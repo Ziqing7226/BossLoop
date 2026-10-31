@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: >-
+  If this protocol or its implementations helped your research,
+  please mention this work.
+type: software
+title: research-iteration-loop
+version: v0.1.0
+date-released: "2026-11-01"
+authors:
+  - alias: Ziqing7226
+repository-code: "https://github.com/Ziqing7226/research-iteration-loop"
+abstract: >-
+  An engine-agnostic protocol (plus reference implementations) for an
+  autonomous AI research team that validates a research idea through
+  bounded build-test-write-review cycles, then hard-stops and reports
+  whether to continue.
+license:
+  - CC-BY-4.0
+  - Apache-2.0
