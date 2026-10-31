@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 科研迭代循环（SPEC v0.5）：从一个初步想法出发自我迭代——总工程师调研立项 → 算法工程师开发 → 测试工程师独立验证与 canary 门禁 → 修复补充 → 研究员修订/创建文稿 → 编辑邀请审稿 → 审稿+迭代建议 → 本地存档；N 轮后硬停，产出《初步评估报告》。支持账本断点续跑。
+description: 科研迭代循环（v0.1.0）：总工程师每轮重组方案 Portfolio（机械校验 1–3）→ 算法工程师三级执行（FULL 出数、第 1 轮端到端数字机械补验）→ 测试工程师独立验证 + canary/映射表/解释器自动回退三重门禁（修复裁决归测试工程师）→ 修复补充 → 研究员修订 → 编辑盲审（审稿人每轮唯一命名）→ 含实验死亡率与新颖性核查的审稿 → 存档（HEAD 落盘核验 + 本地加密备份 remote，绝不推云端）；N 轮硬停出《初步评估报告》，账本断点续跑。
 args:
   idea:
     type: string
@@ -35,6 +35,8 @@ interface SurveyResult {
 interface WorkCards {
   /** 本轮主题一句话 */
   title: string;
+  /** 本轮选定的方案名（1–3 个，机械校验） */
+  proposals: string[];
   /** 任务卡清单，每卡一句话指令 */
   cards: string[];
 }
@@ -75,12 +77,16 @@ interface Review {
   issues: string[];
   /** 下一轮迭代建议 */
   iteration: string[];
+  /** 与该想法最相近的已有工作及差异维度（文献读者必答；其他审稿人可空） */
+  nearestWorks?: string[];
   severity: "minor" | "major" | "blocker";
 }
 
 interface RoundRow {
   round: number;
   task: string;
+  /** 本轮方案组合 */
+  portfolio: string;
   dev: string;
   experiments: string;
   test: string;
@@ -111,6 +117,7 @@ const CHIEF_ZH = [
   "调研（网络检索+本地论文库）：拿不到原文的论文列入 paperRequests 供老板代取——非阻塞，先降置信度推进，绝不空等。",
   "方案数（≤3）与竞品复现数（≤3）由你依据调研在循环内决定，上限不可突破。",
   "方案 Portfolio 是每轮动态的：每轮开始时你依据最新审稿意见重新选定 1–3 个方案（可新增、移除、替换；有得选时选满 3 个，不足时 1–2 个，至少 1 个）与竞品集合；本轮选中的每个方案都必须得到充分验证，禁止用最小对比冒充验证——最小对比会带偏结论。",
+  "每轮规划：上一轮审稿意见逐条处置——要么转成本轮任务卡，要么给出基于存档工件的反驳；不许空口忽略。",
   "新颖性处理：若文献读者报告该想法已被做过，不要终止——把范围重定界到该方向上尚未解决的缺口，重新选定方案，跑满全部轮次。",
   "诚实第一：数字必须可溯源到存档工件；不确定就说不确定；指令矛盾时如实升级提问。",
   "全程中文。",
@@ -120,8 +127,8 @@ const ALGO_ZH = [
   "你是算法工程师：实现方案/复现竞品。端到端真实跑，每个数字注明口径（数据、窗口、单位、每个累加器含义）。",
   "竞品复现必须保真：与原文发表数字对照，偏差逐条记录——你不能既造自己的方法又给竞品打分。",
   "测试冻结规则：测试工程师验证期间，你不修改被测实现（否则测试对象在漂移，结论无效）。此时你只做两件事：准备可复现包（环境/命令/随机种子/数据窗口），响应门禁失败。测试报告返回后再按裁决修复。",
-  "长任务安全（硬约束）：逐批次/逐场景用独立子进程运行，结果立即落盘后退出释放内存；脚本内置内存护栏（超约物理内存 70–80% 主动终止并保存现场）；每步有超时与失败出口；数据集与既有产物只读，不删除不覆盖。",
-  "实验三级执行纪律：每个新实验先 MINI_PILOT（冒烟，验证代码能跑通与内存量级）→ PILOT（小数据核对正确性）→ FULL（正式协议的完整对比）。调试只看 PILOT 及以前；所有入档数字与主张只来自 FULL——禁止拿最小对比的结果冒充验证结论。报告 experimentsAttempted/experimentsPassed 时如实统计（含死在调试阶段的）。",
+  "长任务安全（硬约束）：逐批次/逐场景用独立子进程运行，结果立即落盘后退出释放内存；脚本内置内存护栏（超约物理内存 70–80% 主动终止并保存现场）；每步有超时与失败出口；数据集与既有产物只读，不删除不覆盖；生成的代码视为不可信，可行时优先在容器/受限网络中执行（containment 是降险不是保证）。",
+  "实验三级执行纪律：每个新实验先 MINI_PILOT（冒烟，验证代码能跑通与内存量级）→ PILOT（小数据核对正确性）→ FULL（正式协议的完整对比）。调试只看 PILOT 及以前；所有入档数字与主张只来自 FULL——禁止拿最小对比的结果冒充验证结论。在 DevReport.experiments 字段如实统计尝试数/跑通数（含死在调试阶段的）。",
   "如实报告失败；指令矛盾则升级提问，不造假不绕过。全程中文。",
 ].join("\n");
 
@@ -162,6 +169,7 @@ artifact.table("rounds", {
   columns: [
     { field: "round", label: "轮次" },
     { field: "task", label: "任务" },
+    { field: "portfolio", label: "方案组合" },
     { field: "dev", label: "开发" },
     { field: "experiments", label: "实验死亡率" },
     { field: "test", label: "测试门禁" },
@@ -185,7 +193,7 @@ const survey = await chief.ask<SurveyResult>(
     ? "已有账本（末尾节选，断点续跑依据）：\n" + ledger.slice(-4000) + "\n若账本显示本想法已完成 N 轮，resumeFrom 填 N（从第 N+1 轮继续，勿重做已完成轮）；否则填 0。\n"
     : "本仓库无既有账本：resumeFrom 填 0。\n") +
   "请完成调研（网络检索 + 本地论文库，如 docs/refs/），返回 SurveyResult。" +
-  "约束：方案与竞品数量由你在 ≤3 内依据证据决定；第一轮结束前必须规划出至少一个最小端到端对比的落地路径。",
+  "约束：方案与竞品数量由你在 ≤3 内依据证据决定；第一轮结束前必须规划出至少一个完整（FULL 级）端到端对比的落地路径——最小对比不可作为验证。",
 );
 if (survey.paperRequests.length > 0) {
   log("求论文清单（非阻塞，供老板代取）：" + survey.paperRequests.join("；"));
@@ -204,19 +212,33 @@ let plan = "第 " + startRound + " 轮：按调研结论执行（方案：" + su
 
 for (let round = startRound; round <= rounds; round++) {
   phase("布置本轮任务卡");
-  const cards = await chief.ask<WorkCards>(
+  let cards = await chief.ask<WorkCards>(
     "第 " + round + "/" + rounds + " 轮。idea：" + idea + "\n" +
   (round === 1 ? "调研结论：" + survey.summary : "上一轮审稿意见与你的规划：" + plan) + "\n" +
-  "注意：方案 Portfolio 每轮由你重新选定（可新增/移除/替换，≤3 且 ≥1）；本轮选中的每个方案都要充分验证。\n" +
+  "注意：方案 Portfolio 每轮由你重新选定（可新增/移除/替换，≤3 且 ≥1）；本轮选中的每个方案都要充分验证；proposals 字段列出本轮选定的 1–3 个方案名。\n" +
   "把本轮工作转成任务卡（复现竞品 X / 尝试方案 Y…）。老板关注：" + (focus || "无"),
   );
-  log("第 " + round + " 轮任务：" + cards.title);
+  if (cards.proposals.length < 1 || cards.proposals.length > 3) {
+    cards = await chief.ask<WorkCards>(
+      "proposals 必须为 1–3 个方案名（当前 " + cards.proposals.length + " 个）。请重新返回 WorkCards。",
+    );
+  }
+  if (cards.proposals.length < 1 || cards.proposals.length > 3) {
+    log("第 " + round + " 轮方案组合仍不合规（" + cards.proposals.length + " 个），如实记录并继续");
+  }
+  log("第 " + round + " 轮任务：" + cards.title + "；方案组合：" + cards.proposals.join("、"));
 
   phase("算法工程师开发自测");
-  const dev = await algo.ask<DevReport>(
+  let dev = await algo.ask<DevReport>(
     "本轮任务卡：" + cards.cards.join("；") + "\n" +
     "开发并自测。纪律：端到端真实跑、数字注明口径、竞品保真对照；本轮选中的每个方案都必须得到充分验证（三级执行：MINI_PILOT/PILOT 只用于调试，主张只来自 FULL）；第 1 轮结束时必须已有至少一个来自完整对比的端到端数字。如实报告 experiments（尝试数/跑通数）。",
   );
+  if (round === 1 && dev.numbers.length === 0) {
+    dev = await algo.ask<DevReport>(
+      "第 1 轮必须以至少一个来自完整对比（FULL 级）的端到端数字收尾，禁止以最小对比代替。请现在补跑并返回 DevReport（numbers 填入该数字与口径）；若客观上无法做到，如实说明并保持 numbers 为空。",
+    );
+    if (dev.numbers.length === 0) log("第 1 轮无端到端数字（补救后仍缺）——已如实记录，稿件不得声称已验证");
+  }
 
   phase("测试工程师审查测试");
   const verdict = await tester.ask<TestVerdict>(
@@ -242,7 +264,6 @@ for (let round = startRound; round <= rounds; round++) {
       claimMapOk = false;
     }
   }
-  const mapNote = claimMapOk ? "" : "映射表未建立（数字溯源不完整）；";
   let canary = false;
   try {
     canary = (await files.grep("canary", "selfcheck.py")).length > 0;
@@ -251,26 +272,58 @@ for (let round = startRound; round <= rounds; round++) {
   }
   if (!canary) log("门禁缺少 canary 标记（自检须含必须失败的对照用例）");
   let gate = "";
+  let interpIsPy3 = false;
   for (let attempt = 1; attempt <= 3; attempt++) {
-    const check = await world.run("python", ["selfcheck.py"], { timeoutMs: 3600000 });
-    if (check.exitCode === 0 && canary) {
-      gate = mapNote + "通过（第 " + attempt + " 次尝试）";
+    let exitCode = -1;
+    let output = "";
+    let launchErr = "";
+    try {
+      const r = interpIsPy3
+        ? await world.run("python3", ["selfcheck.py"], { timeoutMs: 3600000 })
+        : await world.run("python", ["selfcheck.py"], { timeoutMs: 3600000 });
+      exitCode = r.exitCode;
+      output = (r.stderr || r.stdout || "(无输出)").slice(0, 1500);
+    } catch {
+      if (!interpIsPy3) {
+        interpIsPy3 = true;
+        try {
+          const r = await world.run("python3", ["selfcheck.py"], { timeoutMs: 3600000 });
+          exitCode = r.exitCode;
+          output = (r.stderr || r.stdout || "(无输出)").slice(0, 1500);
+        } catch {
+          launchErr = "python 与 python3 均无法启动（请确认解释器可用）";
+        }
+      } else {
+        launchErr = "selfcheck.py 启动失败或超时";
+      }
+    }
+    if (launchErr === "" && exitCode === 0 && canary && claimMapOk) {
+      gate = "通过（第 " + attempt + " 次尝试" + (interpIsPy3 ? "，python3" : "") + "）";
       break;
     }
     if (attempt === 3) {
-      gate = mapNote + (canary ? "3 次修复后仍失败" : "门禁未就绪（自检缺少 canary 对照用例）");
+      gate = launchErr !== ""
+        ? launchErr
+        : (claimMapOk ? "" : "映射表未建立；") + (canary ? "3 次修复后仍失败" : "门禁未就绪（自检缺少 canary 对照用例）");
       break;
     }
-    canary = true;
     try {
       canary = (await files.grep("canary", "selfcheck.py")).length > 0;
     } catch {
       canary = false;
     }
-    await algo.ask<DevReport>(
-      "selfcheck.py 门禁未通过（exit " + check.exitCode + (canary ? "" : "，且缺少 canary 对照用例") + "）。请修复后重跑。输出摘要：\n" +
-      (check.stderr || check.stdout || "(无输出)").slice(0, 1500) + "\n返回 DevReport，summary 注明修复内容；前提不成立则升级提问。",
+    const reason = launchErr !== ""
+      ? launchErr
+      : "exit " + exitCode + (canary ? "" : "，且缺少 canary 对照用例") + (claimMapOk ? "" : "，且映射表未建立");
+    const triage = await tester.ask<string>(
+      "门禁未通过（" + reason + "）。你是 selfcheck.py 与映射表的所有者：若问题在测试基建（脚本/用例/映射表），直接修复；若问题在被测实现，返回给算法工程师的明确修复指令清单（勿改被测实现）；若无法判断，如实说明。输出摘要：\n" + output,
     );
+    const t = triage.trim();
+    if (t !== "" && t !== "无") {
+      await algo.ask<DevReport>(
+        "测试工程师裁决的修复指令（你不许改 selfcheck.py 与 claim_map.md）：\n" + t.slice(0, 2000) + "\n执行后返回 DevReport。",
+      );
+    }
   }
 
   phase("修复与补充实验");
@@ -299,13 +352,13 @@ for (let round = startRound; round <= rounds; round++) {
   phase("审稿团评审");
   const settled = await Promise.allSettled(
     Array.from({ length: n }, (_, i) =>
-      agent("审稿人" + (i + 1)).ask<Review>(
+      agent("审稿人-r" + round + "-" + (i + 1)).ask<Review>(
         invite.brief + "\n\n你是相邻领域（与本研究方向相关但不重叠）的独立审稿人，只读：对稿件与证据映射提出尖锐质询（附证据出处），并给出下一轮迭代建议，给 severity。如无法判断，如实说明。",
       ),
     ),
   );
   const readerRev = await reader.ask<Review>(
-    "通读文献后审稿（只读）。稿件摘要：" + paper.slice(0, 500) + "\n核对引用与叙事、查新、提问，并给出迭代建议。",
+    "通读文献后审稿（只读）。稿件摘要：" + paper.slice(0, 500) + "\n核对引用与叙事、查新、提问，并给出迭代建议；nearestWorks 必填：最相近的 3 篇工作与差异维度。",
   );
   const reviews: Review[] = settled.map((s) =>
     s.status === "fulfilled" ? s.value : { summary: "该审稿人未完成", issues: [], iteration: [], severity: "minor" },
@@ -317,9 +370,30 @@ for (let round = startRound; round <= rounds; round++) {
     .join("\n\n");
 
   phase("本轮存档");
+  let head0 = "";
+  try {
+    const l0 = await git.log(1);
+    head0 = l0[0]?.hash ?? "";
+  } catch {
+    head0 = "";
+  }
   const archived = await chief.ask<string>(
     "把本轮（任务/产出/测试/审稿/下轮方向）追加到 docs/workflow/ledger.md，然后 git add -A && git commit。若已配置本地加密备份 remote（建议用 GitCoffer 构建，防 Agent 误删本地代码后无从恢复），同时 push 到该 remote；不主动 push 到任何其它 remote（向云端发布永远是老板的明确动作）。返回一句话。",
   );
+  let head1 = "";
+  try {
+    const l1 = await git.log(1);
+    head1 = l1[0]?.hash ?? "";
+  } catch {
+    head1 = "";
+  }
+  const commitOk = head1 !== "" && head1 !== head0;
+  if (!commitOk) {
+    await chief.ask<string>(
+      "本轮提交未落盘（HEAD 未变化）。请立即 git add -A && git commit（有本地加密备份 remote 则同推），返回提交哈希。",
+    );
+  }
+  log("第 " + round + " 轮存档" + (commitOk ? "已核验（HEAD=" + head1.slice(0, 7) + "）" : "补救后仍需人工核查"));
 
   const worst = reviews.reduce((a, b) => (({ minor: 1, major: 2, blocker: 3 } as Record<string, number>)[b.severity] >
     ({ minor: 1, major: 2, blocker: 3 } as Record<string, number>)[a.severity] ? b : a));
@@ -327,6 +401,7 @@ for (let round = startRound; round <= rounds; round++) {
   rows.push({
     round,
     task: cards.title,
+    portfolio: cards.proposals.join("、"),
     dev: dev.summary + (fixDev !== dev ? "（含修复补充）" : ""),
     experiments: [dev.experiments, fixDev !== dev ? fixDev.experiments : ""].filter((s) => s && s !== "无").join("；") || "未报告",
     test: gate,
@@ -368,7 +443,7 @@ const md = [
   "---",
   "说明：预期成功率是定性判断的数值化表达，非校准概率；审稿人原话未经改写，可能与总判断不一致。",
 ].join("\n");
-await artifact.markdown("report", md, { title: "初步评估报告", description: "三轮硬停后的 go/no-go 评估", primary: true });
+await artifact.markdown("report", md, { title: "初步评估报告", description: rounds + " 轮硬停后的 go/no-go 评估", primary: true });
 
 return {
   conclusion: evalResult.advice,

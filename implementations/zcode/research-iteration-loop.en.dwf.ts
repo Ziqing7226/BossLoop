@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Research iteration loop (SPEC v0.5), English UI variant. Iterate a rough idea through bounded cycles — Chief surveys and scopes -> Engineer builds (implementation frozen during testing) -> Test Engineer independently verifies with a mechanically checked canary gate -> fixes -> Researcher revises/creates the manuscript -> Editor invites reviewers -> review panel with iteration proposals -> local commit. Hard stop after N rounds with a Preliminary Evaluation Report; resumes from the ledger.
+description: Research iteration loop (v0.1.0), English UI. Chief re-selects a mechanically checked proposal portfolio (1-3) each round -> Engineer with staged execution (MINI_PILOT/PILOT debug, FULL for claims; round-1 end-to-end number enforced; frozen during testing) -> independent Test Engineer with a triple gate (canary + claim map + interpreter auto-fallback; fix triage owned by the tester) -> fixes -> Researcher revises -> Editor invites blind adjacent-field reviewers (per-round unique names) -> reviews with experiment mortality and novelty checks -> archive with HEAD verification + encrypted local backup remote (GitCoffer, never cloud); hard stop after N rounds; resumes from the ledger.
 args:
   idea:
     type: string
@@ -35,6 +35,8 @@ interface SurveyResult {
 interface WorkCards {
   /** This round's theme in one sentence */
   title: string;
+  /** Proposals selected this round (1-3, mechanically checked) */
+  proposals: string[];
   /** Work cards, one instruction each */
   cards: string[];
 }
@@ -75,12 +77,16 @@ interface Review {
   issues: string[];
   /** Next-round iteration proposals */
   iteration: string[];
+  /** Closest existing works and the difference dimension (mandatory for the Reference Reader; optional for others) */
+  nearestWorks?: string[];
   severity: "minor" | "major" | "blocker";
 }
 
 interface RoundRow {
   round: number;
   task: string;
+  /** Proposals selected this round */
+  portfolio: string;
   dev: string;
   experiments: string;
   test: string;
@@ -105,6 +111,7 @@ const CHIEF_EN = [
   "You are the Chief Engineer. Mission: decide within a bounded number of rounds whether args.idea deserves deep investment, and drive it forward — not perfect it.",
   "Take over by reading the ledger (docs/workflow/ledger.md): if this idea already has a record, resume from that round instead of redoing finished rounds.",
   "The proposal portfolio is re-selected every round: at the start of each round pick 1-3 proposals from the latest reviews (add, drop or replace; fill up to 3 when choices exist, 1-2 otherwise, never 0) and the competitor set; every proposal selected this round must be fully validated - a minimal comparison passed off as validation is forbidden because it biases conclusions.",
+  "Round planning: dispose of every review issue - either turn it into a work card or rebut it on archived artifacts; never ignore one verbally.",
   "Novelty handling: if the reference reader reports the idea has already been done, do NOT stop - re-scope toward the unsolved gap inside that direction, re-select proposals, and run all remaining rounds.",
   "Survey (web + local paper library): papers you cannot access go to paperRequests for the boss to fetch — non-blocking; proceed with lower confidence, never stall.",
   "How many proposals (≤3) and competitors (≤3) is your in-loop call from survey evidence; the caps are hard.",
@@ -116,7 +123,7 @@ const ALGO_EN = [
   "You are the Algorithm Engineer: build proposals / reproduce competitors. End-to-end real runs only; every number carries its exact definition (data, window, units, per-accumulator meaning).",
   "Competitor reproductions must be faithful: checked against the published numbers, deviations documented — you must not grade the competitors while building your own method.",
   "Test freeze: while the Test Engineer verifies, you do not modify the implementation under test (a moving target makes the verdict void). You only prepare the reproducibility package (env/commands/seeds/data window) and respond to gate failures; fix per the verdict once the report lands.",
-  "Long-run safety (hard constraint): one subprocess per batch/scene, results written to disk immediately then exit to free memory; a memory guardrail in code (terminate and preserve evidence past ~70-80% of physical memory); timeouts and failure exits on every step; run every new experiment in three stages (MINI_PILOT smoke / PILOT small-data correctness / FULL full-protocol comparison) - stages before FULL are for debugging only, all archived numbers and claims come from FULL runs; datasets and existing artifacts read-only — never delete or overwrite.",
+  "Long-run safety (hard constraint): one subprocess per batch/scene, results written to disk immediately then exit to free memory; a memory guardrail in code (terminate and preserve evidence past ~70-80% of physical memory); timeouts and failure exits on every step; run every new experiment in three stages (MINI_PILOT smoke / PILOT small-data correctness / FULL full-protocol comparison) - stages before FULL are for debugging only, all archived numbers and claims come from FULL runs; datasets and existing artifacts read-only — never delete or overwrite; treat generated code as untrusted and prefer containerized or network-restricted execution where available (containment is risk reduction, not a guarantee).",
   "Report failures as failures; escalate contradictions. Never fake or bypass.",
 ].join("\n");
 
@@ -157,6 +164,7 @@ artifact.table("rounds", {
   columns: [
     { field: "round", label: "Round" },
     { field: "task", label: "Task" },
+    { field: "portfolio", label: "Portfolio" },
     { field: "dev", label: "Build" },
     { field: "experiments", label: "Experiment mortality" },
     { field: "test", label: "Test gate" },
@@ -199,19 +207,33 @@ let plan = "Round " + startRound + ": follow the survey (proposals: " + survey.p
 
 for (let round = startRound; round <= rounds; round++) {
   phase("Issue work cards");
-  const cards = await chief.ask<WorkCards>(
+  let cards = await chief.ask<WorkCards>(
     "Round " + round + "/" + rounds + ". Idea: " + idea + "\n" +
     (round === 1 ? "Survey conclusion: " + survey.summary : "Last round's reviews and your planning: " + plan) + "\n" +
-    "The proposal portfolio is re-selected by you every round (add/drop/replace, ≤3 and ≥1); every proposal selected this round must be fully validated.\n" +
+    "The proposal portfolio is re-selected by you every round (add/drop/replace, ≤3 and ≥1); every proposal selected this round must be fully validated; list the 1-3 selected proposal names in the proposals field.\n" +
     "Turn this round's work into cards (reproduce competitor X / try proposal Y...). Boss focus: " + (focus || "none"),
   );
-  log("Round " + round + " task: " + cards.title);
+  if (cards.proposals.length < 1 || cards.proposals.length > 3) {
+    cards = await chief.ask<WorkCards>(
+      "proposals must contain 1-3 proposal names (currently " + cards.proposals.length + "). Return WorkCards again.",
+    );
+  }
+  if (cards.proposals.length < 1 || cards.proposals.length > 3) {
+    log("Round " + round + " portfolio still invalid (" + cards.proposals.length + " entries); recorded honestly and continuing");
+  }
+  log("Round " + round + " task: " + cards.title + "; portfolio: " + cards.proposals.join(", "));
 
   phase("Engineer: build & self-test");
-  const dev = await algo.ask<DevReport>(
+  let dev = await algo.ask<DevReport>(
     "This round's cards: " + cards.cards.join("; ") + "\n" +
     "Build and self-test. Discipline: end-to-end real runs, numbers with exact definitions, faithful competitor reproduction; every proposal selected this round must be fully validated (three stages: MINI_PILOT/PILOT are for debugging only, claims come from FULL); by the end of round 1 there must be at least one end-to-end number from a complete comparison. Report experiments (attempted/passed) honestly.",
   );
+  if (round === 1 && dev.numbers.length === 0) {
+    dev = await algo.ask<DevReport>(
+      "Round 1 must end with at least one end-to-end number from a complete (FULL-stage) comparison; a minimal comparison is not a substitute. Run it now and return DevReport (numbers carries the value and its exact definition); if genuinely impossible, say so and leave numbers empty.",
+    );
+    if (dev.numbers.length === 0) log("Round 1 has no end-to-end number (still missing after remediation) - recorded honestly; the manuscript must not claim validation");
+  }
 
   phase("Test Engineer: review & gate");
   const verdict = await tester.ask<TestVerdict>(
@@ -237,7 +259,6 @@ for (let round = startRound; round <= rounds; round++) {
       claimMapOk = false;
     }
   }
-  const mapNote = claimMapOk ? "" : "claim map missing; ";
   let canary = false;
   try {
     canary = (await files.grep("canary", "selfcheck.py")).length > 0;
@@ -246,14 +267,39 @@ for (let round = startRound; round <= rounds; round++) {
   }
   if (!canary) log("Gate has no canary marker (a must-fail control case is required)");
   let gate = "";
+  let interpIsPy3 = false;
   for (let attempt = 1; attempt <= 3; attempt++) {
-    const check = await world.run("python", ["selfcheck.py"], { timeoutMs: 3600000 });
-    if (check.exitCode === 0 && canary) {
-      gate = mapNote + "pass (attempt " + attempt + ")";
+    let exitCode = -1;
+    let output = "";
+    let launchErr = "";
+    try {
+      const r = interpIsPy3
+        ? await world.run("python3", ["selfcheck.py"], { timeoutMs: 3600000 })
+        : await world.run("python", ["selfcheck.py"], { timeoutMs: 3600000 });
+      exitCode = r.exitCode;
+      output = (r.stderr || r.stdout || "(no output)").slice(0, 1500);
+    } catch {
+      if (!interpIsPy3) {
+        interpIsPy3 = true;
+        try {
+          const r = await world.run("python3", ["selfcheck.py"], { timeoutMs: 3600000 });
+          exitCode = r.exitCode;
+          output = (r.stderr || r.stdout || "(no output)").slice(0, 1500);
+        } catch {
+          launchErr = "neither python nor python3 could be launched (check the interpreter)";
+        }
+      } else {
+        launchErr = "selfcheck.py failed to launch or timed out";
+      }
+    }
+    if (launchErr === "" && exitCode === 0 && canary && claimMapOk) {
+      gate = "pass (attempt " + attempt + (interpIsPy3 ? ", python3" : "") + ")";
       break;
     }
     if (attempt === 3) {
-      gate = mapNote + (canary ? "still failing after 3 fix attempts" : "gate not ready (no canary control case)");
+      gate = launchErr !== ""
+        ? launchErr
+        : (claimMapOk ? "" : "claim map missing; ") + (canary ? "still failing after 3 fix attempts" : "gate not ready (no canary control case)");
       break;
     }
     try {
@@ -261,10 +307,18 @@ for (let round = startRound; round <= rounds; round++) {
     } catch {
       canary = false;
     }
-    await algo.ask<DevReport>(
-      "selfcheck.py gate not passing (exit " + check.exitCode + (canary ? "" : ", and no canary control case") + "). Fix and rerun. Output excerpt:\n" +
-      (check.stderr || check.stdout || "(no output)").slice(0, 1500) + "\nReturn DevReport; escalate if the premise is wrong.",
+    const reason = launchErr !== ""
+      ? launchErr
+      : "exit " + exitCode + (canary ? "" : ", and no canary control case") + (claimMapOk ? "" : ", and the claim map is missing");
+    const triage = await tester.ask<string>(
+      "Gate not passing (" + reason + "). You own selfcheck.py and the claim map: if the problem is in the test infrastructure (script/cases/map), fix it directly; if it is in the implementation under test, return an explicit fix instruction list for the Algorithm Engineer (do not edit the implementation yourself); if you cannot tell, say so. Output excerpt:\n" + output,
     );
+    const t = triage.trim();
+    if (t !== "" && t.toLowerCase() !== "none") {
+      await algo.ask<DevReport>(
+        "Fix instructions ruled by the Test Engineer (you must not edit selfcheck.py or claim_map.md):\n" + t.slice(0, 2000) + "\nExecute and return DevReport.",
+      );
+    }
   }
 
   phase("Fixes & extra experiments");
@@ -293,13 +347,13 @@ for (let round = startRound; round <= rounds; round++) {
   phase("Review panel");
   const settled = await Promise.allSettled(
     Array.from({ length: n }, (_, i) =>
-      agent("Reviewer-" + (i + 1)).ask<Review>(
+      agent("Reviewer-r" + round + "-" + (i + 1)).ask<Review>(
         invite.brief + "\n\nYou are an independent reviewer from an adjacent (related but non-overlapping) field, read-only: raise sharp issues against the manuscript and evidence map (with evidence), propose next-round iterations, and give a severity. Say so if you cannot judge something.",
       ),
     ),
   );
   const readerRev = await reader.ask<Review>(
-    "Review after reading the references (read-only). Manuscript summary: " + paper.slice(0, 500) + "\nVerify citations and narrative, check for missed recent work, ask questions, propose iterations.",
+    "Review after reading the references (read-only). Manuscript summary: " + paper.slice(0, 500) + "\nVerify citations and narrative, check for missed recent work, ask questions, propose iterations; nearestWorks is mandatory: the 3 closest works and the difference dimension.",
   );
   const reviews: Review[] = settled.map((s) =>
     s.status === "fulfilled" ? s.value : { summary: "reviewer did not finish", issues: [], iteration: [], severity: "minor" },
@@ -311,9 +365,30 @@ for (let round = startRound; round <= rounds; round++) {
     .join("\n\n");
 
   phase("Archive round");
+  let head0 = "";
+  try {
+    const l0 = await git.log(1);
+    head0 = l0[0]?.hash ?? "";
+  } catch {
+    head0 = "";
+  }
   const archived = await chief.ask<string>(
     "Append this round (task/build/test/reviews/next direction) to docs/workflow/ledger.md, then git add -A && git commit. If an encrypted local backup remote is configured (recommended: build one with GitCoffer, so agent-caused deletions are always recoverable), also push there; never push to any other remote on your own (publishing to the cloud is always the boss's explicit action). Return one sentence.",
   );
+  let head1 = "";
+  try {
+    const l1 = await git.log(1);
+    head1 = l1[0]?.hash ?? "";
+  } catch {
+    head1 = "";
+  }
+  const commitOk = head1 !== "" && head1 !== head0;
+  if (!commitOk) {
+    await chief.ask<string>(
+      "This round's commit did not land (HEAD unchanged). Run git add -A && git commit now (plus the local backup remote if configured) and return the hash.",
+    );
+  }
+  log("Round " + round + " archive " + (commitOk ? "verified (HEAD=" + head1.slice(0, 7) + ")" : "needs manual check after remediation"));
 
   const rank: Record<string, number> = { minor: 1, major: 2, blocker: 3 };
   const worst = reviews.reduce((a, b) => (rank[b.severity] > rank[a.severity] ? b : a));
@@ -321,6 +396,7 @@ for (let round = startRound; round <= rounds; round++) {
   rows.push({
     round,
     task: cards.title,
+    portfolio: cards.proposals.join(", "),
     dev: dev.summary + (fixDev !== dev ? " (incl. fixes)" : ""),
     experiments: [dev.experiments, fixDev !== dev ? fixDev.experiments : ""].filter((s) => s && s !== "none").join("; ") || "not reported",
     test: gate,

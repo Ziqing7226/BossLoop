@@ -10,7 +10,7 @@ authors:
   - alias: Ziqing7226
 repository-code: "https://github.com/Ziqing7226/research-iteration-loop"
 abstract: >-
-  An engine-agnostic protocol (plus reference implementations) for an
+  A portable-by-design protocol (with reference implementations) for an
   autonomous AI research team that validates a research idea through
   bounded build-test-write-review cycles, then hard-stops and reports
   whether to continue.
