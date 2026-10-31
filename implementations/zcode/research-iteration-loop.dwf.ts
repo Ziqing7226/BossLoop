@@ -318,7 +318,7 @@ for (let round = startRound; round <= rounds; round++) {
 
   phase("本轮存档");
   const archived = await chief.ask<string>(
-    "把本轮（任务/产出/测试/审稿/下轮方向）追加到 docs/workflow/ledger.md，然后 git add -A && git commit。提交后仅推送到本地加密备份 remote（如 GitCoffer 构建的 coffer remote，若存在）；**绝不 push 到云端 remote（origin 等），除非老板在 focus 中明确要求**。返回一句话。",
+    "把本轮（任务/产出/测试/审稿/下轮方向）追加到 docs/workflow/ledger.md，然后 git add -A && git commit。若已配置本地加密备份 remote（建议用 GitCoffer 构建，防 Agent 误删本地代码后无从恢复），同时 push 到该 remote；不主动 push 到任何其它 remote（向云端发布永远是老板的明确动作）。返回一句话。",
   );
 
   const worst = reviews.reduce((a, b) => (({ minor: 1, major: 2, blocker: 3 } as Record<string, number>)[b.severity] >

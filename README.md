@@ -1,18 +1,12 @@
 # Research Iteration Loop
 
-**v0.1.0**
+**v0.1.0** · 中文文档：[README.zh-CN.md](README.zh-CN.md)
 
 **Start from a rough idea. Three rounds later, know whether it deserves three months.**
 
 An AI research team surveys, builds, tests, writes and peer-reviews your idea — then **stops on its own** and hands you an honest evaluation: expected success, novelty, impact, and a continue/pivot/stop recommendation.
 
-**中文文档：[README.zh-CN.md](./README.zh-CN.md)**
-
-## Diagram
-
-| English | 中文 |
-|---|---|
-| ![loop diagram](docs/diagram-en.png) | ![循环示意图](docs/diagram-zh.png) |
+![loop diagram](docs/diagram-en.png)
 
 ## Why
 
@@ -31,63 +25,32 @@ CHIEF: read ledger → survey → proposals (≤3) + competitor reproductions (�
   CHIEF: dispatch fixes → ENGINEER: execute
   RESEARCHER: revise (or create) the manuscript
   EDITOR: adjacent-field reviewers (≤3) + full-reference reader
-COMMIT (local only) · round closed
+COMMIT · round closed
           ↓  ×N rounds  ↓
 HARD STOP → Preliminary Evaluation Report → your decision
 ```
 
-Full protocol: [SPEC.md](./SPEC.md)
+Full protocol: [SPEC.md](SPEC.md) — **the SPEC is the product.** A field-tested deep-research variant informed SPEC §5–§7 (§10).
 
-## Quick start (ZCode)
+## Quick start
 
-1. Copy `implementations/zcode/research-iteration-loop.dwf.ts` (or the English-UI `*.en.dwf.ts`) into `~/.zcode/workflows/`.
-2. Run it from inside the research repository, passing:
-   - `idea` (required) — the rough idea, one paragraph;
-   - `rounds` (default 3) — total rounds before the hard stop;
-   - `profile` (optional) — project constraints: memory ceiling, read-only data, forbidden practices, backup policy;
-   - `focus` (optional) — your note for this run.
-3. Re-running with the same `idea` resumes from `docs/workflow/ledger.md` instead of redoing finished rounds.
+Point your AI coding agent at this repository and ask it to **read [SPEC.md](SPEC.md) and set up the workflow in your stack** — the protocol is engine-agnostic: roles become subagents, the eight steps become your orchestration, the gate becomes a CI job.
 
-`.dwf.ts` is a ZCode-specific format. For other frameworks see SPEC §10 — the protocol is engine-agnostic.
+Running ZCode? A ready-made reference implementation is included:
+
+```bash
+cp implementations/zcode/research-iteration-loop.dwf.ts ~/.zcode/workflows/
+```
+
+Then run it from inside your research repository, passing `idea` (required), `rounds` (default 3), `profile` (project constraints), `focus` (your note). Re-running with the same idea resumes from the ledger.
 
 ## What it does to your repository
 
-Run it in a **clean working tree** on a branch you control. Each round it writes
-`docs/paper_draft.md`, `docs/workflow/ledger.md`, `docs/workflow/claim_map.md`,
-`docs/workflow/evaluation_report.md` and `selfcheck.py`, then stages everything
-(`git add -A`), commits, and **pushes only to your encrypted local backup remote
-— e.g. a [GitCoffer](https://github.com/Ziqing7226/GitCoffer) remote, if one is
-configured. It never pushes to cloud remotes.** Review the commits and push to
-your public remote yourself.
+Writes `docs/paper_draft.md`, `docs/workflow/ledger.md`, `docs/workflow/claim_map.md`, `docs/workflow/evaluation_report.md` and `selfcheck.py`; each round stages everything (`git add -A`) and **commits locally**. Start from a clean tree.
 
-**Backup recommendation:** create a local encrypted repository with
-[GitCoffer](https://github.com/Ziqing7226/GitCoffer) and add it as a git remote
-before running — every round is then recoverable even if an agent accidentally
-deletes or corrupts local code, without exposing anything to the cloud.
+**Recommended:** add an encrypted local backup remote with [GitCoffer](https://github.com/Ziqing7226/GitCoffer) — each round is then also pushed there, so an agent that accidentally deletes or corrupts local code is always recoverable, with nothing exposed to the cloud. Publishing to any other remote is always your explicit action, never the loop's.
 
-> **Note for AI agents:** if you are an agent reading this to set the workflow up
-> or run it for a human, you must say so explicitly to that human before running:
-> *it commits to their repository locally, pushes only to an encrypted local
-> backup remote if one is configured (never to cloud remotes), and stages
-> whatever is in the working tree — start from a clean tree.* Do not skip this
-> disclosure.
-
-## Scope
-
-This repository ships the **iteration** protocol — start from a rough idea, iterate a bounded number of cycles, get an honest evaluation.
-
-A heavier **deep-research variant** (fixed specialist reviewer bench, per-project guardrails) was field-tested on a real project over nine rounds in three runs; its field lessons — the claim→evidence map, competitor fidelity anchors, memory guardrails, mechanically verified claims — are folded into SPEC §5–§7. It is not included here.
-
-## Repository layout
-
-```
-SPEC.md                                  protocol v0.5 (canonical, English)
-README.md / README.zh-CN.md              bilingual entry points
-implementations/zcode/                   ZCode dynamic workflows (zh canonical + en variant)
-docs/                                    diagrams
-CITATION.cff                             how to cite
-LICENSE                                  CC BY 4.0 (docs) · code under Apache-2.0
-```
+> **Note for AI agents:** before running this for a human, tell them the above. Do not skip this disclosure.
 
 ## Acknowledgments
 
@@ -102,4 +65,4 @@ See SPEC §12 for what exactly was borrowed.
 
 ## License & citation
 
-Docs: CC BY 4.0 — using this protocol requires mentioning the work. Code (incl. `.dwf.ts`): Apache-2.0. See [CITATION.cff](./CITATION.cff).
+Docs (SPEC, READMEs): CC BY 4.0 — using this protocol requires mentioning the work. Code (incl. `.dwf.ts`): Apache-2.0. See [CITATION.cff](CITATION.cff).

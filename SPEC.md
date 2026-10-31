@@ -37,8 +37,8 @@ Why the engineer looks idle during testing: verification must be independent of 
 5  CHIEF     dispatch fixes & extra experiments; ENGINEER executes
 6  RESEARCHER revise (or create) the manuscript
 7  EDITOR    keywords → invite adjacent-field reviewers + full-reference reader
-8  ALL       append the round to the ledger; commit and push to the encrypted
-             local backup remote (GitCoffer) — never to cloud remotes
+8  ALL       append the round to the ledger and commit locally; if a local
+             backup remote (GitCoffer) is configured, also push there
 ```
 
 ## 4. Transitions and the gate
@@ -59,14 +59,14 @@ Why the engineer looks idle during testing: verification must be independent of 
 
 ## 6. Safety for unattended runs
 
-Subprocess per batch/scene; write results to disk immediately and exit to free memory; a hard memory cap and timeouts **in code**; staged pilot runs before full runs; datasets and existing artifacts read-only; never push to cloud/shared remotes (backups go to an encrypted local remote, see §7). Agent-written code is **untrusted**: prefer containerized or network-restricted execution where available — but treat containment as risk reduction, not a guarantee (sandbox escapes by capable code are a documented reality).
+Subprocess per batch/scene; write results to disk immediately and exit to free memory; a hard memory cap and timeouts **in code**; staged pilot runs before full runs; datasets and existing artifacts read-only; cloud pushes are never automatic (local backup: see §7). Agent-written code is **untrusted**: prefer containerized or network-restricted execution where available — but treat containment as risk reduction, not a guarantee (sandbox escapes by capable code are a documented reality).
 
 ## 7. Unattended runs and recovery
 
 - The **ledger is the checkpoint**. Every round appends its task, artifacts, gate status, reviews and next direction.
 - A run interrupted by a crash, a dropped model stream or a quota stop is **resumed, not restarted**: same run if the engine supports it, otherwise a fresh run reads the ledger and continues at round N+1 (the Chief reports `resumeFrom`).
 - An external watchdog (cron, CI schedule) may poll run status and resume interrupted runs. It must **never** resume a run a human stopped on purpose.
-- The loop **pushes only to an encrypted local backup remote** — [GitCoffer](https://github.com/Ziqing7226/GitCoffer) builds one locally: after every round the work is committed and pushed there in encrypted form, giving a recovery path when an agent accidentally deletes or corrupts local code, without exposing anything to the cloud. It never pushes to cloud/shared remotes unless the boss explicitly says so.
+- Every round is committed locally. **Recommended:** configure a local encrypted backup remote — [GitCoffer](https://github.com/Ziqing7226/GitCoffer) builds one — so each round is also pushed there; an agent that accidentally deletes or corrupts local code is then always recoverable, with nothing exposed to the cloud. Pushes to cloud/shared remotes are never automatic; publishing is the boss's explicit action.
 - Because recovery depends on the ledger, a round that fails to append is the one failure that costs work.
 
 ## 8. Domain profiles

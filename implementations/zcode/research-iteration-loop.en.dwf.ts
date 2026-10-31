@@ -312,7 +312,7 @@ for (let round = startRound; round <= rounds; round++) {
 
   phase("Archive round");
   const archived = await chief.ask<string>(
-    "Append this round (task/build/test/reviews/next direction) to docs/workflow/ledger.md, then git add -A && git commit. After committing, push only to an encrypted local backup remote (e.g. a GitCoffer coffer remote, if one exists); **never push to cloud remotes (origin etc.) unless the boss explicitly asks in focus**. Return one sentence.",
+    "Append this round (task/build/test/reviews/next direction) to docs/workflow/ledger.md, then git add -A && git commit. If an encrypted local backup remote is configured (recommended: build one with GitCoffer, so agent-caused deletions are always recoverable), also push there; never push to any other remote on your own (publishing to the cloud is always the boss's explicit action). Return one sentence.",
   );
 
   const rank: Record<string, number> = { minor: 1, major: 2, blocker: 3 };
