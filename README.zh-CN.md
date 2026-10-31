@@ -60,6 +60,7 @@ cp implementations/zcode/research-iteration-loop.dwf.ts ~/.zcode/workflows/
 - [allenai/codescientist](https://github.com/allenai/codescientist)——分级执行（pilot → full）与 supporting/refuting/inconclusive 计数
 - [llnl/open-ai-co-scientist](https://github.com/llnl/open-ai-co-scientist)——假设排名与相似度分析
 - [Ahren09/AgentReview](https://github.com/Ahren09/AgentReview)——量化的审稿偏差，促成我们的盲审纪律
+- [gulucaptain/Best-Paper-Writing-Skill](https://github.com/gulucaptain/Best-Paper-Writing-Skill)——约束研究员角色的获奖论文写作规则
 
 具体借鉴了什么见 SPEC §12。
 

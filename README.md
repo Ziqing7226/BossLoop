@@ -60,6 +60,7 @@ This protocol distills lessons from open-source research-agent systems — thank
 - [allenai/codescientist](https://github.com/allenai/codescientist) — staged execution (pilot → full) and supporting/refuting/inconclusive counting
 - [llnl/open-ai-co-scientist](https://github.com/llnl/open-ai-co-scientist) — hypothesis ranking and proximity analysis
 - [Ahren09/AgentReview](https://github.com/Ahren09/AgentReview) — quantified reviewer biases that motivated our blind-review discipline
+- [gulucaptain/Best-Paper-Writing-Skill](https://github.com/gulucaptain/Best-Paper-Writing-Skill) — award-paper writing rules that govern our Researcher role
 
 See SPEC §12 for what exactly was borrowed.
 
