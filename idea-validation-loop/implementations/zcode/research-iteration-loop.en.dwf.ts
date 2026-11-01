@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Research iteration loop (v0.2.0), English UI. Chief re-selects a mechanically checked proposal portfolio (1-3) each round -> Engineer with staged execution (MINI_PILOT/PILOT debug, FULL for claims; round-1 end-to-end number enforced; frozen during testing) -> independent Test Engineer with a triple gate (canary + claim map + interpreter auto-fallback; fix triage owned by the tester; dual-path recomputation of headline numbers; retraction sweeps the repo) -> fixes -> Researcher revises -> Editor invites blind adjacent-field reviewers (per-round unique names) -> reviews with experiment mortality and novelty checks -> archive with HEAD verification + encrypted local backup remote (GitCoffer, never cloud); hard stop after N rounds; resumes from the ledger.
+description: Research iteration loop (v0.2.7), English UI. Chief re-selects a mechanically checked proposal portfolio (1-3) each round -> Engineer with staged execution (MINI_PILOT/PILOT debug, FULL for claims; round-1 end-to-end number enforced; frozen during testing) -> independent Test Engineer with a triple gate (canary + claim map + interpreter auto-fallback; fix triage owned by the tester; dual-path recomputation of headline numbers; retraction sweeps the repo) -> fixes -> Researcher revises -> Editor invites blind adjacent-field reviewers (per-round unique names) -> reviews with experiment mortality and novelty checks -> archive with HEAD verification + encrypted local backup remote (GitCoffer, never cloud); hard stop after N rounds; resumes from the ledger. Model tiering (tiered — chief, editor, reviewers and reference reader on GLM-5.3; engineer, tester and researcher on GLM-5.3-Flash; reviewers on a different tier than the builders satisfies the blind-review decorrelation structurally; models=uniform puts every role on the session model). Destructive operations are declared only and run exactly as the strong-tier Chief approves (covering build and fix paths) — never handed back to the boss.
 args:
   idea:
     type: string
@@ -17,6 +17,10 @@ args:
     type: string
     default: ""
     description: Project-level constraints (hardware/memory limits, read-only data rules, forbidden practices, backup policy; optional)
+  models:
+    type: string
+    default: "tiered"
+    description: Model tiering; tiered = analysis roles (chief/editor/reviewers/reader) on the strong model and hands-on roles (engineer/tester/researcher) on the cheap one (GLM-5.3 vs GLM-5.3-Flash here), uniform = every role on the session model
 */
 
 interface SurveyResult {
@@ -50,6 +54,8 @@ interface DevReport {
   numbers: string[];
   /** Experiment mortality this round: attempted/passed (honestly counting debug-stage deaths) */
   experiments: string;
+  /** Destructive operations needed (delete datasets / overwrite artifacts / rewrite history): declare only, never run them; empty when none */
+  dangerRequests: DangerRequest[];
   /** Leftovers, or "none" */
   leftover: string;
 }
@@ -80,6 +86,28 @@ interface Review {
   /** Closest existing works and the difference dimension (mandatory for the Reference Reader; optional for others) */
   nearestWorks?: string[];
   severity: "minor" | "major" | "blocker";
+}
+
+interface DangerRequest {
+  /** The destructive command as written */
+  command: string;
+  /** Why it has to be done */
+  reason: string;
+  /** Blast radius: which paths/data it deletes or overwrites, and whether it is reversible */
+  scope: string;
+}
+
+interface DangerDecision {
+  command: string;
+  decision: "approve" | "approve-with-change" | "reject";
+  /** Safe form when approve-with-change; empty on a plain approve */
+  safeForm: string;
+  reason: string;
+}
+
+interface DangerReview {
+  summary: string;
+  decisions: DangerDecision[];
 }
 
 interface RoundRow {
@@ -123,6 +151,7 @@ const ALGO_EN = [
   "You are the Algorithm Engineer: build proposals / reproduce competitors. End-to-end real runs only; every number carries its exact definition (data, window, units, per-accumulator meaning); before comparing against prior work, record a caliber table (each competitor's raw convention, dataset, metric definition) and report headline numbers in convention-independent units.",
   "Competitor reproductions must be faithful: checked against the published numbers, deviations documented — you must not grade the competitors while building your own method.",
   "Test freeze: while the Test Engineer verifies, you do not modify the implementation under test (a moving target makes the verdict void). You only prepare the reproducibility package (env/commands/seeds/data window) and respond to gate failures; fix per the verdict once the report lands.",
+  "Destructive-operation rule: deleting datasets, overwriting existing artifacts, git reset --hard, git clean -fdx, force push or rewriting pushed history are declared, never executed unilaterally — put them in dangerRequests (command, reason, blast radius) and run exactly what the Chief approves.",
   "Long-run safety (hard constraint): one subprocess per batch/scene, results written to disk immediately then exit to free memory; a memory guardrail in code (terminate and preserve evidence past ~70-80% of physical memory); timeouts and failure exits on every step; run every new experiment in three stages (MINI_PILOT smoke / PILOT small-data correctness / FULL full-protocol comparison) - stages before FULL are for debugging only, all archived numbers and claims come from FULL runs; datasets and existing artifacts read-only — never delete or overwrite; treat generated code as untrusted and prefer containerized or network-restricted execution where available (containment is risk reduction, not a guarantee).",
   "Report failures as failures; escalate contradictions. Never fake or bypass.",
 ].join("\n");
@@ -133,6 +162,7 @@ const TEST_EN = [
   "You own the claim→evidence map (docs/workflow/claim_map.md): every manuscript number ↔ an archived artifact + a re-runnable check; write the check before the claim. The file must carry a claim-map marker and be tabular.",
   "You create/maintain selfcheck.py at the repo root: it must contain at least one deliberately-broken canary case that must FAIL, marked `canary` so the orchestrator can verify it by search — a suite that cannot go red proves nothing.",
   "Every verdict carries evidence.",
+  "Destructive-operation criterion: beyond the declared-and-ruled list — datasets or existing artifacts deleted or overwritten, history rewritten, force traces — is a serious finding; demand the Chief's ruling record. Ordinary iteration replacing experiment artifacts is not in this class.",
 ].join("\n");
 
 const RESEARCHER_EN = [
@@ -159,6 +189,13 @@ const focus = typeof args.focus === "string" ? args.focus : "";
 const profile = typeof args.profile === "string" ? args.profile : "";
 const PROFILE_LINE = profile ? "\nProject constraints (mandatory, override defaults): " + profile : "";
 
+/** Model tiering: tiered = strong/cheap split (GLM-5.3 / GLM-5.3-Flash here); uniform = session model for all */
+const tiered = String(args.models ?? "tiered").toLowerCase() !== "uniform";
+const STRONG = model("GLM-5.3");
+const CHEAP = model("GLM-5.3-Flash");
+const persona = (system: string, m: ModelRef): { system: string; model?: ModelRef } =>
+  tiered ? { system, model: m } : { system };
+
 artifact.table("rounds", {
   title: "Validation rounds",
   columns: [
@@ -175,7 +212,7 @@ artifact.table("rounds", {
 });
 
 phase("Chief: survey & scope");
-const chief = agent("Chief Engineer", { system: CHIEF_EN + PROFILE_LINE });
+const chief = agent("Chief Engineer", persona(CHIEF_EN + PROFILE_LINE, STRONG)); // strong tier: analysis and planning
 let ledger = "";
 try {
   ledger = await files.read("docs/workflow/ledger.md");
@@ -196,16 +233,42 @@ if (survey.paperRequests.length > 0) {
 const startRound = Math.max(1, Math.min(rounds + 1, Math.round(survey.resumeFrom) + 1));
 if (startRound > 1) log("Ledger shows " + (startRound - 1) + " round(s) done; resuming at round " + startRound);
 
-const algo = agent("Algorithm Engineer", { system: ALGO_EN + PROFILE_LINE });
-const tester = agent("Test Engineer", { system: TEST_EN + PROFILE_LINE });
-const researcher = agent("Researcher", { system: RESEARCHER_EN + PROFILE_LINE });
-const editor = agent("Editor", { system: EDITOR_EN + PROFILE_LINE });
-const reader = agent("Reference Reader", { system: READER_EN + PROFILE_LINE });
+const algo = agent("Algorithm Engineer", persona(ALGO_EN + PROFILE_LINE, CHEAP)); // cheap tier
+const tester = agent("Test Engineer", persona(TEST_EN + PROFILE_LINE, CHEAP)); // cheap tier
+const researcher = agent("Researcher", persona(RESEARCHER_EN + PROFILE_LINE, CHEAP)); // cheap tier
+const editor = agent("Editor", persona(EDITOR_EN + PROFILE_LINE, STRONG)); // strong tier
+const reader = agent("Reference Reader", persona(READER_EN + PROFILE_LINE, STRONG)); // strong tier
 
 const rows: RoundRow[] = [];
 let plan = "Round " + startRound + ": follow the survey (proposals: " + survey.proposals.join(", ") + "; competitors: " + survey.competitors.join(", ") + ")";
 
+/** Destructive operations: declare -> strong-tier Chief rules -> run exactly as approved; returns the ruling log for the ledger. Covers the initial build AND the fix paths. */
+async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
+  phase("Destructive-operation review");
+  const raw = await chief.ask<DangerReview>(
+    "Destructive-operation review (you are the strong-tier authority; this ruling is never handed to the boss). Requester: Algorithm Engineer (cheap tier). Rule on each request: " + JSON.stringify(reqs) +
+    ". Judge by: is the blast radius bounded, is it reversible, is there a narrower safe equivalent (scoped path, dry-run first, back up first, list affected files first)? Reject by default; use approve-with-change with safeForm when a safer equivalent exists; approve only when necessary and safe. Only when the experiment cannot proceed at all without the operation, say so in reason as 'experiment blocked' — it surfaces in the Preliminary Evaluation Report (this loop has no interrupt mechanism). Return DangerReview (decisions map one-to-one to the requests).",
+  );
+  let decisions = raw.decisions ?? [];
+  if (decisions.length !== reqs.length) {
+    log("Destructive ruling incomplete (" + decisions.length + "/" + reqs.length + ") — treating all as rejected, recorded honestly");
+    decisions = reqs.map((r) => ({ command: r.command, decision: "reject" as const, safeForm: "", reason: "Incomplete ruling; rejected wholesale for safety" }));
+  }
+  const entry = decisions.map((d) => d.command + " -> " + d.decision + (d.safeForm ? " (as: " + d.safeForm + ")" : "") + ": " + d.reason).join("; ");
+  const ok = decisions.filter((d) => d.decision !== "reject");
+  if (ok.length > 0) {
+    phase("Run the approved destructive operations");
+    await algo.ask<string>(
+      "Run the Chief-approved destructive operations, exactly as approved (use safeForm when non-empty); do not widen the scope: " + ok.map((d, i) => (i + 1) + ". " + (d.safeForm || d.command)).join("; ") + ". Then git add -A && git commit and return one sentence.",
+    );
+  } else {
+    log("All destructive requests rejected: no workaround allowed");
+  }
+  return entry;
+}
+
 for (let round = startRound; round <= rounds; round++) {
+  let dangerLog = "none"; // this round's destructive-operation rulings (into the ledger)
   phase("Issue work cards");
   let cards = await chief.ask<WorkCards>(
     "Round " + round + "/" + rounds + ". Idea: " + idea + "\n" +
@@ -233,6 +296,10 @@ for (let round = startRound; round <= rounds; round++) {
       "Round 1 must end with at least one end-to-end number from a complete (FULL-stage) comparison; a minimal comparison is not a substitute. Run it now and return DevReport (numbers carries the value and its exact definition); if genuinely impossible, say so and leave numbers empty.",
     );
     if (dev.numbers.length === 0) log("Round 1 has no end-to-end number (still missing after remediation) - recorded honestly; the manuscript must not claim validation");
+  }
+  // Destructive operations: the cheap tier declares, the strong-tier Chief rules execute / safe form / skip
+  if ((dev.dangerRequests || []).length > 0) {
+    dangerLog = await dangerFlow(dev.dangerRequests);
   }
 
   phase("Test Engineer: review & gate");
@@ -315,9 +382,12 @@ for (let round = startRound; round <= rounds; round++) {
     );
     const t = triage.trim();
     if (t !== "" && t.toLowerCase() !== "none") {
-      await algo.ask<DevReport>(
+      const triageDev = await algo.ask<DevReport>(
         "Fix instructions ruled by the Test Engineer (you must not edit selfcheck.py or claim_map.md):\n" + t.slice(0, 2000) + "\nExecute and return DevReport.",
       );
+      if ((triageDev.dangerRequests || []).length > 0) {
+        dangerLog = (dangerLog === "none" ? "" : dangerLog + "; ") + await dangerFlow(triageDev.dangerRequests);
+      }
     }
   }
 
@@ -328,6 +398,9 @@ for (let round = startRound; round <= rounds; round++) {
   );
   if (fixes.length > 0) {
     fixDev = await algo.ask<DevReport>("Execute fixes and extra experiments: " + fixes.join("; ") + "\nReturn DevReport.");
+    if ((fixDev.dangerRequests || []).length > 0) {
+      dangerLog = (dangerLog === "none" ? "" : dangerLog + "; ") + await dangerFlow(fixDev.dangerRequests);
+    }
   }
 
   phase("Researcher: revise manuscript");
@@ -347,7 +420,7 @@ for (let round = startRound; round <= rounds; round++) {
   phase("Review panel");
   const settled = await Promise.allSettled(
     Array.from({ length: n }, (_, i) =>
-      agent("Reviewer-r" + round + "-" + (i + 1)).ask<Review>(
+      agent("Reviewer-r" + round + "-" + (i + 1), tiered ? { model: STRONG } : undefined).ask<Review>(
         invite.brief + "\n\nYou are an independent reviewer from an adjacent (related but non-overlapping) field, read-only: raise sharp issues against the manuscript and evidence map (with evidence), propose next-round iterations, and give a severity. Say so if you cannot judge something.",
       ),
     ),
@@ -374,7 +447,7 @@ for (let round = startRound; round <= rounds; round++) {
     head0 = "";
   }
   const archived = await chief.ask<string>(
-    "Append this round (task/build/test/reviews/next direction) to docs/workflow/ledger.md, then git add -A && git commit. If an encrypted local backup remote is configured (recommended: build one with GitCoffer, so agent-caused deletions are always recoverable), also push there; never push to any other remote on your own (publishing to the cloud is always the boss's explicit action). Return one sentence.",
+    "Append this round (task/build/destructive-operation ruling (" + dangerLog + ")/test/reviews/next direction) to docs/workflow/ledger.md, then git add -A && git commit. If an encrypted local backup remote is configured (recommended: build one with GitCoffer, so agent-caused deletions are always recoverable), also push there; never push to any other remote on your own (publishing to the cloud is always the boss's explicit action). Return one sentence.",
   );
   let head1 = "";
   try {

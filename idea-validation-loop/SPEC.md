@@ -1,6 +1,6 @@
 # Research Iteration Loop
 
-**v0.2.0** · collection: `bossloop` · sibling: [Robust Engineering Loop](../robust-engineering-loop/SPEC.md)
+**v0.2.7** · collection: `bossloop` · sibling: [Robust Engineering Loop](../robust-engineering-loop/SPEC.md)
 
 > Start from a rough idea. Iterate it through bounded, adversarial cycles. Stop on schedule and report whether it deserves more of your life.
 
@@ -18,12 +18,12 @@ Iterate, don't perfect. The loop **hard-stops after N rounds (default 3)** and p
 
 | Role | Responsibility |
 |---|---|
-| **Chief Engineer** | Recover context from the ledger (resume, never redo); internalize the boss's requirements; survey (web + local paper library). Post a **paper-fetch request list** for inaccessible papers (non-blocking: proceed with lower confidence, don't stall). Maintain a **dynamic proposal portfolio**: re-select 1–3 proposals every round from the latest reviews (add, drop or replace; fill to 3 when choices exist, never 0) plus the competitor set (≤3). **Novelty handling:** if the idea turns out to be already done, do not stop — re-scope toward the unsolved gap inside that direction and run all remaining rounds. |
-| **Algorithm Engineer** | Build proposals / reproduce competitors. Real runs only; every number carries its exact definition. **Staged execution:** every new experiment runs MINI_PILOT (smoke) → PILOT (small-data correctness) → FULL (full-protocol comparison); stages before FULL are for debugging only — all archived numbers and claims come from FULL runs, and a minimal comparison passed off as validation is forbidden. **Freeze rule:** while the Test Engineer verifies, the implementation under test is not modified — a moving target makes the verdict void. **Zero-cost anchors & boundary probes:** before building a full method, representation and preprocessing assumptions are bounded with standard-tool anchor experiments; each round runs one boundary experiment (where the approach breaks), and every claim states its evidence scope — the datasets and conditions that back it. |
-| **Test Engineer** | Independent verification: code review; roundtrip incl. adversarial inputs; generalization across scenes/datasets; perturbation stability. Owns the claim→evidence map and the self-check. **Independence:** never edits the implementation under test — a verifier who fixes makes verification self-serving. |
-| **Researcher** | Revise the manuscript once per round (after engineering, before review); create the first draft if none exists. Only artifact-backed numbers; gaps stay explicit `[TODO]`. Follows award-paper writing rules: concrete openings, conditional gap statements, components that build on each other, ablations mapped to claims, a standalone Limitations section, no AI-style tells. |
-| **Editor** | Extract keywords; invite reviewers from adjacent, non-overlapping fields — **how many (≤3) is the Editor's call** — plus 1 reader who has read every reference. Reviews must carry both issues and iteration proposals. **Blind-review discipline:** briefs are anonymized (no author/affiliation/project identity), reviewers never see each other's opinions (the orchestrator aggregates), and should the engine allow it, reviewers run on a different model than the builders — decorrelating reviewer and author error modes. Briefs stay tight: manuscript + claim map + targeted questions, never the whole repo. |
-| **Reference Reader** | Read every reference; verify citations and narrative — including what each cited competitor actually does, not how surveys classify it. **Per-round novelty check (mandatory):** name the 3 closest existing works and state in which dimension the idea differs (problem setting / mechanism / scope) — evidence for the report, never a stop signal. |
+| **Chief Engineer** *(strong tier)* | Recover context from the ledger (resume, never redo); internalize the boss's requirements; survey (web + local paper library). Post a **paper-fetch request list** for inaccessible papers (non-blocking: proceed with lower confidence, don't stall). Maintain a **dynamic proposal portfolio**: re-select 1–3 proposals every round from the latest reviews (add, drop or replace; fill to 3 when choices exist, never 0) plus the competitor set (≤3). **Novelty handling:** if the idea turns out to be already done, do not stop — re-scope toward the unsolved gap inside that direction and run all remaining rounds. |
+| **Algorithm Engineer** *(cheap tier)* | Build proposals / reproduce competitors. Real runs only; every number carries its exact definition. **Staged execution:** every new experiment runs MINI_PILOT (smoke) → PILOT (small-data correctness) → FULL (full-protocol comparison); stages before FULL are for debugging only — all archived numbers and claims come from FULL runs, and a minimal comparison passed off as validation is forbidden. **Freeze rule:** while the Test Engineer verifies, the implementation under test is not modified — a moving target makes the verdict void. **Zero-cost anchors & boundary probes:** before building a full method, representation and preprocessing assumptions are bounded with standard-tool anchor experiments; each round runs one boundary experiment (where the approach breaks), and every claim states its evidence scope — the datasets and conditions that back it. |
+| **Test Engineer** *(cheap tier)* | Independent verification: code review; roundtrip incl. adversarial inputs; generalization across scenes/datasets; perturbation stability. Owns the claim→evidence map and the self-check. **Independence:** never edits the implementation under test — a verifier who fixes makes verification self-serving. |
+| **Researcher** *(cheap tier)* | Revise the manuscript once per round (after engineering, before review); create the first draft if none exists. Only artifact-backed numbers; gaps stay explicit `[TODO]`. Follows award-paper writing rules: concrete openings, conditional gap statements, components that build on each other, ablations mapped to claims, a standalone Limitations section, no AI-style tells. |
+| **Editor** *(strong tier)* | Extract keywords; invite reviewers from adjacent, non-overlapping fields — **how many (≤3) is the Editor's call** — plus 1 reader who has read every reference. Reviews must carry both issues and iteration proposals. **Blind-review discipline:** briefs are anonymized (no author/affiliation/project identity), reviewers never see each other's opinions (the orchestrator aggregates), and should the engine allow it, reviewers run on a different model than the builders — decorrelating reviewer and author error modes. Briefs stay tight: manuscript + claim map + targeted questions, never the whole repo. |
+| **Reference Reader** *(strong tier)* | Read every reference; verify citations and narrative — including what each cited competitor actually does, not how surveys classify it. **Per-round novelty check (mandatory):** name the 3 closest existing works and state in which dimension the idea differs (problem setting / mechanism / scope) — evidence for the report, never a stop signal. |
 | **Boss (human)** | Supply the idea and the project constraints; fetch requested papers; read the round-N report; decide continue / pivot / stop. |
 
 The *orchestrator* is the engine layer that runs the loop (workflow runtime, script, or CI) — not a persona.
@@ -66,6 +66,8 @@ Why the engineer looks idle during testing: verification must be independent of 
 
 Subprocess per batch/scene; write results to disk immediately and exit to free memory; a hard memory cap and timeouts **in code**; staged pilot runs before full runs; datasets and existing artifacts read-only; cloud pushes are never automatic (local backup: see §7). Agent-written code is **untrusted**: prefer containerized or network-restricted execution where available — but treat containment as risk reduction, not a guarantee (sandbox escapes by capable code are a documented reality).
 
+**Destructive operations are declared and adjudicated on cheap tiers.** Deleting datasets, overwriting existing artifacts, `git reset --hard`, `git clean -fdx`, force pushes and rewrites of pushed history are declared (`dangerRequests`: command, reason, blast radius) and never run unilaterally; the **strong-tier Chief** rules each one — reject, a safer scoped form, or approve — and only the approved form runs. The ruling is not handed back to the boss: an experiment that cannot proceed at all without the operation is recorded as blocked in the ledger and surfaces in the Preliminary Evaluation Report.
+
 ## 7. Unattended runs and recovery
 
 - The **ledger is the checkpoint**. Every round appends its task, artifacts, gate status, reviews and next direction.
@@ -78,7 +80,11 @@ Subprocess per batch/scene; write results to disk immediately and exit to free m
 
 Project-specific constraints travel in a `profile` string injected into every role: hardware/memory ceilings, read-only data rules, forbidden practices (e.g. no simulators), required baselines, backup policy, language. This keeps one protocol usable across fields without forking it.
 
-## 9. Configuration
+## 9. Model tiers
+
+Roles run on two model tiers by default (`models=tiered`; `uniform` = session model for all): the **strong tier** carries the Chief, Editor, reviewers and Reference Reader — analysis and judgement; the **cheap tier** carries the Algorithm Engineer, Test Engineer and Researcher — hands-on work. Reviewers sitting on a different tier than the builders also satisfy the blind-review decorrelation rule (§2) structurally. Tier assignment is engine config, not protocol — any strong/cheap pair works, and the cheap tier may be a locally deployed model (e.g. Qwen4) where the engine allows it.
+
+## 10. Configuration
 
 | Parameter | Default | Note |
 |---|---|---|
@@ -86,15 +92,16 @@ Project-specific constraints travel in a `profile` string injected into every ro
 | `idea` | — | required; the rough idea, one paragraph |
 | `focus` | "" | the boss's note for this run |
 | `profile` | "" | project constraints (see §8) |
+| `models` | `tiered` | tiered = strong tier for Chief/Editor/reviewers/Reader, cheap tier for Engineer/Tester/Researcher; `uniform` = session model for all |
 | proposal portfolio / competitors | re-selected every round | 1–3 proposals (never 0) + ≤3 competitors; Chief's call per round |
 | max reviewers | 3 adjacent + 1 full-reference reader | bounds only — actual count is the Editor's call |
 
-## 10. Implementations and scope
+## 11. Implementations and scope
 
 - **ZCode** — `implementations/zcode/*.dwf.ts`: ZCode-specific format; copy into `~/.zcode/workflows/` and run from inside the research repo. The gate calls `python selfcheck.py` and falls back to `python3` automatically. The Chinese-UI file is canonical; `*.en.dwf.ts` is protocol-identical.
 - **Any framework** — roles → subagents, steps 1–8 → graph nodes or an orchestration script, the gate → a CI job, the ledger → a repo file, `profile` → project config. Portable by design; validated on one engine (ZCode).
 - **Scope** — this repository ships the *iteration* protocol. A heavier deep-research variant (fixed specialist reviewer bench, domain guardrails) was field-tested on a real project over nine rounds in three runs; its lessons are folded into §5–§7. It is not included here. `claim_map` as a standardized JSON schema is a possible future extension.
 
-## 11. License
+## 12. License
 
 Docs: **CC BY 4.0** — redistributing or adapting the documentation requires attribution; if the protocol helps your research, please cite the work (`../CITATION.cff`). Code (incl. `.dwf.ts`): **Apache-2.0**.

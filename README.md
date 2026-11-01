@@ -1,6 +1,6 @@
 # BossLoop
 
-**v0.2.0** · 中文文档：[README.zh-CN.md](README.zh-CN.md)
+**v0.2.7** · 中文文档：[README.zh-CN.md](README.zh-CN.md)
 
 **Bounded AI-team loops that work for the boss — and report to you.** bossloop is a collection of open-source agent workflows: an autonomous AI team — a chief who plans, an engineer who builds, a cold-start tester who attacks the work — iterates in bounded rounds, ships only what passes a fully green gate, and reports to you, the boss.
 
@@ -10,6 +10,8 @@
 |---|---|---|
 | **Idea Validation** | Start from a rough idea. Three rounds later, know whether it deserves three months. | [Research Iteration Loop](idea-validation-loop/SPEC.md) |
 | **Engineering Development** | Give it a requirement. Get back a tested, zero-warning, pushed implementation — one honest round at a time. | [Robust Engineering Loop](robust-engineering-loop/SPEC.md) |
+
+**Tiered models by default.** Both loops put strong models on planning and review (chief, reviewers) and cheap models on build and test, with a junior→senior escalation path; destructive commands raised on the cheap tier are ruled on by the strong tier, never bounced back to you — fewer tokens, larger jobs, same guardrails.
 
 ## Shared philosophy
 

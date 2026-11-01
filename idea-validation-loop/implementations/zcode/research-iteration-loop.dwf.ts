@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 科研迭代循环（v0.2.0）：总工程师每轮重组方案 Portfolio（机械校验 1–3）→ 算法工程师三级执行（FULL 出数、第 1 轮端到端数字机械补验）→ 测试工程师独立验证 + canary/映射表/解释器自动回退三重门禁（修复裁决归测试工程师；头条数字双路径复算，撤回即全库扫描）→ 修复补充 → 研究员修订 → 编辑盲审（审稿人每轮唯一命名）→ 含实验死亡率与新颖性核查的审稿 → 存档（HEAD 落盘核验 + 本地加密备份 remote，绝不推云端）；N 轮硬停出《初步评估报告》，账本断点续跑。
+description: 科研迭代循环（v0.2.7）：总工程师每轮重组方案 Portfolio（机械校验 1–3）→ 算法工程师三级执行（FULL 出数、第 1 轮端到端数字机械补验）→ 测试工程师独立验证 + canary/映射表/解释器自动回退三重门禁（修复裁决归测试工程师；头条数字双路径复算，撤回即全库扫描）→ 修复补充 → 研究员修订 → 编辑盲审（审稿人每轮唯一命名）→ 含实验死亡率与新颖性核查的审稿 → 存档（HEAD 落盘核验 + 本地加密备份 remote，绝不推云端）；N 轮硬停出《初步评估报告》，账本断点续跑。模型分档（tiered：总工/编辑/审稿人/文献读者用 GLM-5.3，算法/测试/研究员用 GLM-5.3-Flash；审稿与开发异档即天然满足盲审去相关；models=uniform 全随会话模型）。破坏性操作只申报、由强档总工裁决后按批准执行（开发与修复路径全覆盖），不转交用户。
 args:
   idea:
     type: string
@@ -17,6 +17,10 @@ args:
     type: string
     default: ""
     description: 项目级约束（如硬件内存上限、数据只读规则、禁用做法、备份方式；可为空）
+  models:
+    type: string
+    default: "tiered"
+    description: 模型分档；tiered = 分析类角色（总工/编辑/审稿/文献读者）用强模型、实践类角色（算法/测试/研究员）用廉价模型（本参考实现为 GLM-5.3 与 GLM-5.3-Flash），uniform = 全部随会话模型
 */
 
 interface SurveyResult {
@@ -50,6 +54,8 @@ interface DevReport {
   numbers: string[];
   /** 本轮实验死亡率：尝试数/跑通数（含死在调试阶段的，如实统计） */
   experiments: string;
+  /** 需要执行的破坏性操作（删除数据集/覆盖产物/改写历史）：只申报，绝不自行执行；没有则空数组 */
+  dangerRequests: DangerRequest[];
   /** 遗留事项，没有则写"无" */
   leftover: string;
 }
@@ -80,6 +86,28 @@ interface Review {
   /** 与该想法最相近的已有工作及差异维度（文献读者必答；其他审稿人可空） */
   nearestWorks?: string[];
   severity: "minor" | "major" | "blocker";
+}
+
+interface DangerRequest {
+  /** 拟执行的破坏性命令原文 */
+  command: string;
+  /** 为什么必须这么做 */
+  reason: string;
+  /** 影响范围：将删除/覆盖哪些路径或数据、是否可逆 */
+  scope: string;
+}
+
+interface DangerDecision {
+  command: string;
+  decision: "approve" | "approve-with-change" | "reject";
+  /** approve-with-change 时的安全写法；approve 时为空串 */
+  safeForm: string;
+  reason: string;
+}
+
+interface DangerReview {
+  summary: string;
+  decisions: DangerDecision[];
 }
 
 interface RoundRow {
@@ -128,6 +156,7 @@ const ALGO_ZH = [
   "竞品复现必须保真：与原文发表数字对照，偏差逐条记录——你不能既造自己的方法又给竞品打分。",
   "测试冻结规则：测试工程师验证期间，你不修改被测实现（否则测试对象在漂移，结论无效）。此时你只做两件事：准备可复现包（环境/命令/随机种子/数据窗口），响应门禁失败。测试报告返回后再按裁决修复。",
   "长任务安全（硬约束）：逐批次/逐场景用独立子进程运行，结果立即落盘后退出释放内存；脚本内置内存护栏（超约物理内存 70–80% 主动终止并保存现场）；每步有超时与失败出口；数据集与既有产物只读，不删除不覆盖；生成的代码视为不可信，可行时优先在容器/受限网络中执行（containment 是降险不是保证）。",
+  "破坏性操作铁律：删除数据集/覆盖既有产物/git reset --hard/git clean -fdx/force push/改写已推送历史，一律只申报不执行——写入 dangerRequests（命令、原因、影响范围），等总工程师裁决后按其批准的写法执行。",
   "实验三级执行纪律：每个新实验先 MINI_PILOT（冒烟，验证代码能跑通与内存量级）→ PILOT（小数据核对正确性）→ FULL（正式协议的完整对比）。调试只看 PILOT 及以前；所有入档数字与主张只来自 FULL——禁止拿最小对比的结果冒充验证结论。在 DevReport.experiments 字段如实统计尝试数/跑通数（含死在调试阶段的）。",
   "如实报告失败；指令矛盾则升级提问，不造假不绕过。全程中文。",
 ].join("\n");
@@ -137,6 +166,7 @@ const TEST_ZH = [
   "独立性铁律：只读被测实现，绝不修改它——你动手修，验证就变成自我服务、不再独立。你只写自检与映射表。",
   "你拥有 claim→evidence 映射表（docs/workflow/claim_map.md）：稿件每个数字 ↔ 存档工件 + 可重跑的检查命令；先写检查，再做主张。文件首行须含 claim-map 标记，正文用表格。",
   "你负责在仓库根目录建立/维护 selfcheck.py：必须含至少一个故意埋坏、必须 FAIL 的金丝雀用例（代码中带 canary 标记，供编排器检索核对）——不会变红的测试套件证明不了任何事。",
+  "破坏性操作判据：超出申报裁决清单的——数据集或既有产物被删/被覆盖、历史被改写、force 痕迹——标为严重问题并索要总工裁决记录；实验产物正常迭代替换不属此列。",
   "每条裁决附证据。全程中文。",
 ].join("\n");
 
@@ -164,6 +194,13 @@ const focus = typeof args.focus === "string" ? args.focus : "";
 const profile = typeof args.profile === "string" ? args.profile : "";
 const PROFILE_LINE = profile ? "\n项目级约束（必须遵守，高于默认做法）：" + profile : "";
 
+/** 模型分档：tiered = 强弱分档（本参考实现 GLM-5.3 / GLM-5.3-Flash）；uniform = 全随会话模型 */
+const tiered = String(args.models ?? "tiered").toLowerCase() !== "uniform";
+const STRONG = model("GLM-5.3");
+const CHEAP = model("GLM-5.3-Flash");
+const persona = (system: string, m: ModelRef): { system: string; model?: ModelRef } =>
+  tiered ? { system, model: m } : { system };
+
 artifact.table("rounds", {
   title: "验证轮次看板",
   columns: [
@@ -180,7 +217,7 @@ artifact.table("rounds", {
 });
 
 phase("总工程师调研立项");
-const chief = agent("总工程师", { system: CHIEF_ZH + PROFILE_LINE });
+const chief = agent("总工程师", persona(CHIEF_ZH + PROFILE_LINE, STRONG)); // 强模型档：分析与规划
 let ledger = "";
 try {
   ledger = await files.read("docs/workflow/ledger.md");
@@ -201,16 +238,42 @@ if (survey.paperRequests.length > 0) {
 const startRound = Math.max(1, Math.min(rounds + 1, Math.round(survey.resumeFrom) + 1));
 if (startRound > 1) log("账本显示已完成 " + (startRound - 1) + " 轮，从第 " + startRound + " 轮续跑");
 
-const algo = agent("算法工程师", { system: ALGO_ZH + PROFILE_LINE });
-const tester = agent("测试工程师", { system: TEST_ZH + PROFILE_LINE });
-const researcher = agent("研究员", { system: RESEARCHER_ZH + PROFILE_LINE });
-const editor = agent("编辑", { system: EDITOR_ZH + PROFILE_LINE });
-const reader = agent("文献资深读者", { system: READER_ZH + PROFILE_LINE });
+const algo = agent("算法工程师", persona(ALGO_ZH + PROFILE_LINE, CHEAP)); // 廉价模型档
+const tester = agent("测试工程师", persona(TEST_ZH + PROFILE_LINE, CHEAP)); // 廉价模型档
+const researcher = agent("研究员", persona(RESEARCHER_ZH + PROFILE_LINE, CHEAP)); // 廉价模型档
+const editor = agent("编辑", persona(EDITOR_ZH + PROFILE_LINE, STRONG)); // 强模型档
+const reader = agent("文献资深读者", persona(READER_ZH + PROFILE_LINE, STRONG)); // 强模型档
 
 const rows: RoundRow[] = [];
 let plan = "第 " + startRound + " 轮：按调研结论执行（方案：" + survey.proposals.join("、") + "；竞品：" + survey.competitors.join("、") + "）";
 
+/** 破坏性操作：申报→强档总工裁决→按批准执行；返回裁决日志（入账本）。初始开发与修复/补充实验路径都走这里 */
+async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
+  phase("危险操作审核");
+  const raw = await chief.ask<DangerReview>(
+    "破坏性操作审核（你是强模型档裁决者，此判断不下放给老板）。申报人：算法工程师（廉价档）。逐条裁决：" + JSON.stringify(reqs) +
+    "。判断依据：影响范围能否精确界定、是否可逆、有无更窄更安全的等价写法（限定路径、先 dry-run、先备份、先列受影响清单）；默认 reject，能给安全写法用 approve-with-change 并写 safeForm，必要且安全才 approve。仅当实验在无该操作时根本无法继续，才在 reason 中如实写明「实验受阻」，交由《初步评估报告》呈现（研究循环无打断机制）。返回 DangerReview（decisions 与请求逐条对应）。",
+  );
+  let decisions = raw.decisions ?? [];
+  if (decisions.length !== reqs.length) {
+    log("危险操作裁决不完整（" + decisions.length + "/" + reqs.length + " 条）——整体按驳回处理，如实记录");
+    decisions = reqs.map((r) => ({ command: r.command, decision: "reject" as const, safeForm: "", reason: "裁决不完整，整体驳回以保安全" }));
+  }
+  const entry = decisions.map((d) => d.command + "→" + d.decision + (d.safeForm ? "（改：" + d.safeForm + "）" : "") + "：" + d.reason).join("；");
+  const ok = decisions.filter((d) => d.decision !== "reject");
+  if (ok.length > 0) {
+    phase("执行已批准的危险操作");
+    await algo.ask<string>(
+      "执行总工程师已批准的危险操作，严格按批准写法（safeForm 非空时用 safeForm），不得扩大范围：" + ok.map((d, i) => (i + 1) + ". " + (d.safeForm || d.command)).join("；") + "。完成后 git add -A && git commit，返回一句话。",
+    );
+  } else {
+    log("危险操作全部驳回：不得绕过，另寻安全路径");
+  }
+  return entry;
+}
+
 for (let round = startRound; round <= rounds; round++) {
+  let dangerLog = "无"; // 本轮危险操作裁决（入账本）
   phase("布置本轮任务卡");
   let cards = await chief.ask<WorkCards>(
     "第 " + round + "/" + rounds + " 轮。idea：" + idea + "\n" +
@@ -238,6 +301,10 @@ for (let round = startRound; round <= rounds; round++) {
       "第 1 轮必须以至少一个来自完整对比（FULL 级）的端到端数字收尾，禁止以最小对比代替。请现在补跑并返回 DevReport（numbers 填入该数字与口径）；若客观上无法做到，如实说明并保持 numbers 为空。",
     );
     if (dev.numbers.length === 0) log("第 1 轮无端到端数字（补救后仍缺）——已如实记录，稿件不得声称已验证");
+  }
+  // 破坏性操作：廉价档只申报，强档总工裁决执行/改写法/跳过（不下放给老板）
+  if ((dev.dangerRequests || []).length > 0) {
+    dangerLog = await dangerFlow(dev.dangerRequests);
   }
 
   phase("测试工程师审查测试");
@@ -320,9 +387,12 @@ for (let round = startRound; round <= rounds; round++) {
     );
     const t = triage.trim();
     if (t !== "" && t !== "无") {
-      await algo.ask<DevReport>(
+      const triageDev = await algo.ask<DevReport>(
         "测试工程师裁决的修复指令（你不许改 selfcheck.py 与 claim_map.md）：\n" + t.slice(0, 2000) + "\n执行后返回 DevReport。",
       );
+      if ((triageDev.dangerRequests || []).length > 0) {
+        dangerLog = (dangerLog === "无" ? "" : dangerLog + "；") + await dangerFlow(triageDev.dangerRequests);
+      }
     }
   }
 
@@ -333,6 +403,9 @@ for (let round = startRound; round <= rounds; round++) {
   );
   if (fixes.length > 0) {
     fixDev = await algo.ask<DevReport>("执行修复与补充实验：" + fixes.join("；") + "\n返回 DevReport。");
+    if ((fixDev.dangerRequests || []).length > 0) {
+      dangerLog = (dangerLog === "无" ? "" : dangerLog + "；") + await dangerFlow(fixDev.dangerRequests);
+    }
   }
 
   phase("研究员修订文稿");
@@ -352,7 +425,7 @@ for (let round = startRound; round <= rounds; round++) {
   phase("审稿团评审");
   const settled = await Promise.allSettled(
     Array.from({ length: n }, (_, i) =>
-      agent("审稿人-r" + round + "-" + (i + 1)).ask<Review>(
+      agent("审稿人-r" + round + "-" + (i + 1), tiered ? { model: STRONG } : undefined).ask<Review>(
         invite.brief + "\n\n你是相邻领域（与本研究方向相关但不重叠）的独立审稿人，只读：对稿件与证据映射提出尖锐质询（附证据出处），并给出下一轮迭代建议，给 severity。如无法判断，如实说明。",
       ),
     ),
@@ -379,7 +452,7 @@ for (let round = startRound; round <= rounds; round++) {
     head0 = "";
   }
   const archived = await chief.ask<string>(
-    "把本轮（任务/产出/测试/审稿/下轮方向）追加到 docs/workflow/ledger.md，然后 git add -A && git commit。若已配置本地加密备份 remote（建议用 GitCoffer 构建，防 Agent 误删本地代码后无从恢复），同时 push 到该 remote；不主动 push 到任何其它 remote（向云端发布永远是老板的明确动作）。返回一句话。",
+    "把本轮（任务/产出/危险操作裁决（" + dangerLog + "）/测试/审稿/下轮方向）追加到 docs/workflow/ledger.md，然后 git add -A && git commit。若已配置本地加密备份 remote（建议用 GitCoffer 构建，防 Agent 误删本地代码后无从恢复），同时 push 到该 remote；不主动 push 到任何其它 remote（向云端发布永远是老板的明确动作）。返回一句话。",
   );
   let head1 = "";
   try {
