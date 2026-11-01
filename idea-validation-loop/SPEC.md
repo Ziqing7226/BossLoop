@@ -1,10 +1,12 @@
 # Research Iteration Loop
 
-**v0.1.1** · repo: `research-iteration-loop`
+**v0.2.0** · collection: `bossloop` · sibling: [Robust Engineering Loop](../robust-engineering-loop/SPEC.md)
 
 > Start from a rough idea. Iterate it through bounded, adversarial cycles. Stop on schedule and report whether it deserves more of your life.
 
 This protocol describes an AI research team that surveys, builds, tests, writes, and peer-reviews — then hard-stops and hands back an honest evaluation. It is portable by design (validated on ZCode); reference implementations live in `implementations/`.
+
+![loop diagram](docs/diagram-en.png)
 
 ---
 
@@ -91,12 +93,8 @@ Project-specific constraints travel in a `profile` string injected into every ro
 
 - **ZCode** — `implementations/zcode/*.dwf.ts`: ZCode-specific format; copy into `~/.zcode/workflows/` and run from inside the research repo. The gate calls `python selfcheck.py` and falls back to `python3` automatically. The Chinese-UI file is canonical; `*.en.dwf.ts` is protocol-identical.
 - **Any framework** — roles → subagents, steps 1–8 → graph nodes or an orchestration script, the gate → a CI job, the ledger → a repo file, `profile` → project config. Portable by design; validated on one engine (ZCode).
-- **Scope** — this repository ships the *iteration* protocol. A heavier deep-research variant (fixed specialist reviewer bench, domain guardrails) was field-tested on a real project over nine rounds in three runs; its lessons are folded into §5–§7. It is not included here.
+- **Scope** — this repository ships the *iteration* protocol. A heavier deep-research variant (fixed specialist reviewer bench, domain guardrails) was field-tested on a real project over nine rounds in three runs; its lessons are folded into §5–§7. It is not included here. `claim_map` as a standardized JSON schema is a possible future extension.
 
 ## 11. License
 
-Docs: **CC BY 4.0** — redistributing or adapting the documentation requires attribution; if the protocol helps your research, please cite the work (`CITATION.cff`). Code (incl. `.dwf.ts`): **Apache-2.0**.
-
-## 12. Prior art
-
-Design lessons folded in from open-source systems: the AI-Scientist's review module (numeric rubric, ensembled reviews with a meta-review) and its documented sandbox-escape risk; CodeScientist's staged execution (pilot → full) and supporting/refuting/inconclusive counting; the AI co-scientist's ranking and proximity analysis; AgentReview's quantified reviewer biases (identity disclosure alone flips a large share of decisions), which motivated the blind-review discipline. `claim_map` as a standardized JSON schema is a possible future extension. The Researcher's writing rules are distilled from [gulucaptain/Best-Paper-Writing-Skill](https://github.com/gulucaptain/Best-Paper-Writing-Skill).
+Docs: **CC BY 4.0** — redistributing or adapting the documentation requires attribution; if the protocol helps your research, please cite the work (`../CITATION.cff`). Code (incl. `.dwf.ts`): **Apache-2.0**.

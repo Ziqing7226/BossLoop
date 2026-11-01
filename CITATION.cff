@@ -1,19 +1,21 @@
 cff-version: 1.2.0
 message: >-
-  If this protocol or its implementations helped your research,
+  If these protocols or their implementations helped your work,
   please mention this work.
 type: software
-title: research-iteration-loop
-version: v0.1.1
+title: bossloop
+version: v0.2.0
 date-released: "2026-11-01"
 authors:
   - alias: Ziqing7226
-repository-code: "https://github.com/Ziqing7226/research-iteration-loop"
+repository-code: "https://github.com/Ziqing7226/bossloop"
 abstract: >-
-  A portable-by-design protocol (with reference implementations) for an
-  autonomous AI research team that validates a research idea through
-  bounded build-test-write-review cycles, then hard-stops and reports
-  whether to continue.
+  A collection of portable-by-design protocols (with reference
+  implementations) for bounded loops run by autonomous AI teams:
+  idea validation through build-test-write-review cycles, and robust
+  engineering development through plan-build-cold-test-amend-push
+  rounds — each loop hard-stops on schedule and reports honestly
+  to the boss.
 license:
   - CC-BY-4.0
   - Apache-2.0

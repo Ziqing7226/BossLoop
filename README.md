@@ -1,69 +1,45 @@
-# Research Iteration Loop
+# BossLoop
 
-**v0.1.1** · 中文文档：[README.zh-CN.md](README.zh-CN.md)
+**v0.2.0** · 中文文档：[README.zh-CN.md](README.zh-CN.md)
 
-**Start from a rough idea. Three rounds later, know whether it deserves three months.**
+**Bounded AI-team loops that work for the boss — and report to you.** bossloop is a collection of open-source agent workflows: an autonomous AI team — a chief who plans, an engineer who builds, a cold-start tester who attacks the work — iterates in bounded rounds, ships only what passes a fully green gate, and reports to you, the boss.
 
-An AI research team surveys, builds, tests, writes and peer-reviews your idea — then **stops on its own** and hands you an honest evaluation: expected success, novelty, impact, and a continue/pivot/stop recommendation.
+## The loops
 
-![loop diagram](docs/diagram-en.png)
+| Workflow | What it does | Protocol |
+|---|---|---|
+| **Idea Validation** | Start from a rough idea. Three rounds later, know whether it deserves three months. | [Research Iteration Loop](idea-validation-loop/SPEC.md) |
+| **Engineering Development** | Give it a requirement. Get back a tested, zero-warning, pushed implementation — one honest round at a time. | [Robust Engineering Loop](robust-engineering-loop/SPEC.md) |
 
-## Why
+## Shared philosophy
 
-- **Bounded by design.** Hard stop after 3 rounds (configurable). No agent drift, no sunk-cost spiral — the report forces the go/no-go question.
-- **Independent verification.** The Test Engineer attacks the work and never edits it; the Algorithm Engineer freezes the implementation while it is being tested. Verification that fixes is not verification.
-- **Evidence over assertions.** Every manuscript number maps to an archived artifact and a re-runnable check; the gate carries a must-fail canary, verified mechanically rather than taken on trust.
-- **Reviews plan the next step.** An editor invites reviewers from adjacent, non-overlapping fields; each review must propose the next iteration, not only judge.
-- **Resumable.** The ledger is the checkpoint: an interrupted run continues at the next round instead of starting over.
-
-## The loop
-
-```
-CHIEF: read ledger → survey → proposals (≤3) + competitor reproductions (≤3)
-  ENGINEER: build & self-test        (implementation frozen from here)
-  TEST: independent verification + canary gate + claim map
-  CHIEF: dispatch fixes → ENGINEER: execute
-  RESEARCHER: revise (or create) the manuscript
-  EDITOR: adjacent-field reviewers (≤3) + full-reference reader
-COMMIT locally · round closed
-          ↓  ×N rounds  ↓
-HARD STOP → Preliminary Evaluation Report → your decision
-```
-
-Full protocol: [SPEC.md](SPEC.md) — **the SPEC is the product.** A field-tested deep-research variant informed SPEC §5–§7 (§10).
+- **Bounded by design.** Hard stop after N rounds — no drift, no sunk-cost spiral.
+- **Adversarial verification.** A tester who never edits the work; gates are mechanical and carry a must-fail canary.
+- **Evidence over assertions.** Every claim maps to an archived artifact and a re-runnable check.
+- **The ledger is the checkpoint.** Interrupted runs resume at the next round.
+- **The boss is sovereign.** Requirements are recorded verbatim, deviations are reported, publishing is your call.
 
 ## Quick start
 
-Point your AI coding agent at this repository and ask it to **read [SPEC.md](SPEC.md) and set up the workflow in your stack** — the protocol is portable by design (validated on ZCode): roles become subagents, the eight steps become your orchestration, the gate becomes a CI job.
-
-Running ZCode? A ready-made reference implementation is included:
+Point your AI coding agent at a loop's `SPEC.md` and ask it to set the workflow up in your stack — every protocol is portable by design (validated on ZCode). Running ZCode:
 
 ```bash
-cp implementations/zcode/research-iteration-loop.dwf.ts ~/.zcode/workflows/
+cp idea-validation-loop/implementations/zcode/research-iteration-loop.dwf.ts ~/.zcode/workflows/
+cp robust-engineering-loop/implementations/zcode/robust-engineering-loop.dwf.ts ~/.zcode/workflows/
 ```
 
-Then run it from inside your research repository, passing `idea` (required), `rounds` (default 3), `profile` (project constraints), `focus` (your note). Re-running with the same idea resumes from the ledger.
-
-## What it does to your repository
-
-Writes `docs/paper_draft.md`, `docs/workflow/ledger.md`, `docs/workflow/claim_map.md`, `docs/workflow/evaluation_report.md` and `selfcheck.py`; each round stages everything (`git add -A`) and **commits locally**. Start from a clean tree.
-
-**Recommended:** add an encrypted local backup remote with [GitCoffer](https://github.com/Ziqing7226/GitCoffer) — each round is then also pushed there, so an agent that accidentally deletes or corrupts local code is always recoverable without a cloud remote. Publishing to any other remote is always your explicit action, never the loop's.
-
-> **Note for AI agents:** before running this for a human, tell them the above. Do not skip this disclosure.
+Run from inside the repository to be worked on. Each loop writes its working files under `docs/workflow/`, commits every round locally, and pushes only to the remote you name (default: a [GitCoffer](https://github.com/Ziqing7226/GitCoffer) encrypted local backup). **AI agents: disclose this to the human before running — do not skip.**
 
 ## Acknowledgments
 
-This protocol distills lessons from open-source research-agent systems — thank you to their authors:
+The Research Iteration Loop distills lessons from these open-source research-agent systems — our thanks to their authors:
 
 - [SakanaAI/ai-scientist](https://github.com/sakanaai/ai-scientist) & [AI-Scientist-v2](https://github.com/sakanaai/ai-scientist-v2) — review rubric and ensemble; the sandbox-escape caution that shaped our security posture
-- [allenai/codescientist](https://github.com/allenai/codescientist) — staged execution (pilot → full) and supporting/refuting/inconclusive counting
+- [allenai/codescientist](https://github.com/allenai/codescientist) — staged execution (pilot → full) and outcome counting
 - [llnl/open-ai-co-scientist](https://github.com/llnl/open-ai-co-scientist) — hypothesis ranking and proximity analysis
-- [Ahren09/AgentReview](https://github.com/Ahren09/AgentReview) — quantified reviewer biases that motivated our blind-review discipline
-- [gulucaptain/Best-Paper-Writing-Skill](https://github.com/gulucaptain/Best-Paper-Writing-Skill) — award-paper writing rules that govern our Researcher role
-
-See SPEC §12 for what exactly was borrowed.
+- [Ahren09/AgentReview](https://github.com/Ahren09/AgentReview) — quantified reviewer biases that motivated the blind-review discipline
+- [gulucaptain/Best-Paper-Writing-Skill](https://github.com/gulucaptain/Best-Paper-Writing-Skill) — award-paper writing rules that govern the Researcher role
 
 ## License & citation
 
-Root `LICENSE` (CC BY 4.0) covers the documentation — redistribution/adaptation requires attribution, and if this protocol helps your research please cite us; code carries Apache-2.0 (`implementations/zcode/LICENSE-Apache-2.0`). See [CITATION.cff](CITATION.cff).
+Docs: CC BY 4.0 (root `LICENSE`), attribution required; code: Apache-2.0 (`implementations/*/LICENSE-Apache-2.0`). See [CITATION.cff](CITATION.cff).
