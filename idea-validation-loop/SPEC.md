@@ -1,6 +1,6 @@
 # Research Iteration Loop
 
-**v0.2.7** · collection: `bossloop` · sibling: [Robust Engineering Loop](../robust-engineering-loop/SPEC.md)
+**v0.2.8** · collection: `bossloop` · sibling: [Robust Engineering Loop](../robust-engineering-loop/SPEC.md)
 
 > Start from a rough idea. Iterate it through bounded, adversarial cycles. Stop on schedule and report whether it deserves more of your life.
 
@@ -66,7 +66,7 @@ Why the engineer looks idle during testing: verification must be independent of 
 
 Subprocess per batch/scene; write results to disk immediately and exit to free memory; a hard memory cap and timeouts **in code**; staged pilot runs before full runs; datasets and existing artifacts read-only; cloud pushes are never automatic (local backup: see §7). Agent-written code is **untrusted**: prefer containerized or network-restricted execution where available — but treat containment as risk reduction, not a guarantee (sandbox escapes by capable code are a documented reality).
 
-**Destructive operations are declared and adjudicated on cheap tiers.** Deleting datasets, overwriting existing artifacts, `git reset --hard`, `git clean -fdx`, force pushes and rewrites of pushed history are declared (`dangerRequests`: command, reason, blast radius) and never run unilaterally; the **strong-tier Chief** rules each one — reject, a safer scoped form, or approve — and only the approved form runs. The ruling is not handed back to the boss: an experiment that cannot proceed at all without the operation is recorded as blocked in the ledger and surfaces in the Preliminary Evaluation Report.
+**Destructive operations are declared and adjudicated on cheap tiers, and the loop verifies its own bookkeeping:** the executor reports the commands it actually ran, compared against the approved forms; an unconfirmed execution is recorded honestly in the ledger. Deleting datasets, overwriting existing artifacts, `git reset --hard`, `git clean -fdx`, force pushes and rewrites of pushed history are declared (`dangerRequests`: command, reason, blast radius) and never run unilaterally; the **strong-tier Chief** rules each one — reject, a safer scoped form, or approve — and only the approved form runs. The ruling is not handed back to the boss: an experiment that cannot proceed at all without the operation is recorded as blocked in the ledger and surfaces in the Preliminary Evaluation Report.
 
 ## 7. Unattended runs and recovery
 

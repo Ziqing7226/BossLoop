@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 鲁棒工程循环（v0.2.7）：总工程师先建"要求台账"（老板原话逐字+内涵+验收标准）并承诺 N 轮规划（老板可用 rounds 锁定）→ 每轮：算法工程师开发+文档（文档即交付物：专业、美观、简洁、无冗余重复）+单笔本地提交 → 测试工程师冷启动上岗（全新代理上下文，只见 diff 与代码，绝不见开发自报）：diff 审查（含文档质量）+鲁棒性测试+canary+本地 CI 全绿+警告即错误构建+核查上一轮 remote CI 结转 → 不过则算法工程师先复现（确认→修复 / 误诊→证据反驳，测试工程师仲裁）→ amend 并入本轮提交 → 复检（初级 3 次未解即升级高级工程师，门禁复核 10 次仍未过即打断上报老板）→ 全绿才推送约定 remote（默认 GitCoffer 自动探测，append-only 永不 force）→ 总工账本小提交；N 轮硬停出《最终汇报》：逐条要求→结果→证据+偏离说明；破坏性操作只申报不执行：初级申报由高级工程师裁决、升级阶段申报由总工裁决（裁决者非申报者本人），执行或跳过绝不转交用户；账本断点续跑。模型分档（tiered：总工与高级工程师用 GLM-5.3，算法/测试用 GLM-5.3-Flash；同一问题初级 3 次迭代未解决即升级高级工程师；models=uniform 全随会话模型）。
+description: 鲁棒工程循环（v0.2.8）：总工程师先建"要求台账"（老板原话逐字+内涵+验收标准）并承诺 N 轮规划（老板可用 rounds 锁定）→ 每轮：算法工程师开发+文档（文档即交付物：专业、美观、简洁、无冗余重复）+单笔本地提交 → 测试工程师冷启动上岗（全新代理上下文，只见 diff 与代码，绝不见开发自报）：diff 审查（含文档质量）+鲁棒性测试+canary+本地 CI 全绿+警告即错误构建+核查上一轮 remote CI 结转 → 不过则算法工程师先复现（确认→修复 / 误诊→证据反驳，测试工程师仲裁）→ amend 并入本轮提交 → 复检（初级 3 次未解即升级高级工程师，门禁复核 10 次仍未过即打断上报老板）→ 全绿才推送约定 remote（默认 GitCoffer 自动探测，append-only 永不 force）→ 总工账本小提交；N 轮硬停出《最终汇报》：逐条要求→结果→证据+偏离说明；破坏性操作只申报不执行：初级申报由高级工程师裁决、升级阶段申报由总工裁决（裁决者非申报者本人），执行或跳过绝不转交用户；账本断点续跑。模型分档（tiered：总工与高级工程师用 GLM-5.3，算法/测试用 GLM-5.3-Flash；同一问题初级 3 次迭代未解决即升级高级工程师；models=uniform 全随会话模型）。
 args:
   requirement:
     type: string
@@ -79,6 +79,8 @@ interface TestVerdict {
   passed: boolean;
   /** 问题清单，每条附复现证据 */
   findings: Finding[];
+  /** 覆盖声明：深审了哪些文件/区域、只略读了哪些（先于判定写出，供日后对账） */
+  coverage: string;
 }
 
 interface FixOutcome {
@@ -359,6 +361,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   // 破坏性操作：初级工程师只申报不执行，由强模型档裁决执行 / 改写法 / 跳过（不下放给老板）
   let dangerLog = "无";
   let approvedDanger: string[] = [];
+  const dangerTrail: { declared: string; ruled: string; executed: string }[] = []; // 一致性核查凭据：申报→裁决→执行三段必须对得上
   if ((dev.dangerRequests || []).length > 0) {
     phase("危险操作审核");
     const review = await adjudicateDanger(dev.dangerRequests, "算法工程师", "廉价模型档", false);
@@ -366,9 +369,16 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     log("第 " + round + " 轮危险操作裁决：" + dangerLog.slice(0, 300));
     const ok = review.decisions.filter((d) => d.decision !== "reject");
     approvedDanger = ok.map((d) => d.safeForm || d.command);
+    for (const d of ok) dangerTrail.push({ declared: d.command, ruled: d.decision + (d.safeForm ? "|" + d.safeForm : ""), executed: "待执行确认" });
     if (ok.length > 0) {
       phase("执行已批准的危险操作");
-      await algo.ask<string>(dangerExecAsk(ok));
+      const execReport = await algo.ask<string>(dangerExecAsk(ok));
+      for (const e of dangerTrail) {
+        if (e.executed !== "待执行确认") continue;
+        const form = e.ruled.split("|")[1] || e.declared;
+        e.executed = execReport.includes(form) ? form : "未确认：执行回报未含批准写法";
+        if (!execReport.includes(form)) log("危险操作执行确认缺失：" + e.declared + "——如实记录并计入门禁");
+      }
       headA = await HEAD0();
     } else {
       log("危险操作全部驳回：不执行，不得绕过");
@@ -378,7 +388,18 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   phase("测试工程师冷启动门禁");
   const tester = agent("测试工程师-R" + round, persona(TEST_ZH + PROFILE_LINE, CHEAP)); // 每轮全新实例：冷启动；廉价模型档
   const diffHint = baseline ? "git diff " + baseline + "..HEAD" : "git show HEAD（整仓首提交）";
-  let verdict: TestVerdict = { summary: "未开始", passed: false, findings: [] };
+  // 覆盖声明辅助：编排器只统计并转告 diff 体量，不设阈值红线；深读/略读的取舍由测试员在 verdict 中声明并对账
+  let diffLines = -1;
+  if (baseline) {
+    try {
+      const df = await world.run("git", ["diff", "--numstat", baseline + "..HEAD"], { timeoutMs: 120000 });
+      diffLines = (df.stdout || "").split("\n").reduce((a, l) => { const p2 = l.trim().split("\t"); return a + (Number(p2[0]) || 0) + (Number(p2[1]) || 0); }, 0);
+    } catch {
+      diffLines = -1;
+    }
+  }
+  const sizeNote = diffLines < 0 ? "（diff 体量未知：numstat 不可用，请自行评估）" : "（本轮 diff 体量约 " + diffLines + " 行" + (diffLines > 800 ? "，偏大：请先盘变更清单、再对高风险区深读" : "") + "）";
+  let verdict: TestVerdict = { summary: "未开始", passed: false, findings: [] , coverage: "未开始：尚未评审" };
   let gate = "";
   let canary = false;
   let mapOk = false;
@@ -391,13 +412,13 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   for (let attempt = 1; attempt <= 10; attempt++) {
     verdict = await tester.ask<TestVerdict>(
       (attempt === 1
-        ? "冷启动上岗。baseline 提交：" + (baseline || "（空树，本仓库首提交）") + "。审查 " + diffHint + " 与代码库本身：diff 审查、鲁棒性测试、selfcheck.py（严格构建/全量测试+鲁棒性/本地 CI 等价 + canary 标记）、更新 docs/workflow/requirement_map.md 验证列。"
+        ? "冷启动上岗。baseline 提交：" + (baseline || "（空树，本仓库首提交）") + "。本轮 diff 体量：" + sizeNote + "。审查 " + diffHint + " 与代码库本身：diff 审查、鲁棒性测试、selfcheck.py（严格构建/全量测试+鲁棒性/本地 CI 等价 + canary 标记）、更新 docs/workflow/requirement_map.md 验证列。"
         : "算法工程师已返修（amend 并入本轮提交），其返修申报（只作对账线索，结论仍以你重跑的检查为准）：" + JSON.stringify(lastFix) + "\n逐条复检：修复项重跑原始失败检查确认关闭；反驳项只依据证据仲裁——反驳成立则撤回问题，不成立则保留并说明。") +
       (cards.remoteCiIssues.length > 0 ? "\n另：上一轮 remote CI 必修项已由算法工程师处理：" + cards.remoteCiIssues.join("; ") : "") +
       (approvedDanger.length > 0
         ? "\n本轮经裁决批准的危险操作，只允许这些写法：" + approvedDanger.join("；")
         : "\n本轮未批准任何破坏性操作：diff 或历史中若出现数据/整目录消失、baseline 之下历史被改写、force、既有产物被覆盖，即为未授权破坏性操作，标 blocker（正常重构的源文件删除除外）。") +
-      "返回 TestVerdict（问题必须有复现证据）。",
+      "返回 TestVerdict（问题必须有复现证据）。verdict 中必须附覆盖声明 coverage：深审了哪些文件/区域（逻辑改动、门禁相关、涉危险操作处）、只略读了哪些——它写在知道问题在哪之前，日后任何问题落在略读区将直接以此对账。",
     );
     findingsCount = verdict.findings.length;
     try {
@@ -437,12 +458,14 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     } else {
       output = "selfcheck.py 缺少 canary 标记（必须失败的金丝雀用例）";
     }
-    if (verdict.passed && exitCode === 0 && canary && mapOk) {
+    // 机械核查：每条已批准的危险操作必须申报、有裁决、按批准写法执行（三段对得上才算过）
+    const dangerConsistent = dangerTrail.every((e) => e.executed !== "待执行确认" && !e.executed.startsWith("未确认") && approvedDanger.includes(e.executed));
+    if (verdict.passed && exitCode === 0 && canary && mapOk && dangerConsistent) {
       gate = "pass（第 " + attempt + " 次尝试" + (interpIsPy3 ? "，python3" : "") + "）";
       break;
     }
     if (attempt === 10) {
-      gate = (verdict.passed ? "" : "测试未过；") + (canary ? "" : "缺 canary；") + (mapOk ? "" : "要求映射表缺失；") + (exitCode === 0 ? "" : "selfcheck exit " + exitCode);
+      gate = (verdict.passed ? "" : "测试未过；") + (canary ? "" : "缺 canary；") + (mapOk ? "" : "要求映射表缺失；") + (dangerConsistent ? "" : "危险操作申报-裁决-执行不一致；") + (exitCode === 0 ? "" : "selfcheck exit " + exitCode);
       break;
     }
     const juniorAsk = attempt <= 3; // 初级 3 次迭代未解决 → 升级高级工程师（强模型档）
@@ -451,7 +474,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     const fix = await fixer.ask<FixOutcome>(
       (juniorAsk ? "" : "【升级】初级工程师已 3 次迭代未解决以下问题。你是高级工程师（强模型档）：先定位根因，一次修对，同样 amend 并入本轮提交。\n") +
       "第 " + attempt + " 次门禁未过：" + (verdict.passed ? "（自检通过但 selfcheck/映射表未达标）" : JSON.stringify(verdict.findings)) +
-      "\n机械状态：canary=" + (canary ? "有" : "无") + "；requirement_map=" + (mapOk ? "有效" : "缺失") + "；selfcheck exit=" + (canary ? exitCode : "未运行") +
+      "\n机械状态：canary=" + (canary ? "有" : "无") + "；requirement_map=" + (mapOk ? "有效" : "缺失") + "；危险操作三段一致=" + (dangerConsistent ? "是" : "否") + "；selfcheck exit=" + (canary ? exitCode : "未运行") +
       "\n输出摘录：\n" + output +
       "\n先逐条复现：确认→修复；误诊→证据反驳（FixOutcome.rebutted）。然后 git add -A && git commit --amend --no-edit 并入本轮提交。绝不改写 baseline 之下的历史。",
     );
@@ -461,10 +484,17 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       const dr = await adjudicateDanger(fix.dangerRequests, juniorAsk ? "算法工程师" : "高级工程师", juniorAsk ? "廉价模型档" : "强模型档", !juniorAsk);
       const ok2 = dr.decisions.filter((d) => d.decision !== "reject");
       approvedDanger = approvedDanger.concat(ok2.map((d) => d.safeForm || d.command));
+      for (const d of ok2) dangerTrail.push({ declared: d.command, ruled: d.decision + (d.safeForm ? "|" + d.safeForm : ""), executed: "待执行确认" });
       dangerLog = (dangerLog === "无" ? "" : dangerLog + "；") + dr.decisions.map((d) => d.command + " → " + d.decision + (d.safeForm ? "（改：" + d.safeForm + "）" : "") + "：" + d.reason).join("；");
       if (ok2.length > 0) {
         phase("执行已批准的危险操作");
-        await fixer.ask<string>(dangerExecAsk(ok2));
+        const execReport2 = await fixer.ask<string>(dangerExecAsk(ok2));
+        for (const e of dangerTrail) {
+          if (e.executed !== "待执行确认") continue;
+          const form = e.ruled.split("|")[1] || e.declared;
+          e.executed = execReport2.includes(form) ? form : "未确认：执行回报未含批准写法";
+          if (!execReport2.includes(form)) log("危险操作执行确认缺失：" + e.declared + "——如实记录并计入门禁");
+        }
       } else {
         log("返修请求的危险操作全部驳回：不得绕过，另寻安全路径");
       }
@@ -540,7 +570,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
 
   phase("总工记账");
   const archived = await chief.ask<string>(
-    "把第 " + round + " 轮追加到 docs/workflow/ledger.md：任务卡、开发摘要、危险操作裁决（" + dangerLog + "）、测试判决（问题 " + findingsCount + " / 反驳 " + rebuttedCount + " / 升级 " + escalations + "）、门禁 " + gate + "、baseline " + (baseline || "空树").slice(0, 7) + "、推送 " + pushState + "、下一轮方向。然后 git add -A && git commit（账本小提交）" +
+    "把第 " + round + " 轮追加到 docs/workflow/ledger.md：任务卡、开发摘要、危险操作裁决（" + dangerLog + "）、测试判决（问题 " + findingsCount + " / 反驳 " + rebuttedCount + " / 升级 " + escalations + "）、门禁 " + gate + "、覆盖声明（" + (verdict.coverage || "").slice(0, 300) + "）、baseline " + (baseline || "空树").slice(0, 7) + "、推送 " + pushState + "、下一轮方向。然后 git add -A && git commit（账本小提交）" +
     (push0.target !== "" ? "并推送（git push " + push0.target + "，不 force）" : "") + "，返回一句话。",
   );
   const headLedger = await HEAD0();

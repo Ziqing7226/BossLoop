@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Research iteration loop (v0.2.7), English UI. Chief re-selects a mechanically checked proposal portfolio (1-3) each round -> Engineer with staged execution (MINI_PILOT/PILOT debug, FULL for claims; round-1 end-to-end number enforced; frozen during testing) -> independent Test Engineer with a triple gate (canary + claim map + interpreter auto-fallback; fix triage owned by the tester; dual-path recomputation of headline numbers; retraction sweeps the repo) -> fixes -> Researcher revises -> Editor invites blind adjacent-field reviewers (per-round unique names) -> reviews with experiment mortality and novelty checks -> archive with HEAD verification + encrypted local backup remote (GitCoffer, never cloud); hard stop after N rounds; resumes from the ledger. Model tiering (tiered — chief, editor, reviewers and reference reader on GLM-5.3; engineer, tester and researcher on GLM-5.3-Flash; reviewers on a different tier than the builders satisfies the blind-review decorrelation structurally; models=uniform puts every role on the session model). Destructive operations are declared only and run exactly as the strong-tier Chief approves (covering build and fix paths) — never handed back to the boss.
+description: Research iteration loop (v0.2.8), English UI. Chief re-selects a mechanically checked proposal portfolio (1-3) each round -> Engineer with staged execution (MINI_PILOT/PILOT debug, FULL for claims; round-1 end-to-end number enforced; frozen during testing) -> independent Test Engineer with a triple gate (canary + claim map + interpreter auto-fallback; fix triage owned by the tester; dual-path recomputation of headline numbers; retraction sweeps the repo) -> fixes -> Researcher revises -> Editor invites blind adjacent-field reviewers (per-round unique names) -> reviews with experiment mortality and novelty checks -> archive with HEAD verification + encrypted local backup remote (GitCoffer, never cloud); hard stop after N rounds; resumes from the ledger. Model tiering (tiered — chief, editor, reviewers and reference reader on GLM-5.3; engineer, tester and researcher on GLM-5.3-Flash; reviewers on a different tier than the builders satisfies the blind-review decorrelation structurally; models=uniform puts every role on the session model). Destructive operations are declared only and run exactly as the strong-tier Chief approves (covering build and fix paths) — never handed back to the boss.
 args:
   idea:
     type: string
@@ -65,6 +65,8 @@ interface TestVerdict {
   summary: string;
   /** Issues (code / generalization / reliability), each with evidence */
   issues: string[];
+  /** Coverage statement: areas reviewed deeply vs only skimmed (written before the verdict, reconciled later) */
+  coverage: string;
 }
 
 interface Invite {
@@ -161,6 +163,7 @@ const TEST_EN = [
   "Independence is absolute: read the implementation under test, never modify it — a verifier who fixes makes the verification self-serving. You only write the self-check and the map.",
   "You own the claim→evidence map (docs/workflow/claim_map.md): every manuscript number ↔ an archived artifact + a re-runnable check; write the check before the claim. The file must carry a claim-map marker and be tabular.",
   "You create/maintain selfcheck.py at the repo root: it must contain at least one deliberately-broken canary case that must FAIL, marked `canary` so the orchestrator can verify it by search — a suite that cannot go red proves nothing.",
+  "Long-context discipline: when the diff or review surface is large, inventory the changes first, then deep-read the high-risk areas (logic changes, gate-relevant, danger-operation sites); the verdict's coverage field must state what was reviewed deeply and what was only skimmed — it is written before you know where the problems are, and any later problem in a skimmed area is reconciled against it.",
   "Every verdict carries evidence.",
   "Destructive-operation criterion: beyond the declared-and-ruled list — datasets or existing artifacts deleted or overwritten, history rewritten, force traces — is a serious finding; demand the Chief's ruling record. Ordinary iteration replacing experiment artifacts is not in this class.",
 ].join("\n");
@@ -254,13 +257,18 @@ async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
     log("Destructive ruling incomplete (" + decisions.length + "/" + reqs.length + ") — treating all as rejected, recorded honestly");
     decisions = reqs.map((r) => ({ command: r.command, decision: "reject" as const, safeForm: "", reason: "Incomplete ruling; rejected wholesale for safety" }));
   }
-  const entry = decisions.map((d) => d.command + " -> " + d.decision + (d.safeForm ? " (as: " + d.safeForm + ")" : "") + ": " + d.reason).join("; ");
+  let entry = decisions.map((d) => d.command + " -> " + d.decision + (d.safeForm ? " (as: " + d.safeForm + ")" : "") + ": " + d.reason).join("; ");
   const ok = decisions.filter((d) => d.decision !== "reject");
   if (ok.length > 0) {
     phase("Run the approved destructive operations");
-    await algo.ask<string>(
-      "Run the Chief-approved destructive operations, exactly as approved (use safeForm when non-empty); do not widen the scope: " + ok.map((d, i) => (i + 1) + ". " + (d.safeForm || d.command)).join("; ") + ". Then git add -A && git commit and return one sentence.",
+    const execReport = await algo.ask<string>(
+      "Run the Chief-approved destructive operations, exactly as approved (use safeForm when non-empty); do not widen the scope: " + ok.map((d, i) => (i + 1) + ". " + (d.safeForm || d.command)).join("; ") + ". Then git add -A && git commit and return one sentence (listing the commands actually executed).",
     );
+    for (const d of ok) {
+      const form = d.safeForm || d.command;
+      if (!execReport.includes(form)) log("Dangerous-operation execution unconfirmed: " + d.command + " — recorded honestly, flagged in the ledger");
+    }
+    entry += "; execution confirmation: " + (ok.every((d) => execReport.includes(d.safeForm || d.command)) ? "all match the approved forms" : "some unconfirmed (see log)");
   } else {
     log("All destructive requests rejected: no workaround allowed");
   }
@@ -447,7 +455,7 @@ for (let round = startRound; round <= rounds; round++) {
     head0 = "";
   }
   const archived = await chief.ask<string>(
-    "Append this round (task/build/destructive-operation ruling (" + dangerLog + ")/test/reviews/next direction) to docs/workflow/ledger.md, then git add -A && git commit. If an encrypted local backup remote is configured (recommended: build one with GitCoffer, so agent-caused deletions are always recoverable), also push there; never push to any other remote on your own (publishing to the cloud is always the boss's explicit action). Return one sentence.",
+    "Append this round (task/build/destructive-operation ruling (" + dangerLog + ")/test (coverage statement: " + (verdict.coverage || "").slice(0, 300) + ")/reviews/next direction) to docs/workflow/ledger.md, then git add -A && git commit. If an encrypted local backup remote is configured (recommended: build one with GitCoffer, so agent-caused deletions are always recoverable), also push there; never push to any other remote on your own (publishing to the cloud is always the boss's explicit action). Return one sentence.",
   );
   let head1 = "";
   try {

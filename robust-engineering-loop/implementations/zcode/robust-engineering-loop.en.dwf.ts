@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Robust Engineering Loop (v0.2.7), English UI. Chief records a verbatim requirement ledger and commits to N rounds (boss may lock via rounds) -> each round, the Algorithm Engineer builds + docs (docs are a deliverable — professional, clean, concise, non-redundant) in ONE local commit -> Test Engineer COLD START (fresh agent context; sees only the diff and the code, never the dev self-report) with diff review (incl. doc quality) + robustness suite + canary + local CI green + warnings-as-errors build + remote-CI carryover check of the previous push -> on failure the engineer reproduces first (confirmed -> fix; misdiagnosis -> evidence rebuttal; tester arbitrates) -> amend into the round commit -> re-verify (10 attempts still red -> interrupt and report to the boss) -> only when fully green, push to the agreed remote (GitCoffer auto-detected by default; append-only, never force) -> Chief ledger commit; hard stop after N rounds -> Final Report (requirement -> outcome -> evidence, deviations included); destructive operations are declared, never executed unilaterally — junior declarations ruled on by the Senior Engineer, escalation-phase declarations by the Chief (the ruler is never the declarer) — never handed back to the boss; resumes from the ledger. Model tiering (tiered — Chief and Senior Engineer on GLM-5.3, engineer and tester on GLM-5.3-Flash; a finding the junior cannot solve in 3 fix attempts escalates to the Senior Engineer; models=uniform puts every role on the session model).
+description: Robust Engineering Loop (v0.2.8), English UI. Chief records a verbatim requirement ledger and commits to N rounds (boss may lock via rounds) -> each round, the Algorithm Engineer builds + docs (docs are a deliverable — professional, clean, concise, non-redundant) in ONE local commit -> Test Engineer COLD START (fresh agent context; sees only the diff and the code, never the dev self-report) with diff review (incl. doc quality) + robustness suite + canary + local CI green + warnings-as-errors build + remote-CI carryover check of the previous push -> on failure the engineer reproduces first (confirmed -> fix; misdiagnosis -> evidence rebuttal; tester arbitrates) -> amend into the round commit -> re-verify (10 attempts still red -> interrupt and report to the boss) -> only when fully green, push to the agreed remote (GitCoffer auto-detected by default; append-only, never force) -> Chief ledger commit; hard stop after N rounds -> Final Report (requirement -> outcome -> evidence, deviations included); destructive operations are declared, never executed unilaterally — junior declarations ruled on by the Senior Engineer, escalation-phase declarations by the Chief (the ruler is never the declarer) — never handed back to the boss; resumes from the ledger. Model tiering (tiered — Chief and Senior Engineer on GLM-5.3, engineer and tester on GLM-5.3-Flash; a finding the junior cannot solve in 3 fix attempts escalates to the Senior Engineer; models=uniform puts every role on the session model).
 args:
   requirement:
     type: string
@@ -79,6 +79,8 @@ interface TestVerdict {
   passed: boolean;
   /** Findings, each with reproduction evidence */
   findings: Finding[];
+  /** Coverage statement: areas reviewed deeply vs only skimmed (written before the verdict, reconciled later) */
+  coverage: string;
 }
 
 interface FixOutcome {
@@ -360,6 +362,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   // Destructive operations: the junior declares, the strong tier rules execute / safe form / skip
   let dangerLog = "none";
   let approvedDanger: string[] = [];
+  const dangerTrail: { declared: string; ruled: string; executed: string }[] = []; // consistency evidence: declared -> ruled -> executed must all line up
   if ((dev.dangerRequests || []).length > 0) {
     phase("Destructive-operation review");
     const review = await adjudicateDanger(dev.dangerRequests, "Algorithm Engineer", "cheap tier", false);
@@ -367,9 +370,16 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     log("Round " + round + " destructive-operation ruling: " + dangerLog.slice(0, 300));
     const ok = review.decisions.filter((d) => d.decision !== "reject");
     approvedDanger = ok.map((d) => d.safeForm || d.command);
+    for (const d of ok) dangerTrail.push({ declared: d.command, ruled: d.decision + (d.safeForm ? "|" + d.safeForm : ""), executed: "pending confirmation" });
     if (ok.length > 0) {
       phase("Run the approved destructive operations");
-      await algo.ask<string>(dangerExecAsk(ok));
+      const execReport = await algo.ask<string>(dangerExecAsk(ok));
+      for (const e of dangerTrail) {
+        if (e.executed !== "pending confirmation") continue;
+        const form = e.ruled.split("|")[1] || e.declared;
+        e.executed = execReport.includes(form) ? form : "unconfirmed: executor report lacks the approved form";
+        if (!execReport.includes(form)) log("Dangerous-operation execution unconfirmed: " + e.declared + " — recorded honestly and counted by the gate");
+      }
       headA = await HEAD0();
     } else {
       log("All destructive requests rejected: nothing runs, no workarounds");
@@ -379,7 +389,18 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   phase("Test Engineer cold-start gate");
   const tester = agent("Test Engineer R" + round, persona(TEST_EN + PROFILE_LINE, CHEAP)); // fresh instance per round: cold start; cheap tier
   const diffHint = baseline ? "git diff " + baseline + "..HEAD" : "git show HEAD (the repository's first commit)";
-  let verdict: TestVerdict = { summary: "not started", passed: false, findings: [] };
+  // Coverage-statement aid: the orchestrator only measures and reports the diff size — no threshold line; the deep-vs-skim tradeoff is declared by the tester and reconciled later
+  let diffLines = -1;
+  if (baseline) {
+    try {
+      const df = await world.run("git", ["diff", "--numstat", baseline + "..HEAD"], { timeoutMs: 120000 });
+      diffLines = (df.stdout || "").split("\n").reduce((a, l) => { const p2 = l.trim().split("\t"); return a + (Number(p2[0]) || 0) + (Number(p2[1]) || 0); }, 0);
+    } catch {
+      diffLines = -1;
+    }
+  }
+  const sizeNote = diffLines < 0 ? "(diff size unknown: numstat unavailable, assess yourself)" : "(this round's diff is about " + diffLines + " lines" + (diffLines > 800 ? " — large: inventory the changes first, then deep-read the high-risk areas" : "") + ")";
+  let verdict: TestVerdict = { summary: "not started", passed: false, findings: [] , coverage: "not started: no review yet" };
   let gate = "";
   let canary = false;
   let mapOk = false;
@@ -392,13 +413,13 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   for (let attempt = 1; attempt <= 10; attempt++) {
     verdict = await tester.ask<TestVerdict>(
       (attempt === 1
-        ? "Cold start. Baseline commit: " + (baseline || "(empty tree — this repo's first commit)") + ". Review " + diffHint + " and the repository itself: diff review, robustness tests, selfcheck.py (strict build / full tests + robustness / local CI equivalent + canary marker), and update the verification column of docs/workflow/requirement_map.md."
+        ? "Cold start. Baseline commit: " + (baseline || "(empty tree — this repo's first commit)") + ". Diff size this round: " + sizeNote + ". Review " + diffHint + " and the repository itself: diff review, robustness tests, selfcheck.py (strict build / full tests + robustness / local CI equivalent + canary marker), and update the verification column of docs/workflow/requirement_map.md."
         : "The engineer has reworked (amended into the round commit); their fix report (a reconciliation lead only — your verdict rests on the checks you re-run): " + JSON.stringify(lastFix) + "\nRe-verify one by one: re-run the original failing check for each fix to confirm closure; arbitrate each rebuttal on evidence only — withdraw the finding if the rebuttal stands, keep it with an explanation if not.") +
       (cards.remoteCiIssues.length > 0 ? "\nAlso: the mandatory remote-CI items were handled by the engineer: " + cards.remoteCiIssues.join("; ") : "") +
       (approvedDanger.length > 0
         ? "\nDestructive operations approved by ruling this round — only these forms are allowed: " + approvedDanger.join("; ")
         : "\nNo destructive operation was approved this round: data files or whole directories vanishing, history below the baseline rewritten, a force push, or existing artifacts overwritten in the diff or history is an unapproved destructive operation — mark it blocker (source-file deletions in an ordinary refactor excepted).") +
-      " Return TestVerdict (every finding needs reproduction evidence).",
+      " Return TestVerdict (every finding needs reproduction evidence). The verdict must carry a coverage statement: which files/areas you reviewed deeply (logic changes, gate-relevant, danger-operation sites) and which you only skimmed — it is written before you know where the problems are; any later problem in a skimmed area is reconciled against it.",
     );
     findingsCount = verdict.findings.length;
     try {
@@ -438,12 +459,14 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     } else {
       output = "selfcheck.py lacks the canary marker (a must-fail control case)";
     }
-    if (verdict.passed && exitCode === 0 && canary && mapOk) {
+    // Mechanical check: every approved dangerous operation must be declared, ruled on, and executed exactly in the approved form
+    const dangerConsistent = dangerTrail.every((e) => e.executed !== "pending confirmation" && !e.executed.startsWith("unconfirmed") && approvedDanger.includes(e.executed));
+    if (verdict.passed && exitCode === 0 && canary && mapOk && dangerConsistent) {
       gate = "pass (attempt " + attempt + (interpIsPy3 ? ", python3" : "") + ")";
       break;
     }
     if (attempt === 10) {
-      gate = (verdict.passed ? "" : "test verdict not passed; ") + (canary ? "" : "no canary; ") + (mapOk ? "" : "requirement map missing; ") + (exitCode === 0 ? "" : "selfcheck exit " + exitCode);
+      gate = (verdict.passed ? "" : "test verdict not passed; ") + (canary ? "" : "no canary; ") + (mapOk ? "" : "requirement map missing; ") + (dangerConsistent ? "" : "dangerous-operation declared/ruled/executed mismatch; ") + (exitCode === 0 ? "" : "selfcheck exit " + exitCode);
       break;
     }
     const juniorAsk = attempt <= 3; // 3 failed junior attempts -> escalate to the Senior Engineer (strong tier)
@@ -452,7 +475,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     const fix = await fixer.ask<FixOutcome>(
       (juniorAsk ? "" : "[Escalation] The junior engineer could not solve the following in 3 attempts. You are the Senior Engineer (strong tier): find the root cause and fix it in one pass; amend into the same round commit.\n") +
       "Gate attempt " + attempt + " failed: " + (verdict.passed ? "(self-report green but selfcheck/map not satisfied)" : JSON.stringify(verdict.findings)) +
-      "\nMechanical state: canary=" + (canary ? "present" : "missing") + "; requirement_map=" + (mapOk ? "valid" : "missing") + "; selfcheck exit=" + (canary ? exitCode : "not run") +
+      "\nMechanical state: canary=" + (canary ? "present" : "missing") + "; requirement_map=" + (mapOk ? "valid" : "missing") + "; danger declared/ruled/executed aligned=" + (dangerConsistent ? "yes" : "no") + "; selfcheck exit=" + (canary ? exitCode : "not run") +
       "\nOutput excerpt:\n" + output +
       "\nReproduce every finding first: confirmed -> fix; misdiagnosis -> evidence rebuttal (FixOutcome.rebutted). Then git add -A && git commit --amend --no-edit into the round commit. Never rewrite history below the baseline.",
     );
@@ -462,10 +485,17 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       const dr = await adjudicateDanger(fix.dangerRequests, juniorAsk ? "Algorithm Engineer" : "Senior Engineer", juniorAsk ? "cheap tier" : "strong tier", !juniorAsk);
       const ok2 = dr.decisions.filter((d) => d.decision !== "reject");
       approvedDanger = approvedDanger.concat(ok2.map((d) => d.safeForm || d.command));
+      for (const d of ok2) dangerTrail.push({ declared: d.command, ruled: d.decision + (d.safeForm ? "|" + d.safeForm : ""), executed: "pending confirmation" });
       dangerLog = (dangerLog === "none" ? "" : dangerLog + "; ") + dr.decisions.map((d) => d.command + " -> " + d.decision + (d.safeForm ? " (as: " + d.safeForm + ")" : "") + ": " + d.reason).join("; ");
       if (ok2.length > 0) {
         phase("Run the approved destructive operations");
-        await fixer.ask<string>(dangerExecAsk(ok2));
+        const execReport2 = await fixer.ask<string>(dangerExecAsk(ok2));
+        for (const e of dangerTrail) {
+          if (e.executed !== "pending confirmation") continue;
+          const form = e.ruled.split("|")[1] || e.declared;
+          e.executed = execReport2.includes(form) ? form : "unconfirmed: executor report lacks the approved form";
+          if (!execReport2.includes(form)) log("Dangerous-operation execution unconfirmed: " + e.declared + " — recorded honestly and counted by the gate");
+        }
       } else {
         log("Every destructive request in the rework was rejected: no workaround allowed");
       }
@@ -541,7 +571,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
 
   phase("Chief archives the ledger");
   const archived = await chief.ask<string>(
-    "Append round " + round + " to docs/workflow/ledger.md: cards, dev summary, destructive-operation ruling (" + dangerLog + "), test verdict (findings " + findingsCount + " / rebuttals " + rebuttedCount + " / escalated " + escalations + "), gate " + gate + ", baseline " + (baseline || "empty tree").slice(0, 7) + ", push " + pushState + ", next direction. Then git add -A && git commit (the small ledger commit)" +
+    "Append round " + round + " to docs/workflow/ledger.md: cards, dev summary, destructive-operation ruling (" + dangerLog + "), test verdict (findings " + findingsCount + " / rebuttals " + rebuttedCount + " / escalated " + escalations + "), coverage statement (" + (verdict.coverage || "").slice(0, 300) + "), gate " + gate + ", baseline " + (baseline || "empty tree").slice(0, 7) + ", push " + pushState + ", next direction. Then git add -A && git commit (the small ledger commit)" +
     (push0.target !== "" ? " and push it (git push " + push0.target + ", no force)" : "") + "; return one sentence.",
   );
   const headLedger = await HEAD0();

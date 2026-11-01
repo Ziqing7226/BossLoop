@@ -1,6 +1,6 @@
 # BossLoop
 
-**v0.2.7** · 中文文档：[README.zh-CN.md](README.zh-CN.md)
+**v0.2.8** · 中文文档：[README.zh-CN.md](README.zh-CN.md)
 
 **Bounded AI-team loops that work for the boss — and report to you.** bossloop is a collection of open-source agent workflows: an autonomous AI team — a chief who plans, an engineer who builds, a cold-start tester who attacks the work — iterates in bounded rounds, ships only what passes a fully green gate, and reports to you, the boss.
 

@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 科研迭代循环（v0.2.7）：总工程师每轮重组方案 Portfolio（机械校验 1–3）→ 算法工程师三级执行（FULL 出数、第 1 轮端到端数字机械补验）→ 测试工程师独立验证 + canary/映射表/解释器自动回退三重门禁（修复裁决归测试工程师；头条数字双路径复算，撤回即全库扫描）→ 修复补充 → 研究员修订 → 编辑盲审（审稿人每轮唯一命名）→ 含实验死亡率与新颖性核查的审稿 → 存档（HEAD 落盘核验 + 本地加密备份 remote，绝不推云端）；N 轮硬停出《初步评估报告》，账本断点续跑。模型分档（tiered：总工/编辑/审稿人/文献读者用 GLM-5.3，算法/测试/研究员用 GLM-5.3-Flash；审稿与开发异档即天然满足盲审去相关；models=uniform 全随会话模型）。破坏性操作只申报、由强档总工裁决后按批准执行（开发与修复路径全覆盖），不转交用户。
+description: 科研迭代循环（v0.2.8）：总工程师每轮重组方案 Portfolio（机械校验 1–3）→ 算法工程师三级执行（FULL 出数、第 1 轮端到端数字机械补验）→ 测试工程师独立验证 + canary/映射表/解释器自动回退三重门禁（修复裁决归测试工程师；头条数字双路径复算，撤回即全库扫描）→ 修复补充 → 研究员修订 → 编辑盲审（审稿人每轮唯一命名）→ 含实验死亡率与新颖性核查的审稿 → 存档（HEAD 落盘核验 + 本地加密备份 remote，绝不推云端）；N 轮硬停出《初步评估报告》，账本断点续跑。模型分档（tiered：总工/编辑/审稿人/文献读者用 GLM-5.3，算法/测试/研究员用 GLM-5.3-Flash；审稿与开发异档即天然满足盲审去相关；models=uniform 全随会话模型）。破坏性操作只申报、由强档总工裁决后按批准执行（开发与修复路径全覆盖），不转交用户。
 args:
   idea:
     type: string
@@ -65,6 +65,8 @@ interface TestVerdict {
   summary: string;
   /** 问题清单（代码/泛化/可靠性），每条附证据 */
   issues: string[];
+  /** 覆盖声明：深审了哪些文件/区域、只略读了哪些（先于判定写出，供日后对账） */
+  coverage: string;
 }
 
 interface Invite {
@@ -167,6 +169,7 @@ const TEST_ZH = [
   "你拥有 claim→evidence 映射表（docs/workflow/claim_map.md）：稿件每个数字 ↔ 存档工件 + 可重跑的检查命令；先写检查，再做主张。文件首行须含 claim-map 标记，正文用表格。",
   "你负责在仓库根目录建立/维护 selfcheck.py：必须含至少一个故意埋坏、必须 FAIL 的金丝雀用例（代码中带 canary 标记，供编排器检索核对）——不会变红的测试套件证明不了任何事。",
   "破坏性操作判据：超出申报裁决清单的——数据集或既有产物被删/被覆盖、历史被改写、force 痕迹——标为严重问题并索要总工裁决记录；实验产物正常迭代替换不属此列。",
+  "长上下文纪律：diff 或审查面偏大时，先盘变更清单、再对高风险区（逻辑改动、门禁相关、涉危险操作处）深读；verdict 的 coverage 字段必须写明深审了哪些、只略读了哪些——它写在知道问题在哪之前，日后问题落在略读区将以此对账。",
   "每条裁决附证据。全程中文。",
 ].join("\n");
 
@@ -259,13 +262,18 @@ async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
     log("危险操作裁决不完整（" + decisions.length + "/" + reqs.length + " 条）——整体按驳回处理，如实记录");
     decisions = reqs.map((r) => ({ command: r.command, decision: "reject" as const, safeForm: "", reason: "裁决不完整，整体驳回以保安全" }));
   }
-  const entry = decisions.map((d) => d.command + "→" + d.decision + (d.safeForm ? "（改：" + d.safeForm + "）" : "") + "：" + d.reason).join("；");
+  let entry = decisions.map((d) => d.command + "→" + d.decision + (d.safeForm ? "（改：" + d.safeForm + "）" : "") + "：" + d.reason).join("；");
   const ok = decisions.filter((d) => d.decision !== "reject");
   if (ok.length > 0) {
     phase("执行已批准的危险操作");
-    await algo.ask<string>(
-      "执行总工程师已批准的危险操作，严格按批准写法（safeForm 非空时用 safeForm），不得扩大范围：" + ok.map((d, i) => (i + 1) + ". " + (d.safeForm || d.command)).join("；") + "。完成后 git add -A && git commit，返回一句话。",
+    const execReport = await algo.ask<string>(
+      "执行总工程师已批准的危险操作，严格按批准写法（safeForm 非空时用 safeForm），不得扩大范围：" + ok.map((d, i) => (i + 1) + ". " + (d.safeForm || d.command)).join("；") + "。完成后 git add -A && git commit，返回一句话（须列明实际执行的命令）。",
     );
+    for (const d of ok) {
+      const form = d.safeForm || d.command;
+      if (!execReport.includes(form)) log("危险操作执行确认缺失：" + d.command + "——如实记录，账本将标注未确认");
+    }
+    entry += "；执行确认：" + (ok.every((d) => execReport.includes(d.safeForm || d.command)) ? "全部与批准写法一致" : "存在未确认项（见日志）");
   } else {
     log("危险操作全部驳回：不得绕过，另寻安全路径");
   }
@@ -452,7 +460,7 @@ for (let round = startRound; round <= rounds; round++) {
     head0 = "";
   }
   const archived = await chief.ask<string>(
-    "把本轮（任务/产出/危险操作裁决（" + dangerLog + "）/测试/审稿/下轮方向）追加到 docs/workflow/ledger.md，然后 git add -A && git commit。若已配置本地加密备份 remote（建议用 GitCoffer 构建，防 Agent 误删本地代码后无从恢复），同时 push 到该 remote；不主动 push 到任何其它 remote（向云端发布永远是老板的明确动作）。返回一句话。",
+    "把本轮（任务/产出/危险操作裁决（" + dangerLog + "）/测试（覆盖声明：" + (verdict.coverage || "").slice(0, 300) + "）/审稿/下轮方向）追加到 docs/workflow/ledger.md，然后 git add -A && git commit。若已配置本地加密备份 remote（建议用 GitCoffer 构建，防 Agent 误删本地代码后无从恢复），同时 push 到该 remote；不主动 push 到任何其它 remote（向云端发布永远是老板的明确动作）。返回一句话。",
   );
   let head1 = "";
   try {
