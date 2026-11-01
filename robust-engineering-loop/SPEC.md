@@ -37,7 +37,7 @@ Why the tester starts cold: a tester who has read the author's claims anchors on
              → verdict: pass | findings, each with reproduction evidence
 5  ENGINEER  triage every finding (confirmed → fix; misdiagnosis →
              evidence rebuttal) → amend the round commit → TEST
-             re-verifies  (≤3 attempts; still red → interrupt)
+             re-verifies  (≤10 attempts; still red → interrupt)
 6  PUSH      round commit → the agreed remote (append-only, never force)
 7  CHIEF     append ledger (docs-only commit, pushed right after) →
              next round | Final Report

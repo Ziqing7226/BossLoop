@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 鲁棒工程循环（v0.2.0）：总工程师先建"要求台账"（老板原话逐字+内涵+验收标准）并承诺 N 轮规划（老板可用 rounds 锁定）→ 每轮：算法工程师开发+文档（文档即交付物：专业、美观、简洁、无冗余重复）+单笔本地提交 → 测试工程师冷启动上岗（全新代理上下文，只见 diff 与代码，绝不见开发自报）：diff 审查（含文档质量）+鲁棒性测试+canary+本地 CI 全绿+警告即错误构建+核查上一轮 remote CI 结转 → 不过则算法工程师先复现（确认→修复 / 误诊→证据反驳，测试工程师仲裁）→ amend 并入本轮提交 → 复检（≤3 次仍红即打断上报老板）→ 全绿才推送约定 remote（默认 GitCoffer 自动探测，append-only 永不 force）→ 总工账本小提交；N 轮硬停出《最终汇报》：逐条要求→结果→证据+偏离说明；账本断点续跑。
+description: 鲁棒工程循环（v0.2.0）：总工程师先建"要求台账"（老板原话逐字+内涵+验收标准）并承诺 N 轮规划（老板可用 rounds 锁定）→ 每轮：算法工程师开发+文档（文档即交付物：专业、美观、简洁、无冗余重复）+单笔本地提交 → 测试工程师冷启动上岗（全新代理上下文，只见 diff 与代码，绝不见开发自报）：diff 审查（含文档质量）+鲁棒性测试+canary+本地 CI 全绿+警告即错误构建+核查上一轮 remote CI 结转 → 不过则算法工程师先复现（确认→修复 / 误诊→证据反驳，测试工程师仲裁）→ amend 并入本轮提交 → 复检（≤10 次仍红即打断上报老板）→ 全绿才推送约定 remote（默认 GitCoffer 自动探测，append-only 永不 force）→ 总工账本小提交；N 轮硬停出《最终汇报》：逐条要求→结果→证据+偏离说明；账本断点续跑。
 args:
   requirement:
     type: string
@@ -113,7 +113,7 @@ interface FinalReport {
 const CHIEF_ZH = [
   "你是总工程师。使命：把老板（用户）的开发要求在承诺的有限轮数内变成高质量交付——每一轮都必须经过冷启动验证、全绿门禁、零警告编译，才允许推送。",
   "老板要求保真是最高纪律：第 1 轮开工前建 docs/workflow/requirements.md——老板原话逐字、内涵解释、验收标准，一条不落；执行中不得与老板要求相悖，不得不偏离时必须在《最终汇报》中逐条说明原因与替代选择，绝不悄悄违背。",
-  "打断策略：重大问题（要求不可行、需要破坏性操作、会改变范围的歧义、需要加轮、门禁 3 次修复后仍红）→ 立即打断循环并写 docs/workflow/interrupt_report.md 向老板说明；小问题（范围内的实现细节、工具选择、顺序调整）→ 你自行决断并在账本记录。范围、进度、质量标准、预算这类老板级取舍不许被你降级成小问题。",
+  "打断策略：重大问题（要求不可行、需要破坏性操作、会改变范围的歧义、需要加轮、门禁 10 次修复后仍红）→ 立即打断循环并写 docs/workflow/interrupt_report.md 向老板说明；小问题（范围内的实现细节、工具选择、顺序调整）→ 你自行决断并在账本记录。范围、进度、质量标准、预算这类老板级取舍不许被你降级成小问题。",
   "轮次规划：第 1 轮前承诺总轮数 N 与每轮一句话范围（老板用 rounds 参数锁定时以老板为准，不得增减）；每轮开始依据账本重新安排本轮任务卡——上一轮判决、问题与反驳、remote CI 结转、遗留事项都要处置；每张任务卡必须可追溯到要求条目（R1/R2…）。",
   "误诊仲裁：算法工程师与测试工程师就某条问题争执时，你只依据证据仲裁；仍不能定 → 重大问题，打断上报老板。",
   "接手先读账本（docs/workflow/ledger.md）：断点续跑，不重做已完成轮；账本同时记录每轮 baseline 哈希与已推送 SHA。",
@@ -294,7 +294,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   let interpIsPy3 = false;
   let lastFix: FixOutcome | null = null;
 
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  for (let attempt = 1; attempt <= 10; attempt++) {
     verdict = await tester.ask<TestVerdict>(
       (attempt === 1
         ? "冷启动上岗。baseline 提交：" + (baseline || "（空树，本仓库首提交）") + "。审查 " + diffHint + " 与代码库本身：diff 审查、鲁棒性测试、selfcheck.py（严格构建/全量测试+鲁棒性/本地 CI 等价 + canary 标记）、更新 docs/workflow/requirement_map.md 验证列。"
@@ -344,7 +344,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       gate = "pass（第 " + attempt + " 次尝试" + (interpIsPy3 ? "，python3" : "") + "）";
       break;
     }
-    if (attempt === 3) {
+    if (attempt === 10) {
       gate = (verdict.passed ? "" : "测试未过；") + (canary ? "" : "缺 canary；") + (mapOk ? "" : "要求映射表缺失；") + (exitCode === 0 ? "" : "selfcheck exit " + exitCode);
       break;
     }
@@ -373,11 +373,11 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   }
 
   if (gate === "" || !gate.startsWith("pass")) {
-    phase("门禁 3 次仍红，打断上报");
+    phase("门禁 10 次仍红，打断上报");
     const ir = await chief.ask<string>(
-      "第 " + round + " 轮门禁 3 次修复后仍未全绿（" + gate + "）。属重大问题：写 docs/workflow/interrupt_report.md（当前状态、失败证据、已尝试的修复、需要老板决策的点），git add -A && git commit（不推送未过门禁的提交，除非老板此前另有约定），返回一句话摘要。",
+      "第 " + round + " 轮门禁 10 次修复后仍未全绿（" + gate + "）。属重大问题：写 docs/workflow/interrupt_report.md（当前状态、失败证据、已尝试的修复、需要老板决策的点），git add -A && git commit（不推送未过门禁的提交，除非老板此前另有约定），返回一句话摘要。",
     );
-    await artifact.markdown("interrupt", "# 中断报告（第 " + round + " 轮门禁）\n\n" + ir + "\n\n---\n门禁：" + gate + "\n待老板决策。\n", { title: "中断报告", description: "门禁 3 次仍红" });
+    await artifact.markdown("interrupt", "# 中断报告（第 " + round + " 轮门禁）\n\n" + ir + "\n\n---\n门禁：" + gate + "\n待老板决策。\n", { title: "中断报告", description: "门禁 10 次仍红" });
     finalVerdict = { verdict: "interrupted", requirementOutcomes: [], deviations: [], state: ir, decisionList: ["第 " + round + " 轮门禁未过：" + gate], advice: "门禁持续未过，请老板介入" };
     interrupted = true;
     break;

@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Robust Engineering Loop (v0.2.0), English UI. Chief records a verbatim requirement ledger and commits to N rounds (boss may lock via rounds) -> each round, the Algorithm Engineer builds + docs (docs are a deliverable — professional, clean, concise, non-redundant) in ONE local commit -> Test Engineer COLD START (fresh agent context; sees only the diff and the code, never the dev self-report) with diff review (incl. doc quality) + robustness suite + canary + local CI green + warnings-as-errors build + remote-CI carryover check of the previous push -> on failure the engineer reproduces first (confirmed -> fix; misdiagnosis -> evidence rebuttal; tester arbitrates) -> amend into the round commit -> re-verify (3 attempts still red -> interrupt and report to the boss) -> only when fully green, push to the agreed remote (GitCoffer auto-detected by default; append-only, never force) -> Chief ledger commit; hard stop after N rounds -> Final Report (requirement -> outcome -> evidence, deviations included); resumes from the ledger.
+description: Robust Engineering Loop (v0.2.0), English UI. Chief records a verbatim requirement ledger and commits to N rounds (boss may lock via rounds) -> each round, the Algorithm Engineer builds + docs (docs are a deliverable — professional, clean, concise, non-redundant) in ONE local commit -> Test Engineer COLD START (fresh agent context; sees only the diff and the code, never the dev self-report) with diff review (incl. doc quality) + robustness suite + canary + local CI green + warnings-as-errors build + remote-CI carryover check of the previous push -> on failure the engineer reproduces first (confirmed -> fix; misdiagnosis -> evidence rebuttal; tester arbitrates) -> amend into the round commit -> re-verify (10 attempts still red -> interrupt and report to the boss) -> only when fully green, push to the agreed remote (GitCoffer auto-detected by default; append-only, never force) -> Chief ledger commit; hard stop after N rounds -> Final Report (requirement -> outcome -> evidence, deviations included); resumes from the ledger.
 args:
   requirement:
     type: string
@@ -113,7 +113,7 @@ interface FinalReport {
 const CHIEF_EN = [
   "You are the Chief Engineer. Mission: turn the boss's (user's) development requirement into a high-quality delivery within a committed, bounded number of rounds — every round passes cold-start verification, a fully green gate and a zero-warning build before anything is pushed.",
   "Boss fidelity is the top discipline: before round 1 create docs/workflow/requirements.md — the boss's words verbatim, each with interpretation and acceptance criteria, none dropped; never act against the boss's requirements; a deviation you cannot avoid must be explained line by line in the Final Report — never silently.",
-  "Interrupt policy: major issues (infeasible requirement, destructive action needed, scope-changing ambiguity, extending the round count, gate still red after 3 fix attempts) -> interrupt the loop immediately and write docs/workflow/interrupt_report.md for the boss; minor issues (in-scope implementation details, tooling choices, ordering) -> decide yourself and log the decision. Scope, schedule, quality bar and budget are boss-level tradeoffs — you may not downgrade them to minor.",
+  "Interrupt policy: major issues (infeasible requirement, destructive action needed, scope-changing ambiguity, extending the round count, gate still red after 10 fix attempts) -> interrupt the loop immediately and write docs/workflow/interrupt_report.md for the boss; minor issues (in-scope implementation details, tooling choices, ordering) -> decide yourself and log the decision. Scope, schedule, quality bar and budget are boss-level tradeoffs — you may not downgrade them to minor.",
   "Round planning: commit to N rounds with a one-line scope each before round 1 (a boss-locked rounds value is final — no adding or dropping); each round re-plan from the ledger — last round's verdict, findings and rebuttals, remote-CI carryover and leftovers must all be disposed of; every work card traces to a requirement entry (R1/R2...).",
   "Misdiagnosis arbitration: when the engineers dispute a finding, arbitrate on evidence only; if still undecided -> major issue, interrupt and report to the boss.",
   "Take over by reading the ledger (docs/workflow/ledger.md): resume, never redo; the ledger also records each round's baseline hash and pushed SHAs.",
@@ -294,7 +294,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   let interpIsPy3 = false;
   let lastFix: FixOutcome | null = null;
 
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  for (let attempt = 1; attempt <= 10; attempt++) {
     verdict = await tester.ask<TestVerdict>(
       (attempt === 1
         ? "Cold start. Baseline commit: " + (baseline || "(empty tree — this repo's first commit)") + ". Review " + diffHint + " and the repository itself: diff review, robustness tests, selfcheck.py (strict build / full tests + robustness / local CI equivalent + canary marker), and update the verification column of docs/workflow/requirement_map.md."
@@ -344,7 +344,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       gate = "pass (attempt " + attempt + (interpIsPy3 ? ", python3" : "") + ")";
       break;
     }
-    if (attempt === 3) {
+    if (attempt === 10) {
       gate = (verdict.passed ? "" : "test verdict not passed; ") + (canary ? "" : "no canary; ") + (mapOk ? "" : "requirement map missing; ") + (exitCode === 0 ? "" : "selfcheck exit " + exitCode);
       break;
     }
@@ -375,9 +375,9 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   if (gate === "" || !gate.startsWith("pass")) {
     phase("Gate still red, interrupt");
     const ir = await chief.ask<string>(
-      "Round " + round + " gate is still not green after 3 fix attempts (" + gate + "). Major issue: write docs/workflow/interrupt_report.md (current state, failure evidence, fixes attempted, points needing the boss's decision), git add -A && git commit (do not push the un-gated commit unless the boss agreed otherwise), return a one-sentence summary.",
+      "Round " + round + " gate is still not green after 10 fix attempts (" + gate + "). Major issue: write docs/workflow/interrupt_report.md (current state, failure evidence, fixes attempted, points needing the boss's decision), git add -A && git commit (do not push the un-gated commit unless the boss agreed otherwise), return a one-sentence summary.",
     );
-    await artifact.markdown("interrupt", "# Interrupt Report (round " + round + " gate)\n\n" + ir + "\n\n---\nGate: " + gate + "\nAwaiting the boss's decision.\n", { title: "Interrupt Report", description: "Gate still red after 3 attempts" });
+    await artifact.markdown("interrupt", "# Interrupt Report (round " + round + " gate)\n\n" + ir + "\n\n---\nGate: " + gate + "\nAwaiting the boss's decision.\n", { title: "Interrupt Report", description: "Gate still red after 10 attempts" });
     finalVerdict = { verdict: "interrupted", requirementOutcomes: [], deviations: [], state: ir, decisionList: ["Round " + round + " gate not passed: " + gate], advice: "Gate persistently red; boss attention needed" };
     interrupted = true;
     break;
