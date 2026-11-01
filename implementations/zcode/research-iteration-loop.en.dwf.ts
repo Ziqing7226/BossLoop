@@ -361,7 +361,8 @@ for (let round = startRound; round <= rounds; round++) {
   reviews.push(readerRev);
   const digest = reviews
     .map((r, i) => "[" + (i < n ? "Reviewer-" + (i + 1) : "Reference Reader") + " | " + r.severity + "] " + r.summary +
-      "\n- Issues: " + (r.issues.join("; ") || "none") + "\n- Iteration: " + (r.iteration.join("; ") || "none"))
+      "\n- Issues: " + (r.issues.join("; ") || "none") + "\n- Iteration: " + (r.iteration.join("; ") || "none") +
+      (r.nearestWorks && r.nearestWorks.length > 0 ? "\n- Closest works: " + r.nearestWorks.join("; ") : ""))
     .join("\n\n");
 
   phase("Archive round");

@@ -366,7 +366,8 @@ for (let round = startRound; round <= rounds; round++) {
   reviews.push(readerRev);
   const digest = reviews
     .map((r, i) => "【" + (i < n ? "审稿人" + (i + 1) : "文献读者") + "｜" + r.severity + "】" + r.summary +
-      "\n- 质询：" + (r.issues.join("；") || "无") + "\n- 迭代建议：" + (r.iteration.join("；") || "无"))
+      "\n- 质询：" + (r.issues.join("；") || "无") + "\n- 迭代建议：" + (r.iteration.join("；") || "无") +
+      (r.nearestWorks && r.nearestWorks.length > 0 ? "\n- 最相近工作：" + r.nearestWorks.join("；") : ""))
     .join("\n\n");
 
   phase("本轮存档");
