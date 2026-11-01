@@ -79,7 +79,7 @@ interface TestVerdict {
   passed: boolean;
   /** 问题清单，每条附复现证据 */
   findings: Finding[];
-  /** 覆盖声明：深审了哪些文件/区域、只略读了哪些（先于判定写出，供日后对账） */
+  /** 覆盖与验证声明：深审/略读区域 + 每个结论的验证手段（先于判定写出，供日后对账） */
   coverage: string;
 }
 
@@ -141,6 +141,12 @@ interface FinalReport {
   state: string;
   /** 只有老板能做的决策清单 */
   decisionList: string[];
+  /** 延后事项：记录在案的延后是决策而非遗漏 */
+  deferred?: { item: string; reason: string }[];
+  /** 否决事项：带理由，防止下轮重新提案 */
+  declined?: { item: string; reason: string }[];
+  /** 流程教训：本轮循环自身如何失败或险些失败，提炼为检查单条目 */
+  processLessons?: string[];
   /** 给老板的一句建议 */
   advice: string;
 }
@@ -421,7 +427,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       (approvedDanger.length > 0
         ? "\n本轮经裁决批准的危险操作，只允许这些写法：" + approvedDanger.join("；")
         : "\n本轮未批准任何破坏性操作：diff 或历史中若出现数据/整目录消失、baseline 之下历史被改写、force、既有产物被覆盖，即为未授权破坏性操作，标 blocker（正常重构的源文件删除除外）。") +
-      "返回 TestVerdict（问题必须有复现证据）。verdict 中必须附覆盖声明 coverage：深审了哪些文件/区域（逻辑改动、门禁相关、涉危险操作处）、只略读了哪些——它写在知道问题在哪之前，日后任何问题落在略读区将直接以此对账。",
+      "返回 TestVerdict（问题必须有复现证据）。verdict 中必须附覆盖声明 coverage：深审了哪些文件/区域（逻辑改动、门禁相关、涉危险操作处）、只略读了哪些，且每个结论写明验证手段（真实设备/介质实测、CI 运行、或无设备时的专项冷启动审查替代——替代审查如实写明，绝不写成实测）——它写在知道问题在哪之前，日后任何问题落在略读区或替代验证上将直接以此对账。",
     );
     findingsCount = verdict.findings.length;
     try {
@@ -573,7 +579,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
 
   phase("总工记账");
   const archived = await chief.ask<string>(
-    "把第 " + round + " 轮追加到 docs/workflow/ledger.md：任务卡、开发摘要、危险操作裁决（" + dangerLog + "）、测试判决（问题 " + findingsCount + " / 反驳 " + rebuttedCount + " / 升级 " + escalations + "）、门禁 " + gate + "、覆盖声明（" + (verdict.coverage || "").slice(0, 300) + "）、baseline " + (baseline || "空树").slice(0, 7) + "、推送 " + pushState + "、下一轮方向。然后 git add -A && git commit（账本小提交）" +
+    "把第 " + round + " 轮追加到 docs/workflow/ledger.md：任务卡、开发摘要、危险操作裁决（" + dangerLog + "）、测试判决（问题 " + findingsCount + " / 反驳 " + rebuttedCount + " / 升级 " + escalations + "）、门禁 " + gate + "、覆盖声明（" + (verdict.coverage || "").slice(0, 300) + "）、baseline " + (baseline || "空树").slice(0, 7) + "、推送 " + pushState + "、遗留与否决（deferred/declined，各带理由，无则写“无”）、下一轮方向。然后 git add -A && git commit（账本小提交）" +
     (push0.target !== "" ? "并推送（git push " + push0.target + "，不 force）" : "") + "，返回一句话。",
   );
   const headLedger = await HEAD0();
@@ -612,7 +618,7 @@ const interruptNote = finalVerdict
   : "";
 const reported = await chief.ask<FinalReport>(
     interruptNote + (interrupted ? "" : roundsTotal + " 轮硬停（或提前完工）。") +
-    "以 docs/workflow/requirements.md 与账本为唯一依据，写《最终汇报》到 docs/workflow/final_report.md：逐条要求（原话逐字）→结果→证据（requirementOutcomes，没有条目的要求不算完成）；与老板要求相悖的偏离逐条说明（deviations）；最终状态（提交/推送/CI/测试/已知局限）；只有老板能做的决策清单（decisionList）；遗留与否决各设固定小节（deferred/declined，各带理由——记录在案的延后是决策而非遗漏，被否决的想法不得下轮重新提案）；流程教训一节——本轮循环自身如何失败或险些失败，提炼为检查单条目，老板采纳的教训持久化并随下次运行加载；一句建议。git add -A && git commit" +
+    "以 docs/workflow/requirements.md 与账本为唯一依据，写《最终汇报》到 docs/workflow/final_report.md：逐条要求（原话逐字）→结果→证据（requirementOutcomes，没有条目的要求不算完成）；与老板要求相悖的偏离逐条说明（deviations）；最终状态（提交/推送/CI/测试/已知局限）；只有老板能做的决策清单（decisionList）；遗留与否决各设固定小节（deferred/declined，各带理由——记录在案的延后是决策而非遗漏，被否决的想法不得下轮重新提案；deferred/declined/processLessons 字段如实填写，无则空数组）；流程教训一节——本轮循环自身如何失败或险些失败，提炼为检查单条目，老板采纳的教训持久化并随下次运行加载；一句建议。git add -A && git commit" +
       (push0.target !== "" ? "并推送约定 remote（不 force）" : "") + "。返回 FinalReport。",
 );
 const md = [
@@ -631,6 +637,15 @@ const md = [
   "",
   "## 待老板决策",
   ...reported.decisionList.map((d) => "- " + d),
+  "",
+  "## 延后（deferred）",
+  (reported.deferred && reported.deferred.length > 0) ? reported.deferred.map((d) => "- " + d.item + "（理由：" + d.reason + "）") : ["- 无"],
+  "",
+  "## 否决（declined）",
+  (reported.declined && reported.declined.length > 0) ? reported.declined.map((d) => "- " + d.item + "（理由：" + d.reason + "）") : ["- 无"],
+  "",
+  "## 流程教训",
+  (reported.processLessons && reported.processLessons.length > 0) ? reported.processLessons.map((d) => "- " + d) : ["- 无"],
   "",
   "## 建议",
   reported.advice,

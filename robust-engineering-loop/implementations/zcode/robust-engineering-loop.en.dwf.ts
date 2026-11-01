@@ -79,7 +79,7 @@ interface TestVerdict {
   passed: boolean;
   /** Findings, each with reproduction evidence */
   findings: Finding[];
-  /** Coverage statement: areas reviewed deeply vs only skimmed (written before the verdict, reconciled later) */
+  /** Coverage and verification statement: deep vs skimmed areas + the means of verification per conclusion (written before the verdict, reconciled later) */
   coverage: string;
 }
 
@@ -142,6 +142,12 @@ interface FinalReport {
   state: string;
   /** Decisions only the boss can make */
   decisionList: string[];
+  /** Deferred items: a recorded deferral is a decision, not an omission */
+  deferred?: { item: string; reason: string }[];
+  /** Declined items: with reasons, so a rejected idea is not re-proposed next run */
+  declined?: { item: string; reason: string }[];
+  /** Process lessons: how the loop itself failed or nearly failed, as checklist entries */
+  processLessons?: string[];
   /** One-sentence advice to the boss */
   advice: string;
 }
@@ -422,7 +428,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       (approvedDanger.length > 0
         ? "\nDestructive operations approved by ruling this round — only these forms are allowed: " + approvedDanger.join("; ")
         : "\nNo destructive operation was approved this round: data files or whole directories vanishing, history below the baseline rewritten, a force push, or existing artifacts overwritten in the diff or history is an unapproved destructive operation — mark it blocker (source-file deletions in an ordinary refactor excepted).") +
-      " Return TestVerdict (every finding needs reproduction evidence). The verdict must carry a coverage statement: which files/areas you reviewed deeply (logic changes, gate-relevant, danger-operation sites) and which you only skimmed — it is written before you know where the problems are; any later problem in a skimmed area is reconciled against it.",
+      " Return TestVerdict (every finding needs reproduction evidence). The verdict must carry a coverage statement: which files/areas you reviewed deeply (logic changes, gate-relevant, danger-operation sites) and which you only skimmed, plus the means of verification for each conclusion (a real-device test, a CI run, or a specialist cold review standing in where no device exists — worded as such, never as hands-on) — it is written before you know where the problems are; any later problem in a skimmed or substituted area is reconciled against it.",
     );
     findingsCount = verdict.findings.length;
     try {
@@ -574,7 +580,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
 
   phase("Chief archives the ledger");
   const archived = await chief.ask<string>(
-    "Append round " + round + " to docs/workflow/ledger.md: cards, dev summary, destructive-operation ruling (" + dangerLog + "), test verdict (findings " + findingsCount + " / rebuttals " + rebuttedCount + " / escalated " + escalations + "), coverage statement (" + (verdict.coverage || "").slice(0, 300) + "), gate " + gate + ", baseline " + (baseline || "empty tree").slice(0, 7) + ", push " + pushState + ", next direction. Then git add -A && git commit (the small ledger commit)" +
+    "Append round " + round + " to docs/workflow/ledger.md: cards, dev summary, destructive-operation ruling (" + dangerLog + "), test verdict (findings " + findingsCount + " / rebuttals " + rebuttedCount + " / escalated " + escalations + "), coverage statement (" + (verdict.coverage || "").slice(0, 300) + "), gate " + gate + ", baseline " + (baseline || "empty tree").slice(0, 7) + ", push " + pushState + ", deferred/declined sections (with reasons, “none” when empty), next direction. Then git add -A && git commit (the small ledger commit)" +
     (push0.target !== "" ? " and push it (git push " + push0.target + ", no force)" : "") + "; return one sentence.",
   );
   const headLedger = await HEAD0();
@@ -613,7 +619,7 @@ const interruptNote = finalVerdict
   : "";
 const reported = await chief.ask<FinalReport>(
     interruptNote + (interrupted ? "" : roundsTotal + " rounds complete — hard stop (or finished early).") +
-    " Using docs/workflow/requirements.md and the ledger as the only basis, write the Final Report to docs/workflow/final_report.md: every requirement (verbatim) -> outcome -> evidence (requirementOutcomes; a requirement without an entry is not done); deviations from the boss's requirements explained one by one (deviations); final state (commits/pushes/CI/tests/known limitations); decisions only the boss can make (decisionList); two fixed sections — deferred and declined, each with its reason (a recorded deferral is a decision, not an omission; a declined idea is not re-proposed next run); a process-lessons section — how the loop itself failed or nearly failed, distilled into checklist entries, adopted lessons persisted and loaded with the next run; one line of advice. git add -A && git commit" +
+    " Using docs/workflow/requirements.md and the ledger as the only basis, write the Final Report to docs/workflow/final_report.md: every requirement (verbatim) -> outcome -> evidence (requirementOutcomes; a requirement without an entry is not done); deviations from the boss's requirements explained one by one (deviations); final state (commits/pushes/CI/tests/known limitations); decisions only the boss can make (decisionList); two fixed sections — deferred and declined, each with its reason (a recorded deferral is a decision, not an omission; a declined idea is not re-proposed next run); fill the deferred/declined/processLessons fields faithfully (empty arrays when none); a process-lessons section — how the loop itself failed or nearly failed, distilled into checklist entries, adopted lessons persisted and loaded with the next run; one line of advice. git add -A && git commit" +
       (push0.target !== "" ? " and push to the agreed remote (no force)" : "") + ". Return FinalReport.",
 );
 const md = [
@@ -632,6 +638,15 @@ const md = [
   "",
   "## Awaiting the boss",
   ...reported.decisionList.map((d) => "- " + d),
+  "",
+  "## Deferred",
+  (reported.deferred && reported.deferred.length > 0) ? reported.deferred.map((d) => "- " + d.item + " (reason: " + d.reason + ")") : ["- none"],
+  "",
+  "## Declined",
+  (reported.declined && reported.declined.length > 0) ? reported.declined.map((d) => "- " + d.item + " (reason: " + d.reason + ")") : ["- none"],
+  "",
+  "## Process lessons",
+  (reported.processLessons && reported.processLessons.length > 0) ? reported.processLessons.map((d) => "- " + d) : ["- none"],
   "",
   "## Advice",
   reported.advice,
