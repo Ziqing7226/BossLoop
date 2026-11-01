@@ -1,6 +1,6 @@
 # Research Iteration Loop
 
-**v0.1.0** · repo: `research-iteration-loop`
+**v0.1.1** · repo: `research-iteration-loop`
 
 > Start from a rough idea. Iterate it through bounded, adversarial cycles. Stop on schedule and report whether it deserves more of your life.
 
@@ -17,11 +17,11 @@ Iterate, don't perfect. The loop **hard-stops after N rounds (default 3)** and p
 | Role | Responsibility |
 |---|---|
 | **Chief Engineer** | Recover context from the ledger (resume, never redo); internalize the boss's requirements; survey (web + local paper library). Post a **paper-fetch request list** for inaccessible papers (non-blocking: proceed with lower confidence, don't stall). Maintain a **dynamic proposal portfolio**: re-select 1–3 proposals every round from the latest reviews (add, drop or replace; fill to 3 when choices exist, never 0) plus the competitor set (≤3). **Novelty handling:** if the idea turns out to be already done, do not stop — re-scope toward the unsolved gap inside that direction and run all remaining rounds. |
-| **Algorithm Engineer** | Build proposals / reproduce competitors. Real runs only; every number carries its exact definition. **Staged execution:** every new experiment runs MINI_PILOT (smoke) → PILOT (small-data correctness) → FULL (full-protocol comparison); stages before FULL are for debugging only — all archived numbers and claims come from FULL runs, and a minimal comparison passed off as validation is forbidden. **Freeze rule:** while the Test Engineer verifies, the implementation under test is not modified — a moving target makes the verdict void. |
+| **Algorithm Engineer** | Build proposals / reproduce competitors. Real runs only; every number carries its exact definition. **Staged execution:** every new experiment runs MINI_PILOT (smoke) → PILOT (small-data correctness) → FULL (full-protocol comparison); stages before FULL are for debugging only — all archived numbers and claims come from FULL runs, and a minimal comparison passed off as validation is forbidden. **Freeze rule:** while the Test Engineer verifies, the implementation under test is not modified — a moving target makes the verdict void. **Zero-cost anchors & boundary probes:** before building a full method, representation and preprocessing assumptions are bounded with standard-tool anchor experiments; each round runs one boundary experiment (where the approach breaks), and every claim states its evidence scope — the datasets and conditions that back it. |
 | **Test Engineer** | Independent verification: code review; roundtrip incl. adversarial inputs; generalization across scenes/datasets; perturbation stability. Owns the claim→evidence map and the self-check. **Independence:** never edits the implementation under test — a verifier who fixes makes verification self-serving. |
 | **Researcher** | Revise the manuscript once per round (after engineering, before review); create the first draft if none exists. Only artifact-backed numbers; gaps stay explicit `[TODO]`. Follows award-paper writing rules: concrete openings, conditional gap statements, components that build on each other, ablations mapped to claims, a standalone Limitations section, no AI-style tells. |
 | **Editor** | Extract keywords; invite reviewers from adjacent, non-overlapping fields — **how many (≤3) is the Editor's call** — plus 1 reader who has read every reference. Reviews must carry both issues and iteration proposals. **Blind-review discipline:** briefs are anonymized (no author/affiliation/project identity), reviewers never see each other's opinions (the orchestrator aggregates), and should the engine allow it, reviewers run on a different model than the builders — decorrelating reviewer and author error modes. Briefs stay tight: manuscript + claim map + targeted questions, never the whole repo. |
-| **Reference Reader** | Read every reference; verify citations and narrative. **Per-round novelty check (mandatory):** name the 3 closest existing works and state in which dimension the idea differs (problem setting / mechanism / scope) — evidence for the report, never a stop signal. |
+| **Reference Reader** | Read every reference; verify citations and narrative — including what each cited competitor actually does, not how surveys classify it. **Per-round novelty check (mandatory):** name the 3 closest existing works and state in which dimension the idea differs (problem setting / mechanism / scope) — evidence for the report, never a stop signal. |
 | **Boss (human)** | Supply the idea and the project constraints; fetch requested papers; read the round-N report; decide continue / pivot / stop. |
 
 The *orchestrator* is the engine layer that runs the loop (workflow runtime, script, or CI) — not a persona.
@@ -46,7 +46,7 @@ Why the engineer looks idle during testing: verification must be independent of 
 ## 4. Transitions and the gate
 
 - **Next round, no boss input**: the Chief turns review issues into task cards (each issue → a task or an explicit rebuttal-on-artifacts).
-- **After round N: hard stop → Preliminary Evaluation Report** — verdict, expected success (labelled as a qualitative judgement expressed numerically, not a calibrated probability), novelty, impact, risks, reviewer verdicts quoted verbatim. Wait for the boss.
+- **After round N: hard stop → Preliminary Evaluation Report** — verdict, expected success (labelled as a qualitative judgement expressed numerically, not a calibrated probability), novelty, impact, risks, each claim's evidence scope, a decision list for the boss (accounts, data, resources — things only the boss can do), reviewer verdicts quoted verbatim. Wait for the boss.
 - **Round 1 must end with at least one end-to-end number from a properly powered comparison.** Toy or minimal comparisons that could bias conclusions do not count as validation — staged smoke/pilot runs exist for debugging only.
 
 ## 5. Evidence rules
@@ -54,10 +54,11 @@ Why the engineer looks idle during testing: verification must be independent of 
 1. **Claim→evidence map** (Test Engineer): every manuscript number ↔ an archived artifact + a re-runnable check. No map entry, no claim. *Write the check before building the claim.*
 2. Meeting-note numbers ≠ archived numbers. Claimed edits are verified mechanically, never by paraphrase.
 3. Survey/predictive numbers must survive an end-to-end run before entering any document.
-4. Retraction is a normal action: log what was wrong, how it was caught, what is correct now.
+4. Retraction is a normal action: log what was wrong, how it was caught, what is correct now — and sweep every document that repeats the retracted number (ledger history, READMEs, figures), fixing each within the same round.
 5. **The gate has a canary**: at least one deliberately-broken control case that must FAIL, marked so the orchestrator can find it by search. A suite that cannot go red proves nothing — and self-reported quality is not a gate: both the canary and the claim map are **verified mechanically**, not taken on trust.
-6. **Competitors carry fidelity anchors**: reproduction within plausible range of the published numbers, deviations documented. Whoever builds your method must not grade the competitors.
-7. **Experiment mortality is tracked and reported**: every round logs experiments attempted vs passed (honestly counting debug-stage deaths); the Preliminary Evaluation Report must cite this trend as evidence — a high debug mortality is itself a feasibility signal.
+6. **Competitors carry fidelity anchors**: reproduction within plausible range of the published numbers, deviations documented. Whoever builds your method must not grade the competitors. **Before comparing against prior work, record a caliber table** — each competitor's raw convention, dataset, resolution and metric definition — and report headline numbers in convention-independent units where possible; cross-paper numbers are never compared without it.
+7. **Experiment mortality is tracked and reported**: every round logs experiments attempted vs passed (honestly counting debug-stage deaths); the Preliminary Evaluation Report must cite this trend as evidence — a high debug mortality is itself a feasibility signal. Null results from work cards are archived with a mechanism explanation (why nothing was gained), never silently dropped — they bound the claim's scope.
+8. **Dual-path recomputation, where it pays**: a number that enters a claim or a go/no-go decision and is produced by multi-step aggregation is recomputed via a second path from archived intermediates (a different grouping or formula — a second implementation is not required). Archive the intermediates that make this a minutes-long check, not a rerun. A mismatch freezes the number pending audit; it is never waved off as a rounding note. Single-source direct measurements are exempt — roundtrip and canary checks already cover them.
 
 ## 6. Safety for unattended runs
 

@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Research iteration loop (v0.1.0), English UI. Chief re-selects a mechanically checked proposal portfolio (1-3) each round -> Engineer with staged execution (MINI_PILOT/PILOT debug, FULL for claims; round-1 end-to-end number enforced; frozen during testing) -> independent Test Engineer with a triple gate (canary + claim map + interpreter auto-fallback; fix triage owned by the tester) -> fixes -> Researcher revises -> Editor invites blind adjacent-field reviewers (per-round unique names) -> reviews with experiment mortality and novelty checks -> archive with HEAD verification + encrypted local backup remote (GitCoffer, never cloud); hard stop after N rounds; resumes from the ledger.
+description: Research iteration loop (v0.1.1), English UI. Chief re-selects a mechanically checked proposal portfolio (1-3) each round -> Engineer with staged execution (MINI_PILOT/PILOT debug, FULL for claims; round-1 end-to-end number enforced; frozen during testing) -> independent Test Engineer with a triple gate (canary + claim map + interpreter auto-fallback; fix triage owned by the tester; dual-path recomputation of headline numbers; retraction sweeps the repo) -> fixes -> Researcher revises -> Editor invites blind adjacent-field reviewers (per-round unique names) -> reviews with experiment mortality and novelty checks -> archive with HEAD verification + encrypted local backup remote (GitCoffer, never cloud); hard stop after N rounds; resumes from the ledger.
 args:
   idea:
     type: string
@@ -120,7 +120,7 @@ const CHIEF_EN = [
 ].join("\n");
 
 const ALGO_EN = [
-  "You are the Algorithm Engineer: build proposals / reproduce competitors. End-to-end real runs only; every number carries its exact definition (data, window, units, per-accumulator meaning).",
+  "You are the Algorithm Engineer: build proposals / reproduce competitors. End-to-end real runs only; every number carries its exact definition (data, window, units, per-accumulator meaning); before comparing against prior work, record a caliber table (each competitor's raw convention, dataset, metric definition) and report headline numbers in convention-independent units.",
   "Competitor reproductions must be faithful: checked against the published numbers, deviations documented — you must not grade the competitors while building your own method.",
   "Test freeze: while the Test Engineer verifies, you do not modify the implementation under test (a moving target makes the verdict void). You only prepare the reproducibility package (env/commands/seeds/data window) and respond to gate failures; fix per the verdict once the report lands.",
   "Long-run safety (hard constraint): one subprocess per batch/scene, results written to disk immediately then exit to free memory; a memory guardrail in code (terminate and preserve evidence past ~70-80% of physical memory); timeouts and failure exits on every step; run every new experiment in three stages (MINI_PILOT smoke / PILOT small-data correctness / FULL full-protocol comparison) - stages before FULL are for debugging only, all archived numbers and claims come from FULL runs; datasets and existing artifacts read-only — never delete or overwrite; treat generated code as untrusted and prefer containerized or network-restricted execution where available (containment is risk reduction, not a guarantee).",
@@ -148,7 +148,7 @@ const EDITOR_EN = [
 ].join("\n");
 
 const READER_EN = [
-  "You are the senior reader who has read every reference: verify the manuscript's citations and narrative against the literature, check for missed recent work, and ask questions.",
+  "You are the senior reader who has read every reference: verify the manuscript's citations and narrative against the literature, check for missed recent work, and ask questions; verify what each cited competitor actually does, not how surveys classify it.",
   "Per-round novelty check (mandatory): name the 3 closest existing works (title + venue + one line on what each did) and state in which dimension the idea substantially differs (problem setting / mechanism / scope of conclusions) - this is the evidence behind the report's novelty section, not a stop signal.",
   "Read-only; edit nothing. Reviews must contain both issues and next-round iteration proposals.",
 ].join("\n");
@@ -226,7 +226,7 @@ for (let round = startRound; round <= rounds; round++) {
   phase("Engineer: build & self-test");
   let dev = await algo.ask<DevReport>(
     "This round's cards: " + cards.cards.join("; ") + "\n" +
-    "Build and self-test. Discipline: end-to-end real runs, numbers with exact definitions, faithful competitor reproduction; every proposal selected this round must be fully validated (three stages: MINI_PILOT/PILOT are for debugging only, claims come from FULL); by the end of round 1 there must be at least one end-to-end number from a complete comparison. Report experiments (attempted/passed) honestly.",
+    "Build and self-test. Discipline: end-to-end real runs, numbers with exact definitions, faithful competitor reproduction; every proposal selected this round must be fully validated (three stages: MINI_PILOT/PILOT are for debugging only, claims come from FULL); by the end of round 1 there must be at least one end-to-end number from a complete comparison. Before comparing against prior work, record a caliber table (each competitor's raw convention, dataset, metric definition); bound representation/preprocessing assumptions with zero-cost standard-tool anchor experiments before building the full method; run at least one boundary experiment per round (where the approach breaks, parameter sensitivity) and state each claim's evidence scope (datasets and conditions). Report experiments (attempted/passed) honestly; archive null results with a mechanism explanation.",
   );
   if (round === 1 && dev.numbers.length === 0) {
     dev = await algo.ask<DevReport>(
@@ -239,7 +239,7 @@ for (let round = startRound; round <= rounds; round++) {
   const verdict = await tester.ask<TestVerdict>(
     "Review the build: " + JSON.stringify(dev) + "\n" +
     "Duties: code review / roundtrip (incl. adversarial inputs) / generalization / perturbation stability; update the claim→evidence map (docs/workflow/claim_map.md); " +
-    "create or update selfcheck.py at the repo root with a must-fail canary case. Return TestVerdict.",
+    "create or update selfcheck.py at the repo root with a must-fail canary case. For headline numbers that enter claims or go/no-go decisions and involve multi-step aggregation, recompute them via a second path from archived intermediates (a different grouping or formula — a second implementation is not required); archive the intermediates that make this a minutes-long check, not a rerun. A mismatch freezes the number pending audit — never wave it off as a rounding note. Single-source direct measurements are exempt (roundtrip and canary already cover them). When a number is retracted, sweep the whole repo for documents repeating it (ledger history, READMEs, figures) and list the corrections for this round. Return TestVerdict.",
   );
   let claimMapOk = false;
   try {
@@ -413,8 +413,8 @@ const resumeNote = rows.length === 0 ? "The ledger shows all rounds already comp
 const evalResult = await chief.ask<EvalReport>(
   resumeNote + rounds + " rounds complete — hard stop. All reviews:\n" + plan.slice(0, 6000) + "\n" +
   "Round records: " + JSON.stringify(rows) + "\n" +
-  "Write the Preliminary Evaluation Report: verdict (continue/pivot/stop), expected success with reasoning that cites the experiment-mortality trend and the reader's novelty check, plus an explicit note that it is a qualitative judgement expressed numerically rather than a calibrated probability, novelty grounded in the 3 closest works, impact, points to watch if continued, " +
-  "reviewerQuotes (verbatim, never paraphrased), and one line of advice. Write it to docs/workflow/evaluation_report.md.",
+  "Write the Preliminary Evaluation Report: verdict (continue/pivot/stop), expected success with reasoning that cites the experiment-mortality trend and the reader's novelty check, plus an explicit note that it is a qualitative judgement expressed numerically rather than a calibrated probability, novelty grounded in the 3 closest works, impact, points to watch if continued (each annotated with the evidence scope of the claim it concerns — datasets and conditions), " +
+  "reviewerQuotes (verbatim, never paraphrased), and one line of advice including a decision list of things only the boss can do (accounts, data, resources). Write it to docs/workflow/evaluation_report.md.",
 );
 const md = [
   "# Preliminary Evaluation Report",

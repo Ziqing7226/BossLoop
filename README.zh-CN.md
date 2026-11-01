@@ -1,6 +1,6 @@
 # 科研迭代循环（Research Iteration Loop）
 
-**v0.1.0** · English: [README.md](README.md)（默认）
+**v0.1.1** · English: [README.md](README.md)（默认）
 
 **从一个粗糙的想法出发，三轮之后知道它值不值得你投入三个月。**
 

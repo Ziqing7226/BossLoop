@@ -1,6 +1,6 @@
 # Research Iteration Loop
 
-**v0.1.0** · 中文文档：[README.zh-CN.md](README.zh-CN.md)
+**v0.1.1** · 中文文档：[README.zh-CN.md](README.zh-CN.md)
 
 **Start from a rough idea. Three rounds later, know whether it deserves three months.**
 
