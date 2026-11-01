@@ -240,7 +240,7 @@ let interrupted = false;
 
 for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   const baseline = await HEAD0();
-  phase("Round " + round + " \u00b7 Chief issues cards");
+  phase("Chief issues cards");
   const cards = await chief.ask<RoundCards>(
     "Round " + round + "/" + roundsTotal + ". Requirements live in docs/workflow/requirements.md; planning basis:\n" + String(plan).slice(0, 4000) + "\n" +
     (lastPushed ? "Last round pushed " + lastPushed.slice(0, 7) + ": first check its remote CI status on (" + (push0.target || "not configured") + ") via gh run list/view; if uncheckable, say so honestly; failures go into remoteCiIssues as mandatory fix items.\n" : "") +
@@ -268,7 +268,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   }
   log("Round " + round + " task: " + cards.title + (cards.remoteCiIssues.length > 0 ? "; remote-CI carryover: " + cards.remoteCiIssues.length + " mandatory item(s)" : ""));
 
-  phase("Round " + round + " \u00b7 Engineer builds & commits");
+  phase("Engineer builds & commits");
   let dev = await algo.ask<DevReport>(
     "Round " + round + " work cards:\n" + cards.cards.map((c, i) => (i + 1) + ". " + c).join("\n") +
     (cards.remoteCiIssues.length > 0 ? "\nMandatory remote-CI fixes from last round:\n" + cards.remoteCiIssues.map((s) => "- " + s).join("\n") : "") +
@@ -282,7 +282,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   const commitOk = headA !== "" && headA !== baseline;
   log("Round " + round + " commit " + (commitOk ? "landed (" + headA.slice(0, 7) + ", baseline " + (baseline || "empty tree").slice(0, 7) + ")" : "still missing — recorded honestly; the tester faces uncommitted changes"));
 
-  phase("Round " + round + " \u00b7 Test Engineer cold-start gate");
+  phase("Test Engineer cold-start gate");
   const tester = agent("Test Engineer R" + round, { system: TEST_EN + PROFILE_LINE }); // fresh instance per round: cold start
   const diffHint = baseline ? "git diff " + baseline + "..HEAD" : "git show HEAD (the repository's first commit)";
   let verdict: TestVerdict = { summary: "not started", passed: false, findings: [] };
@@ -373,7 +373,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   }
 
   if (gate === "" || !gate.startsWith("pass")) {
-    phase("Round " + round + " \u00b7 gate still red after 3 attempts: interrupt");
+    phase("Gate still red, interrupt");
     const ir = await chief.ask<string>(
       "Round " + round + " gate is still not green after 3 fix attempts (" + gate + "). Major issue: write docs/workflow/interrupt_report.md (current state, failure evidence, fixes attempted, points needing the boss's decision), git add -A && git commit (do not push the un-gated commit unless the boss agreed otherwise), return a one-sentence summary.",
     );
@@ -384,7 +384,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   }
   headA = await HEAD0();
 
-  phase("Round " + round + " \u00b7 push to the agreed remote");
+  phase("Push to the agreed remote");
   let pushState = "not pushed";
   if (push0.target !== "") {
     let branch = "main";
@@ -424,7 +424,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   }
   log("Round " + round + " push: " + pushState);
 
-  phase("Round " + round + " \u00b7 Chief archives the ledger");
+  phase("Chief archives the ledger");
   const archived = await chief.ask<string>(
     "Append round " + round + " to docs/workflow/ledger.md: cards, dev summary, test verdict (findings " + findingsCount + " / rebuttals " + rebuttedCount + "), gate " + gate + ", baseline " + (baseline || "empty tree").slice(0, 7) + ", push " + pushState + ", next direction. Then git add -A && git commit (the small ledger commit)" +
     (push0.target !== "" ? " and push it (git push " + push0.target + ", no force)" : "") + "; return one sentence.",

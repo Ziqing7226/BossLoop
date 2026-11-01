@@ -240,7 +240,7 @@ let interrupted = false;
 
 for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   const baseline = await HEAD0();
-  phase("第 " + round + " 轮 · 总工发卡");
+  phase("总工发卡");
   const cards = await chief.ask<RoundCards>(
     "第 " + round + "/" + roundsTotal + " 轮。老板要求见 docs/workflow/requirements.md；本轮规划依据：\n" + String(plan).slice(0, 4000) + "\n" +
     (lastPushed ? "上一轮已推送 " + lastPushed.slice(0, 7) + "：先核查其在 remote（" + (push0.target || "未配置") + "）上的 CI 状态（gh run list/view；不可核查则如实注明），失败项列入 remoteCiIssues 作为本轮必修。\n" : "") +
@@ -268,7 +268,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   }
   log("第 " + round + " 轮任务：" + cards.title + (cards.remoteCiIssues.length > 0 ? "；remote CI 结转必修：" + cards.remoteCiIssues.length + " 项" : ""));
 
-  phase("第 " + round + " 轮 · 算法工程师开发与提交");
+  phase("算法工程师开发与提交");
   let dev = await algo.ask<DevReport>(
     "第 " + round + " 轮任务卡：\n" + cards.cards.map((c, i) => (i + 1) + ". " + c).join("\n") +
     (cards.remoteCiIssues.length > 0 ? "\n上一轮 remote CI 必修项：\n" + cards.remoteCiIssues.map((s) => "- " + s).join("\n") : "") +
@@ -282,7 +282,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   const commitOk = headA !== "" && headA !== baseline;
   log("第 " + round + " 轮提交 " + (commitOk ? "已落地（" + headA.slice(0, 7) + "，baseline " + (baseline || "空树").slice(0, 7) + "）" : "仍未落地——如实记录，测试将面对未提交改动"));
 
-  phase("第 " + round + " 轮 · 测试工程师冷启动门禁");
+  phase("测试工程师冷启动门禁");
   const tester = agent("测试工程师-R" + round, { system: TEST_ZH + PROFILE_LINE }); // 每轮全新实例：冷启动
   const diffHint = baseline ? "git diff " + baseline + "..HEAD" : "git show HEAD（整仓首提交）";
   let verdict: TestVerdict = { summary: "未开始", passed: false, findings: [] };
@@ -373,7 +373,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   }
 
   if (gate === "" || !gate.startsWith("pass")) {
-    phase("第 " + round + " 轮 · 门禁 3 次仍红：打断上报");
+    phase("门禁 3 次仍红，打断上报");
     const ir = await chief.ask<string>(
       "第 " + round + " 轮门禁 3 次修复后仍未全绿（" + gate + "）。属重大问题：写 docs/workflow/interrupt_report.md（当前状态、失败证据、已尝试的修复、需要老板决策的点），git add -A && git commit（不推送未过门禁的提交，除非老板此前另有约定），返回一句话摘要。",
     );
@@ -384,7 +384,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   }
   headA = await HEAD0();
 
-  phase("第 " + round + " 轮 · 推送约定 remote");
+  phase("推送约定 remote");
   let pushState = "未推送";
   if (push0.target !== "") {
     let branch = "main";
@@ -424,7 +424,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   }
   log("第 " + round + " 轮推送：" + pushState);
 
-  phase("第 " + round + " 轮 · 总工记账");
+  phase("总工记账");
   const archived = await chief.ask<string>(
     "把第 " + round + " 轮追加到 docs/workflow/ledger.md：任务卡、开发摘要、测试判决（问题 " + findingsCount + " / 反驳 " + rebuttedCount + "）、门禁 " + gate + "、baseline " + (baseline || "空树").slice(0, 7) + "、推送 " + pushState + "、下一轮方向。然后 git add -A && git commit（账本小提交）" +
     (push0.target !== "" ? "并推送（git push " + push0.target + "，不 force）" : "") + "，返回一句话。",
