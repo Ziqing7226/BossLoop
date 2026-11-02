@@ -1,6 +1,6 @@
 # Robust Engineering Loop
 
-**v0.3.1** · collection: `bossloop` · sibling: [Research Iteration Loop](../idea-validation-loop/SPEC.md)
+**v0.3.1** · collection: `bossloop` · sibling: [Research Iteration Loop](../research-iteration-loop/SPEC.md)
 
 > Give it a requirement. Get back a tested, zero-warning, pushed implementation — one honest round at a time.
 
@@ -115,7 +115,7 @@ Roles run on two model tiers by default (`models=tiered`; `uniform` puts every r
 
 **Junior→senior escalation:** a finding the junior cannot solve in **3 fix attempts** escalates to the Senior Engineer (strong model) with the failed attempts in context; attempts 4–10 of the gate loop run on the senior, under the same amend discipline. The executor never rules on its own declarations: escalation-phase destructive requests are adjudicated by the Chief. Escalations are counted per round in the ledger — a high escalation rate is a signal that the tiering or the task split is wrong, and the Chief acts on it.
 
-**Portability:** tier assignment is engine config, not protocol. Any strong/cheap pair works; the cheap tier may be a locally deployed model (e.g. Qwen4) where the engine allows it.
+**Portability:** tier assignment is engine config, not protocol. Any strong/cheap pair works; the cheap tier may be a locally deployed model (e.g. Qwen3.8) where the engine allows it.
 
 ## 12. Domain profiles
 
@@ -144,4 +144,4 @@ Docs: **CC BY 4.0** — redistributing or adapting the documentation requires at
 
 ## 16. Design lineage
 
-The backbone comes from the [Research Iteration Loop](../idea-validation-loop/SPEC.md) (same collection): bounded rounds, the independent tester, the canary, ledger recovery, the GitCoffer posture. This loop diverges where engineering differs from research: **push-by-agreement** instead of never-push (remote verification requires a remote), a **requirement map** instead of a claim map, **cold-start** testing (stronger than sibling independence), a **zero-warning** gate, **misdiagnosis discipline**, and the **single-commit amend round**. The engineering habits it enforces — warnings-as-errors, small reviewable commits, append-only history, reproduce-before-repair — are old discipline; the protocol's job is making agents obey it.
+The backbone comes from the [Research Iteration Loop](../research-iteration-loop/SPEC.md) (same collection): bounded rounds, the independent tester, the canary, ledger recovery, the GitCoffer posture. This loop diverges where engineering differs from research: **push-by-agreement** instead of never-push (remote verification requires a remote), a **requirement map** instead of a claim map, **cold-start** testing (stronger than sibling independence), a **zero-warning** gate, **misdiagnosis discipline**, and the **single-commit amend round**. The engineering habits it enforces — warnings-as-errors, small reviewable commits, append-only history, reproduce-before-repair — are old discipline; the protocol's job is making agents obey it.

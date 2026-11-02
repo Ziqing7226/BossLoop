@@ -1,17 +1,36 @@
+<div align="center">
+
 # BossLoop
 
-**为老板干活的 AI 团队循环，有界、对抗验证，并向你如实汇报。** bossloop 是一组开源 Agent 工作流：一支自主的 AI 团队——规划的总工程师、开发的算法工程师、冷启动攻击作品的测试工程师——在有界轮次中迭代，只交付通过全绿门禁的工作，并向老板（你）汇报。
+**为老板干活的 AI 团队循环，有界、对抗验证，并向你如实汇报。**
 
-**v0.3.1** · English: [README.md](README.md)（默认）
+[![Version](https://img.shields.io/badge/version-v0.3.1-blue)](CITATION.cff)
+[![License](https://img.shields.io/badge/license-CC%20BY%204.0%20%2F%20Apache--2.0-green)](LICENSE)
+![已在 ZCode 验证](https://img.shields.io/badge/%E5%B7%B2%E5%9C%A8%20ZCode%20%E9%AA%8C%E8%AF%81-orange)
+[![English](https://img.shields.io/badge/docs-English-blue)](README.md)
+
+</div>
+
+bossloop 是一组开源 Agent 工作流：一支自主的 AI 团队——规划的总工程师、开发的算法工程师、冷启动攻击作品的测试工程师——在有界轮次中迭代，只交付通过全绿门禁的工作，并向老板（你）汇报。同一套纪律，三件事：验证想法、迭代科研、鲁棒工程开发——强模型做管理，廉价模型做开发。
 
 ## 工作流
 
 | 工作流 | 它做什么 | 协议 |
 |---|---|---|
-| **观点验证** | 从一个粗糙的想法出发，三轮之后知道它值不值得你投入三个月。 | [科研迭代循环](idea-validation-loop/SPEC.md) |
+| **观点验证与科研迭代** | 从一个粗糙的想法出发，三轮之后知道它值不值得你投入三个月——答案是值得，就继续迭代下去。 | [科研迭代循环](research-iteration-loop/SPEC.md) |
 | **工程开发** | 给它一条开发要求，还你一份已测试、零警告、已推送的实现——每一轮都诚实地推进。 | [鲁棒工程循环](robust-engineering-loop/SPEC.md) |
 
-**默认模型分档。**两个循环都把强模型用在规划与审查（总工、审稿人），廉价模型用在开发与测试，并配"初级 3 次未解→高级工程师"升级通道；廉价档提出的破坏性命令由强模型裁决，绝不转交给你——花更少的 token，解决更大的问题，护栏不打折。
+**验证不是终点。**当评估报告说「继续」，带着你的决策重跑即可——循环从账本下一轮续跑，继续推进你的研究。它曾在三次运行中驱动一个真实研究项目迭代九轮。
+
+## 为什么是 bossloop
+
+把一条命令交给 AI，你收获一份没测过的产出和一夜的督促；把要求交给 bossloop，你收获一份已测试、有文档、已推送的交付。
+
+- **低成本。** 强模型做管理，廉价模型做开发——复刻真实工程团队的降本增效打法。廉价档可以是本地部署的开源模型（例如在自己的 GPU 上跑 Qwen3.8）；它提出的危险操作由强模型裁决，未经批准的写法过不了门禁。省 token，办大事。
+- **高质量。** 循环自我对抗：每轮都有冷启动测试工程师攻击作品（绝不见作者自述）、门禁全部机械化并埋必须失败的金丝雀、问题必须附复现证据、返修迭代直到全绿。
+- **少人工。** 全流程工作流化：有界轮次、账本断点、初级→高级自动升级；你只在老板该出场的地方出场——给要求、裁决打断、读汇报。
+
+省 token，自迭代，好产出。
 
 ## 共同理念
 
@@ -26,7 +45,7 @@
 让你的 AI 编码 Agent 读对应工作流的 `SPEC.md`，在你的技术栈中搭建——所有协议按引擎可移植设计（已在 ZCode 验证）。使用 ZCode：
 
 ```bash
-cp idea-validation-loop/implementations/zcode/research-iteration-loop.dwf.ts ~/.zcode/workflows/
+cp research-iteration-loop/implementations/zcode/research-iteration-loop.dwf.ts ~/.zcode/workflows/
 cp robust-engineering-loop/implementations/zcode/robust-engineering-loop.dwf.ts ~/.zcode/workflows/
 ```
 

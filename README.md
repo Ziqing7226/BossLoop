@@ -1,17 +1,36 @@
+<div align="center">
+
 # BossLoop
 
-**Bounded AI-team loops that work for the boss — and report to you.** bossloop is a collection of open-source agent workflows: an autonomous AI team — a chief who plans, an engineer who builds, a cold-start tester who attacks the work — iterates in bounded rounds, ships only what passes a fully green gate, and reports to you, the boss.
+**Bounded AI-team loops that work for the boss — and report to you.**
 
-**v0.3.1** · 中文文档：[README.zh-CN.md](README.zh-CN.md)
+[![Version](https://img.shields.io/badge/version-v0.3.1-blue)](CITATION.cff)
+[![License](https://img.shields.io/badge/license-CC%20BY%204.0%20%2F%20Apache--2.0-green)](LICENSE)
+![Validated on ZCode](https://img.shields.io/badge/validated%20on-ZCode-orange)
+[![Docs](https://img.shields.io/badge/docs-中文-red)](README.zh-CN.md)
+
+</div>
+
+bossloop is a collection of open-source agent workflows: an autonomous AI team — a chief who plans, an engineer who builds, a cold-start tester who attacks the work — iterates in bounded rounds, ships only what passes a fully green gate, and reports to you, the boss. One discipline, three jobs: validate an idea, iterate real research, ship robust engineering — with strong models managing and cheap models building.
 
 ## The loops
 
 | Workflow | What it does | Protocol |
 |---|---|---|
-| **Idea Validation** | Start from a rough idea. Three rounds later, know whether it deserves three months. | [Research Iteration Loop](idea-validation-loop/SPEC.md) |
+| **Idea Validation & Research Iteration** | Start from a rough idea. Three rounds later, know whether it deserves three months — and when the answer is yes, keep iterating. | [Research Iteration Loop](research-iteration-loop/SPEC.md) |
 | **Engineering Development** | Give it a requirement. Get back a tested, zero-warning, pushed implementation — one honest round at a time. | [Robust Engineering Loop](robust-engineering-loop/SPEC.md) |
 
-**Tiered models by default.** Both loops put strong models on planning and review (chief, reviewers) and cheap models on build and test, with a junior→senior escalation path; destructive commands raised on the cheap tier are ruled on by the strong tier, never bounced back to you — fewer tokens, larger jobs, same guardrails.
+**Validation is not a dead end.** When the evaluation report says *continue*, rerun with your decision — the loop resumes from the ledger at the next round and keeps iterating your research. It carried a real project through nine rounds across three runs.
+
+## Why bossloop
+
+Hand a command to an AI and you spend the evening supervising its untested output. Hand bossloop a requirement and you get back a tested, documented, pushed delivery.
+
+- **Low cost.** Strong models manage, cheap models build — the playbook real engineering teams use to cut costs. The cheap tier can be a locally deployed open model (e.g. Qwen3.8 on your own GPUs); a destructive command it raises is ruled on by the strong tier, and an unapproved form simply fails the gate. Fewer tokens, larger jobs.
+- **High quality.** The loop adversarially tests itself: a cold-start tester attacks every round without ever reading the author's claims, gates are mechanical and carry a must-fail canary, findings need reproduction evidence, and rework iterates until everything is green.
+- **Minimal supervision.** The whole pipeline is a workflow — bounded rounds, ledger checkpoints, automatic junior→senior escalation. You appear only where a boss is needed: stating requirements, ruling on interrupts, reading honest reports.
+
+Fewer tokens. Self-iteration. Solid output.
 
 ## Shared philosophy
 
@@ -26,7 +45,7 @@
 Point your AI coding agent at a loop's `SPEC.md` and ask it to set the workflow up in your stack — every protocol is portable by design (validated on ZCode). Running ZCode:
 
 ```bash
-cp idea-validation-loop/implementations/zcode/research-iteration-loop.dwf.ts ~/.zcode/workflows/
+cp research-iteration-loop/implementations/zcode/research-iteration-loop.dwf.ts ~/.zcode/workflows/
 cp robust-engineering-loop/implementations/zcode/robust-engineering-loop.dwf.ts ~/.zcode/workflows/
 ```
 
