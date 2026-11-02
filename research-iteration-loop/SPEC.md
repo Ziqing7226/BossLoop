@@ -6,8 +6,6 @@
 
 This protocol describes an AI research team that surveys, builds, tests, writes, and peer-reviews — then hard-stops and hands back an honest evaluation. It is portable by design (validated on ZCode); reference implementations live in `implementations/`.
 
-![loop diagram](docs/diagram-en.png)
-
 ---
 
 ## 1. Bound

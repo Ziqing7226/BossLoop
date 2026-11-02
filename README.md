@@ -26,19 +26,11 @@ bossloop is a collection of open-source agent workflows: an autonomous AI team �
 
 Hand a command to an AI and you spend the evening supervising its untested output. Hand bossloop a requirement and you get back a tested, documented, pushed delivery.
 
-- **Low cost.** Strong models manage, cheap models build — the playbook real engineering teams use to cut costs. The cheap tier can be a locally deployed open model (e.g. Qwen3.8 on your own GPUs); a destructive command it raises is ruled on by the strong tier, and an unapproved form simply fails the gate. Fewer tokens, larger jobs.
+- **Low cost.** Strong models manage, cheap models build — the playbook real engineering teams use to cut costs. The cheap tier can be a locally deployed open model (e.g. Qwen3.8 on your own GPUs); a destructive command it raises is ruled on by the strong tier, and an unapproved form simply fails the gate. Cheaper tokens, larger jobs.
 - **High quality.** The loop adversarially tests itself: a cold-start tester attacks every round without ever reading the author's claims, gates are mechanical and carry a must-fail canary, findings need reproduction evidence, and rework iterates until everything is green.
 - **Minimal supervision.** The whole pipeline is a workflow — bounded rounds, ledger checkpoints, automatic junior→senior escalation. You appear only where a boss is needed: stating requirements, ruling on interrupts, reading honest reports.
 
-Fewer tokens. Self-iteration. Solid output.
-
-## Shared philosophy
-
-- **Bounded by design.** Hard stop after N rounds — no drift, no sunk-cost spiral.
-- **Adversarial verification.** A tester who never edits the work; gates are mechanical and carry a must-fail canary.
-- **Evidence over assertions.** Every claim maps to an archived artifact and a re-runnable check.
-- **The ledger is the checkpoint.** Interrupted runs resume at the next round.
-- **The boss is sovereign.** Requirements are recorded verbatim, deviations are reported, publishing is your call.
+Cheaper tokens. Self-iteration. Solid output.
 
 ## Quick start
 
