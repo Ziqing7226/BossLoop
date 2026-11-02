@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Robust Engineering Loop (v0.3.0), English UI. Chief records a verbatim requirement ledger and commits to N rounds (boss may lock via rounds) -> each round, the Algorithm Engineer builds + docs (docs are a deliverable — professional, clean, concise, non-redundant) in ONE local commit -> Test Engineer COLD START (fresh agent context; sees only the diff and the code, never the dev self-report) with diff review (incl. doc quality) + robustness suite + canary + local CI green + warnings-as-errors build + remote-CI carryover check of the previous push -> on failure the engineer reproduces first (confirmed -> fix; misdiagnosis -> evidence rebuttal; tester arbitrates) -> amend into the round commit -> re-verify (10 attempts still red -> interrupt and report to the boss) -> only when fully green, push to the agreed remote (GitCoffer auto-detected by default; append-only, never force) -> Chief ledger commit; hard stop after N rounds -> Final Report (requirement -> outcome -> evidence, deviations included); destructive operations are declared, never executed unilaterally — junior declarations ruled on by the Senior Engineer, escalation-phase declarations by the Chief (the ruler is never the declarer) — never handed back to the boss; resumes from the ledger. Model tiering (tiered — Chief and Senior Engineer on GLM-5.3, engineer and tester on GLM-5.3-Flash; a finding the junior cannot solve in 3 fix attempts escalates to the Senior Engineer; models=uniform puts every role on the session model).
+description: Robust Engineering Loop (v0.3.1), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
 args:
   requirement:
     type: string
@@ -156,7 +156,7 @@ const CHIEF_EN = [
   "You are the Chief Engineer. Mission: turn the boss's (user's) development requirement into a high-quality delivery within a committed, bounded number of rounds — every round passes cold-start verification, a fully green gate and a zero-warning build before anything is pushed.",
   "Boss fidelity is the top discipline: before round 1 create docs/workflow/requirements.md — the boss's words verbatim, each with interpretation and acceptance criteria, none dropped; never act against the boss's requirements; a deviation you cannot avoid must be explained line by line in the Final Report — never silently.",
   "Interrupt policy: major issues (infeasible requirement, scope-changing ambiguity, extending the round count, gate still red after 10 gate re-checks) -> interrupt the loop immediately; a destructive operation is not itself an interrupt trigger — it goes to the danger-clause ruling (junior declarations -> Senior Engineer; the Senior Engineer's own declarations in the escalation phase -> you), and only when the round still cannot proceed after the ruling do you interrupt and write docs/workflow/interrupt_report.md for the boss; minor issues (in-scope implementation details, tooling choices, ordering) -> decide yourself and log the decision. Scope, schedule, quality bar and budget are boss-level tradeoffs — you may not downgrade them to minor.",
-  "Round planning: commit to N rounds with a one-line scope each before round 1 (a boss-locked rounds value is final — no adding or dropping); each round re-plan from the ledger — last round's verdict, findings and rebuttals, remote-CI carryover and leftovers must all be disposed of; every work card traces to a requirement entry (R1/R2...); when last round's fix was contradicted by validation (a field replay, a hardware re-test), this round's cards open with an explicit rollback-vs-fix-forward decision, evidence first — a contradicted fix is never stacked on.",
+  "Round planning: commit to N rounds with a one-line scope each before round 1 (a boss-locked rounds value is final — no adding or dropping); each round re-plan from the ledger — last round's verdict, findings and rebuttals, remote-CI carryover and leftovers must all be disposed of; every work card traces to a requirement entry (R1/R2...); when last round's fix was contradicted by validation (later validation), this round's cards open with an explicit rollback-vs-fix-forward decision, evidence first — a contradicted fix is never stacked on.",
   "Misdiagnosis arbitration: when the engineers dispute a finding, arbitrate on evidence only; if still undecided -> major issue, interrupt and report to the boss.",
   "Take over by reading the ledger (docs/workflow/ledger.md): resume, never redo; the ledger also records each round's baseline hash and pushed SHAs. Resuming after an interrupt or a cancelled stretch opens with a closure review of the discarded range: every in-flight item is either verified present or dropped with a ledger note — lost work is reconciled before new rounds, never silently skipped.",
   "Honesty first: reports quote command outputs and exit codes only; say what you don't know; escalate contradictions instead of working around them.",
@@ -169,8 +169,8 @@ const ALGO_EN = [
   "Fixes always land as git add -A && git commit --amend --no-edit into the round commit: never rewrite pushed history, never amend below the baseline.",
   "Your dev report (with per-card requirement coverage) goes to the Chief for planning only; the Test Engineer never sees it — the cold start is by design, not an oversight.",
   "Report failures as failures; escalate contradictions. Never fake, never bypass the gate, never force-push.",
-  "Repair discipline, three rules: layer attribution before repair — pin the layer/component the defect lives in with discriminating evidence first (e.g. data inspection separating the decode layer from the render layer); no \"just in case\" cross-layer fixes, and an unattributable finding is reported as such, never patched speculatively. Falsifiability — a diagnosis names the experiment that would refute it; an unfalsifiable story (an \"illusion\", an \"interference\" with no discriminating test) is a conjecture and never justifies a change; direct observation of the failure outranks theory. Reference anchoring — when a reference implementation exists (upstream project, prior art), check it first at its behavior layer (initialization values, mode conventions, visualization behavior all count) before concluding; a divergence is either justified in the ledger or aligned with the reference — reinventing what the reference already solves is a misdiagnosis risk.",
-  "Destructive-operation rule: rm -rf / deleting directories or data files / git reset --hard / git clean -fdx / force push / rewriting pushed history / overwriting others' artifacts are declared, never executed unilaterally — put them in dangerRequests (exact command, reason, blast radius) and wait for the Senior Engineer's ruling, then run exactly the approved form; never improvise, never widen the scope.",
+  "Repair discipline, three rules: layer attribution before repair — pin the layer/component the defect lives in with discriminating evidence first; no \"just in case\" cross-layer fixes, and an unattributable finding is reported as such, never patched speculatively. Falsifiability — a diagnosis names the experiment that would refute it; an unfalsifiable story is a conjecture and never justifies a change; direct observation of the failure outranks theory. Reference anchoring — when a reference implementation exists (upstream project, prior art), check it first at its behavior layer before concluding; a divergence is either justified in the ledger or aligned with the reference.",
+  "Destructive-operation rule: rm -rf / deleting directories or data files / git reset --hard / git clean -fdx / force push / rewriting pushed history / overwriting others' artifacts are declared, never executed unilaterally — put them in dangerRequests (exact command, reason, blast radius) and wait for the Senior Engineer's ruling, then run exactly the approved form.",
   "You run on the cheap tier as the junior engineer: when the same problem survives 3 fix attempts, stop grinding — write up the minimal reproduction and a root-cause hypothesis and hand it to the Senior Engineer (strong model).",
 ].join("\n");
 
@@ -188,8 +188,8 @@ const TEST_EN = [
   "Check the previous round's push on the remote: on GitHub remotes with gh available use gh run list / gh run view; if uncheckable, say so honestly — an unchecked CI is never reported as passed; failures become mandatory fix items this round.",
   "Destructive-operation criterion (aligned with the declaration duty): beyond the approved list — data files or whole directories vanishing, history below the baseline rewritten, a force push, existing artifacts overwritten — is a blocker; demand the declaration and the ruling record. Source-file deletions in an ordinary refactor are not destructive, but must stay traceable. Third-party upstreams are read-only: pushes still go only to the agreed remote, never upstream; before the round closes, upstream refs are verified unchanged, quoted from git output.",
   "Independence is absolute: never edit the implementation under test. You only write selfcheck.py, the robustness cases, and the verification column of docs/workflow/requirement_map.md (requirement <-> implementation location <-> re-runnable command, tabular with a requirement-map marker).",
-  "Reference anchoring and artifact freshness: when a reference implementation exists (upstream/prior art), check suspect behavior against its behavior layer first (initialization values, conventions, visualization behavior all count) — an unexplained divergence is a finding; the artifacts the checks ran against must be built from HEAD — where the build layout exposes them, verify freshness (no source newer than its artifact; selfcheck.py may carry the check), and a green from a stale binary is void; every finding states its layer/component with discriminating evidence.",
-  "Verification layering and environment determinism: every conclusion states its means of verification — a real-device test, a CI run, or a specialist cold review standing in where no device exists; a substituted review says so honestly and is never worded as hands-on, and the statement precedes the findings so it can be reconciled later. Every verification command runs in a pinned environment — output locale pinned (localized tool output re-invoked under a pinned locale), system-level configuration isolated (credential helpers and global git config bypassed, not trusted), credential state reset between scenarios, no persistence assumed for temp directories.",
+  "Artifact freshness and reference anchoring: the artifacts the checks ran against must be built from HEAD — where the build layout exposes them, verify freshness (no source newer than its artifact; selfcheck.py may carry the check), and a green from a stale binary is void; when a reference implementation exists (upstream/prior art), check suspect behavior against its behavior layer first — an unexplained divergence is a finding; every finding states its layer/component with discriminating evidence.",
+  "Every verification command runs in a pinned environment: output locale pinned, system-level configuration isolated (credential helpers and global git config bypassed, not trusted), credential state reset between scenarios, no persistence assumed for temp directories; the per-conclusion verification-layering statement follows the coverage requirement of each verdict.",
   "Every finding carries reproduction evidence (command + output); after a fix, re-run the original failing check to confirm closure; arbitrate rebuttals on evidence only; mark blocker honestly when the build system cannot even run or the requirement contradicts itself.",
 ].join("\n");
 
@@ -270,8 +270,8 @@ const push0 = await resolvePushTarget();
 if (push0.note !== "") log("Push target: " + push0.note);
 const commit0 = await chief.ask<Commitment>(
   "Boss's requirement (verbatim): " + requirement + "\n" + (focus ? "Boss focus: " + focus + "\n" : "") +
-  (ledger ? "Existing ledger (tail excerpt; the resume basis):\n" + ledger.slice(-4000) + "\nIf it shows N rounds already completed for this requirement, resumeFrom = N (continue at round N+1, never redo); otherwise 0.\n" : "No ledger: resumeFrom = 0.\n") +
-  "Before round 1, three things: 1) create docs/workflow/requirements.md — the boss's words verbatim, numbered (R1/R2...), each with interpretation and acceptance criteria, none dropped; if a scope-changing ambiguity exists, raise it in blocked.question first (the only pre-start question); 2) commit to roundsTotal with a one-line scope per round in roundsOutline" +
+  (ledger ? "Existing ledger (head index + tail detail; the resume basis):\n" + (ledger.length > 6000 ? ledger.slice(0, 1600) + "\n... (middle omitted) ...\n" + ledger.slice(-3200) : ledger) + "\nIf it shows N rounds already completed for this requirement, resumeFrom = N (continue at round N+1, never redo); otherwise 0.\n" : "No ledger: resumeFrom = 0.\n") +
+  "Before round 1, three things: 1) create docs/workflow/requirements.md — headed by one authority line (requirements.md = requirement record; requirement_map.md = verification record; ledger.md = history record), then the boss's words verbatim, numbered (R1/R2...), each with interpretation and acceptance criteria, none dropped; if a scope-changing ambiguity exists, raise it in blocked.question first (the only pre-start question); 2) commit to roundsTotal with a one-line scope per round in roundsOutline" +
   (roundsArg > 0 ? " (the boss locked rounds=" + roundsArg + " — adopt it, no adding or dropping)" : " (planned by you; once fixed, no extension except via interrupt)") +
   "; 3) commit the ledger locally. Return Commitment." + CHIEF_BLOCK_NOTE,
 );
@@ -422,8 +422,11 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   for (let attempt = 1; attempt <= 10; attempt++) {
     verdict = await tester.ask<TestVerdict>(
       (attempt === 1
-        ? "Cold start. Baseline commit: " + (baseline || "(empty tree — this repo's first commit)") + ". Diff size this round: " + sizeNote + ". Review " + diffHint + " and the repository itself: diff review, robustness tests, selfcheck.py (strict build / full tests + robustness / local CI equivalent + canary marker), and update the verification column of docs/workflow/requirement_map.md."
-        : "The engineer has reworked (amended into the round commit); their fix report (a reconciliation lead only — your verdict rests on the checks you re-run): " + JSON.stringify(lastFix) + "\nRe-verify one by one: re-run the original failing check for each fix to confirm closure; arbitrate each rebuttal on evidence only — withdraw the finding if the rebuttal stands, keep it with an explanation if not.") +
+        ? "Cold start. Baseline commit: " + (baseline || "(empty tree — this repo's first commit)") + ". Diff size this round: " + sizeNote + ". Review " + diffHint + " and the repository itself: diff review, robustness tests, selfcheck.py (strict build / full tests + robustness / local CI equivalent + canary marker), and update the verification column of docs/workflow/requirement_map.md; amend the test-fixture changes (selfcheck.py, robustness cases, requirement_map.md) into the round commit with git add -A && git commit --amend --no-edit — the test suite is part of this round's delivery."
+        : (lastFix
+            ? "The engineer has reworked (amended into the round commit); their fix report (a reconciliation lead only — your verdict rests on the checks you re-run): " + JSON.stringify(lastFix) + "\n"
+            : "The failed mechanical items (selfcheck.py/requirement_map.md) were sent back to you to fix; no rework from the engineer side.\n") +
+      "Re-verify one by one: re-run the original failing check for each fix to confirm closure; arbitrate each rebuttal on evidence only — withdraw the finding if the rebuttal stands, keep it with an explanation if not.") +
       (cards.remoteCiIssues.length > 0 ? "\nAlso: the mandatory remote-CI items were handled by the engineer: " + cards.remoteCiIssues.join("; ") : "") +
       (approvedDanger.length > 0
         ? "\nDestructive operations approved by ruling this round — only these forms are allowed: " + approvedDanger.join("; ")
@@ -477,6 +480,15 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     if (attempt === 10) {
       gate = (verdict.passed ? "" : "test verdict not passed; ") + (canary ? "" : "no canary; ") + (mapOk ? "" : "requirement map missing; ") + (dangerConsistent ? "" : "dangerous-operation declared/ruled/executed mismatch; ") + (exitCode === 0 ? "" : "selfcheck exit " + exitCode);
       break;
+    }
+    if (verdict.findings.length === 0) {
+      // Purely mechanical failure (no findings): selfcheck.py and the map are the tester's own fixtures — send them back to their owner, not through the engineer escalation path
+      lastFix = null;
+      await tester.ask<string>(
+        "The mechanical gate is not satisfied (canary=" + (canary ? "present" : "missing") + "; requirement_map=" + (mapOk ? "valid" : "missing") + "; selfcheck exit=" + (canary ? exitCode : "not run") + ") while your verdict carries no findings. selfcheck.py and requirement_map.md are yours: fix or complete them and amend the changes into the round commit (git add -A && git commit --amend --no-edit); if selfcheck exposes an implementation defect, file it as a finding (with reproduction evidence) in your next verdict. Return one sentence.",
+      );
+      headA = await HEAD0();
+      continue;
     }
     const juniorAsk = attempt <= 3; // 3 failed junior attempts -> escalate to the Senior Engineer (strong tier)
     if (!juniorAsk) escalations++;
@@ -548,7 +560,17 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     branch = "main";
   }
   if (push0.target !== "") {
-    await algo.ask<string>("Gate is green. Push this round's commit to the agreed remote: git push " + push0.target + " HEAD:" + branch + " (never --force). Return one sentence.");
+    // The orchestrator pushes and verifies directly (literal git command, target in args): no agent paraphrase involved; failures are recorded honestly
+    let pushExit = -1;
+    for (let t = 0; t < 2 && pushExit !== 0; t++) {
+      try {
+        const p = await world.run("git", ["push", push0.target, "HEAD:" + branch], { timeoutMs: 300000 });
+        pushExit = p.exitCode;
+        if (pushExit !== 0) log("Push attempt " + (t + 1) + " exit code " + pushExit + ": " + (p.stderr || p.stdout || "").slice(0, 200));
+      } catch {
+        log("Push attempt " + (t + 1) + " failed to launch (recorded honestly)");
+      }
+    }
     try {
       const ls = await world.run("git", ["ls-remote", push0.target, "refs/heads/" + branch], { timeoutMs: 120000 });
       const remoteHead = ((ls.stdout || "").split("\t")[0] || "").trim();
@@ -556,19 +578,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
         pushState = "pushed & verified (" + headA.slice(0, 7) + "@" + push0.target + "/" + branch + ")";
         lastPushed = headA;
       } else {
-        await algo.ask<string>("Push verification failed (remote HEAD=" + remoteHead.slice(0, 7) + " != local " + headA.slice(0, 7) + "). Push once more: git push " + push0.target + " HEAD:" + branch + " (no force); return one sentence.");
-        try {
-          const ls2 = await world.run("git", ["ls-remote", push0.target, "refs/heads/" + branch], { timeoutMs: 120000 });
-          const rh2 = ((ls2.stdout || "").split("\t")[0] || "").trim();
-          if (rh2 === headA && headA !== "") {
-            pushState = "pushed & verified (after retry)";
-            lastPushed = headA;
-          } else {
-            pushState = "push verification failed (reported honestly: remote=" + rh2.slice(0, 7) + ")";
-          }
-        } catch {
-          pushState = "push verification failed (ls-remote unavailable; reported honestly)";
-        }
+        pushState = "push verification failed (reported honestly: remote=" + remoteHead.slice(0, 7) + ")";
       }
     } catch {
       pushState = "push verification failed (ls-remote unreachable; reported honestly)";
@@ -580,10 +590,18 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
 
   phase("Chief archives the ledger");
   const archived = await chief.ask<string>(
-    "Append round " + round + " to docs/workflow/ledger.md: cards, dev summary, destructive-operation ruling (" + dangerLog + "), test verdict (findings " + findingsCount + " / rebuttals " + rebuttedCount + " / escalated " + escalations + "), coverage statement (" + (verdict.coverage || "").slice(0, 300) + "), gate " + gate + ", baseline " + (baseline || "empty tree").slice(0, 7) + ", push " + pushState + ", deferred/declined sections (with reasons, “none” when empty), next direction. Then git add -A && git commit (the small ledger commit)" +
-    (push0.target !== "" ? " and push it (git push " + push0.target + ", no force)" : "") + "; return one sentence.",
+    "Record round " + round + " in docs/workflow/ledger.md (keep a one-line-per-round index at its head: update this round's index line first, then append the detail): cards, dev summary, destructive-operation ruling (" + dangerLog + "), test verdict (findings " + findingsCount + " / rebuttals " + rebuttedCount + " / escalated " + escalations + "), coverage statement (" + (verdict.coverage || "").slice(0, 300) + "), gate " + gate + ", baseline " + (baseline || "empty tree").slice(0, 7) + ", push " + pushState + ", deferred/declined sections (with reasons, “none” when empty), next direction. Then git add -A && git commit (the small ledger commit); return one sentence.",
   );
   const headLedger = await HEAD0();
+  if (push0.target !== "" && headLedger !== "") {
+    // The ledger commit is pushed and verified by the orchestrator as well: no agent paraphrase anywhere
+    try {
+      const pl = await world.run("git", ["push", push0.target, "HEAD:" + branch], { timeoutMs: 300000 });
+      if (pl.exitCode !== 0) log("Ledger-commit push exit code " + pl.exitCode + ": " + (pl.stderr || "").slice(0, 200) + " — recorded honestly");
+    } catch {
+      log("Ledger-commit push failed to launch (recorded honestly)");
+    }
+  }
   log("Round " + round + " ledger " + (headLedger !== "" && headLedger !== headA ? "landed (" + headLedger.slice(0, 7) + ")" : "needs manual check"));
   if (push0.target !== "" && headLedger !== "") {
     try {
@@ -619,7 +637,7 @@ const interruptNote = finalVerdict
   : "";
 const reported = await chief.ask<FinalReport>(
     interruptNote + (interrupted ? "" : roundsTotal + " rounds complete — hard stop (or finished early).") +
-    " Using docs/workflow/requirements.md and the ledger as the only basis, write the Final Report to docs/workflow/final_report.md: every requirement (verbatim) -> outcome -> evidence (requirementOutcomes; a requirement without an entry is not done); deviations from the boss's requirements explained one by one (deviations); final state (commits/pushes/CI/tests/known limitations); decisions only the boss can make (decisionList); two fixed sections — deferred and declined, each with its reason (a recorded deferral is a decision, not an omission; a declined idea is not re-proposed next run); fill the deferred/declined/processLessons fields faithfully (empty arrays when none); a process-lessons section — how the loop itself failed or nearly failed, distilled into checklist entries, adopted lessons persisted and loaded with the next run; one line of advice. git add -A && git commit" +
+    " Using docs/workflow/requirements.md and the ledger as the only basis, write the Final Report to docs/workflow/final_report.md: every requirement (verbatim) -> outcome -> evidence (requirementOutcomes; a requirement without an entry is not done); deviations from the boss's requirements explained one by one (deviations); final state (commits/pushes/CI/tests/known limitations); decisions only the boss can make (decisionList); two fixed sections — deferred and declined, each with its reason (a recorded deferral is a decision, not an omission; a declined idea is not re-proposed next run); fill the deferred/declined/processLessons fields faithfully (empty arrays when none); a process-lessons section — how the loop itself failed or nearly failed, distilled into checklist entries (each = rule + why + scope); adopted lessons persist and load with the next run (a disproven lesson is marked superseded, never left contradictory; re-validate against the current repo on load); one line of advice. git add -A && git commit" +
       (push0.target !== "" ? " and push to the agreed remote (no force)" : "") + ". Return FinalReport.",
 );
 const md = [

@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 科研迭代循环（v0.3.0）：总工程师每轮重组方案 Portfolio（机械校验 1–3）→ 算法工程师三级执行（FULL 出数、第 1 轮端到端数字机械补验）→ 测试工程师独立验证 + canary/映射表/解释器自动回退三重门禁（修复裁决归测试工程师；头条数字双路径复算，撤回即全库扫描）→ 修复补充 → 研究员修订 → 编辑盲审（审稿人每轮唯一命名）→ 含实验死亡率与新颖性核查的审稿 → 存档（HEAD 落盘核验 + 本地加密备份 remote，绝不推云端）；N 轮硬停出《初步评估报告》，账本断点续跑。模型分档（tiered：总工/编辑/审稿人/文献读者用 GLM-5.3，算法/测试/研究员用 GLM-5.3-Flash；审稿与开发异档即天然满足盲审去相关；models=uniform 全随会话模型）。破坏性操作只申报、由强档总工裁决后按批准执行（开发与修复路径全覆盖），不转交用户。
+description: 科研迭代循环（v0.3.1）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表 + 含 canary 的 selfcheck 机械门禁，测试基建归其所有）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
 args:
   idea:
     type: string
@@ -230,7 +230,7 @@ try {
 const survey = await chief.ask<SurveyResult>(
   "待迭代的初步想法：" + idea + "\n" + (focus ? "老板特别关注：" + focus + "\n" : "") +
   (ledger
-    ? "已有账本（末尾节选，断点续跑依据）：\n" + ledger.slice(-4000) + "\n若账本显示本想法已完成 N 轮，resumeFrom 填 N（从第 N+1 轮继续，勿重做已完成轮）；否则填 0。\n"
+    ? "已有账本（头部目录+末尾详情，断点续跑依据）：\n" + (ledger.length > 6000 ? ledger.slice(0, 1600) + "\n……（中间省略）……\n" + ledger.slice(-3200) : ledger) + "\n若账本显示本想法已完成 N 轮，resumeFrom 填 N（从第 N+1 轮继续，勿重做已完成轮）；否则填 0。\n"
     : "本仓库无既有账本：resumeFrom 填 0。\n") +
   "请完成调研（网络检索 + 本地论文库，如 docs/refs/），返回 SurveyResult。" +
   "约束：方案与竞品数量由你在 ≤3 内依据证据决定；第一轮结束前必须规划出至少一个完整（FULL 级）端到端对比的落地路径——最小对比不可作为验证。",
@@ -460,7 +460,7 @@ for (let round = startRound; round <= rounds; round++) {
     head0 = "";
   }
   const archived = await chief.ask<string>(
-    "把本轮（任务/产出/危险操作裁决（" + dangerLog + "）/测试（覆盖声明：" + (verdict.coverage || "").slice(0, 300) + "）/审稿/下轮方向）追加到 docs/workflow/ledger.md，然后 git add -A && git commit。若已配置本地加密备份 remote（建议用 GitCoffer 构建，防 Agent 误删本地代码后无从恢复），同时 push 到该 remote；不主动 push 到任何其它 remote（向云端发布永远是老板的明确动作）。返回一句话。",
+    "把本轮记入 docs/workflow/ledger.md（头部维护一行一轮的目录：本轮先更新目录行、再追加详情）：任务/产出/危险操作裁决（" + dangerLog + "）/测试（覆盖声明：" + (verdict.coverage || "").slice(0, 300) + "）/审稿/下轮方向。然后 git add -A && git commit。若已配置本地加密备份 remote（建议用 GitCoffer 构建，防 Agent 误删本地代码后无从恢复），同时 push 到该 remote；不主动 push 到任何其它 remote（向云端发布永远是老板的明确动作）。返回一句话。",
   );
   let head1 = "";
   try {

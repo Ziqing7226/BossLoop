@@ -1,6 +1,6 @@
 # Research Iteration Loop
 
-**v0.3.0** · collection: `bossloop` · sibling: [Robust Engineering Loop](../robust-engineering-loop/SPEC.md)
+**v0.3.1** · collection: `bossloop` · sibling: [Robust Engineering Loop](../robust-engineering-loop/SPEC.md)
 
 > Start from a rough idea. Iterate it through bounded, adversarial cycles. Stop on schedule and report whether it deserves more of your life.
 
@@ -70,7 +70,7 @@ Subprocess per batch/scene; write results to disk immediately and exit to free m
 
 ## 7. Unattended runs and recovery
 
-- The **ledger is the checkpoint**. Every round appends its task, artifacts, gate status, reviews and next direction.
+- The **ledger is the checkpoint**. Every round appends its task, artifacts, gate status, reviews and next direction; the ledger keeps a one-line-per-round index at its head, the detail below it.
 - A run interrupted by a crash, a dropped model stream or a quota stop is **resumed, not restarted**: same run if the engine supports it, otherwise a fresh run reads the ledger and continues at round N+1 (the Chief reports `resumeFrom`).
 - An external watchdog (cron, CI schedule) may poll run status and resume interrupted runs. It must **never** resume a run a human stopped on purpose.
 - Every round is committed locally. **Recommended:** configure a local encrypted backup remote — [GitCoffer](https://github.com/Ziqing7226/GitCoffer) builds one — so each round is also pushed there; an agent that accidentally deletes or corrupts local code is then always recoverable without any cloud remote. Pushes to cloud/shared remotes are never automatic; publishing is the boss's explicit action.

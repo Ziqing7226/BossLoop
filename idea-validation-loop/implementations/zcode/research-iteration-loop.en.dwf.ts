@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Research iteration loop (v0.3.0), English UI. Chief re-selects a mechanically checked proposal portfolio (1-3) each round -> Engineer with staged execution (MINI_PILOT/PILOT debug, FULL for claims; round-1 end-to-end number enforced; frozen during testing) -> independent Test Engineer with a triple gate (canary + claim map + interpreter auto-fallback; fix triage owned by the tester; dual-path recomputation of headline numbers; retraction sweeps the repo) -> fixes -> Researcher revises -> Editor invites blind adjacent-field reviewers (per-round unique names) -> reviews with experiment mortality and novelty checks -> archive with HEAD verification + encrypted local backup remote (GitCoffer, never cloud); hard stop after N rounds; resumes from the ledger. Model tiering (tiered — chief, editor, reviewers and reference reader on GLM-5.3; engineer, tester and researcher on GLM-5.3-Flash; reviewers on a different tier than the builders satisfies the blind-review decorrelation structurally; models=uniform puts every role on the session model). Destructive operations are declared only and run exactly as the strong-tier Chief approves (covering build and fix paths) — never handed back to the boss.
+description: Research Iteration Loop (v0.3.1), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3) from the latest reviews; the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map + a mechanical selfcheck gate with a canary, owning the test fixtures); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
 args:
   idea:
     type: string
@@ -225,7 +225,7 @@ try {
 const survey = await chief.ask<SurveyResult>(
   "Rough idea to iterate on: " + idea + "\n" + (focus ? "Boss focus: " + focus + "\n" : "") +
   (ledger
-    ? "Existing ledger (tail excerpt; the resume basis):\n" + ledger.slice(-4000) + "\nIf it shows N rounds already completed for this idea, set resumeFrom = N (continue at round N+1; never redo finished rounds); otherwise 0.\n"
+    ? "Existing ledger (head index + tail detail; the resume basis):\n" + (ledger.length > 6000 ? ledger.slice(0, 1600) + "\n... (middle omitted) ...\n" + ledger.slice(-3200) : ledger) + "\nIf it shows N rounds already completed for this idea, set resumeFrom = N (continue at round N+1; never redo finished rounds); otherwise 0.\n"
     : "No ledger in this repo: set resumeFrom = 0.\n") +
   "Survey (web + local paper library, e.g. docs/refs/) and return SurveyResult. " +
   "Constraints: proposal/competitor counts are your call within ≤3; plan a path to at least one properly powered end-to-end comparison before round 1 closes (staged pilots are for debugging; claims come from FULL runs).",
@@ -455,7 +455,7 @@ for (let round = startRound; round <= rounds; round++) {
     head0 = "";
   }
   const archived = await chief.ask<string>(
-    "Append this round (task/build/destructive-operation ruling (" + dangerLog + ")/test (coverage statement: " + (verdict.coverage || "").slice(0, 300) + ")/reviews/next direction) to docs/workflow/ledger.md, then git add -A && git commit. If an encrypted local backup remote is configured (recommended: build one with GitCoffer, so agent-caused deletions are always recoverable), also push there; never push to any other remote on your own (publishing to the cloud is always the boss's explicit action). Return one sentence.",
+    "Record this round in docs/workflow/ledger.md (keep a one-line-per-round index at its head: update this round's index line first, then append the detail) — task/build/destructive-operation ruling (" + dangerLog + ")/test (coverage statement: " + (verdict.coverage || "").slice(0, 300) + ")/reviews/next direction. Then git add -A && git commit. If an encrypted local backup remote is configured (recommended: build one with GitCoffer, so agent-caused deletions are always recoverable), also push there; never push to any other remote on your own (publishing to the cloud is always the boss's explicit action). Return one sentence.",
   );
   let head1 = "";
   try {

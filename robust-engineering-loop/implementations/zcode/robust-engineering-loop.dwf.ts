@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 鲁棒工程循环（v0.3.0）：总工程师先建"要求台账"（老板原话逐字+内涵+验收标准）并承诺 N 轮规划（老板可用 rounds 锁定）→ 每轮：算法工程师开发+文档（文档即交付物：专业、美观、简洁、无冗余重复）+单笔本地提交 → 测试工程师冷启动上岗（全新代理上下文，只见 diff 与代码，绝不见开发自报）：diff 审查（含文档质量）+鲁棒性测试+canary+本地 CI 全绿+警告即错误构建+核查上一轮 remote CI 结转 → 不过则算法工程师先复现（确认→修复 / 误诊→证据反驳，测试工程师仲裁）→ amend 并入本轮提交 → 复检（初级 3 次未解即升级高级工程师，门禁复核 10 次仍未过即打断上报老板）→ 全绿才推送约定 remote（默认 GitCoffer 自动探测，append-only 永不 force）→ 总工账本小提交；N 轮硬停出《最终汇报》：逐条要求→结果→证据+偏离说明；破坏性操作只申报不执行：初级申报由高级工程师裁决、升级阶段申报由总工裁决（裁决者非申报者本人），执行或跳过绝不转交用户；账本断点续跑。模型分档（tiered：总工与高级工程师用 GLM-5.3，算法/测试用 GLM-5.3-Flash；同一问题初级 3 次迭代未解决即升级高级工程师；models=uniform 全随会话模型）。
+description: 鲁棒工程循环（v0.3.1）：把一句开发要求变成经过冷启动对抗验证的实现。总工建要求台账（老板原话逐字）并承诺 N 轮（老板可锁定）；每轮开发+文档单笔提交 → 冷启动门禁（diff 审查、鲁棒性测试、canary、零警告构建、上一轮 remote CI 结转）→ 先复现再返修（误诊须证据反驳）、amend 并入本轮提交（初级 3 次未解升级高级工程师，10 次未过打断上报）；全绿才推送约定 remote（默认 GitCoffer，append-only 永不 force）；账本断点续跑；破坏性操作申报-裁决-执行三段核验、绝不转交用户；模型分档 tiered/uniform。
 args:
   requirement:
     type: string
@@ -155,7 +155,7 @@ const CHIEF_ZH = [
   "你是总工程师。使命：把老板（用户）的开发要求在承诺的有限轮数内变成高质量交付——每一轮都必须经过冷启动验证、全绿门禁、零警告编译，才允许推送。",
   "老板要求保真是最高纪律：第 1 轮开工前建 docs/workflow/requirements.md——老板原话逐字、内涵解释、验收标准，一条不落；执行中不得与老板要求相悖，不得不偏离时必须在《最终汇报》中逐条说明原因与替代选择，绝不悄悄违背。",
   "打断策略：重大问题（要求不可行、会改变范围的歧义、需要加轮、门禁复核 10 次仍未过）→ 立即打断循环并写 docs/workflow/interrupt_report.md 向老板说明；破坏性操作本身不是打断事由——按危险操作条款裁决（初级申报→高级工程师；升级阶段高级工程师申报→你），仅当裁决后本轮仍完全无法推进才打断上报；小问题（范围内的实现细节、工具选择、顺序调整）→ 你自行决断并在账本记录。范围、进度、质量标准、预算这类老板级取舍不许被你降级成小问题。",
-  "轮次规划：第 1 轮前承诺总轮数 N 与每轮一句话范围（老板用 rounds 参数锁定时以老板为准，不得增减）；每轮开始依据账本重新安排本轮任务卡——上一轮判决、问题与反驳、remote CI 结转、遗留事项都要处置；每张任务卡必须可追溯到要求条目（R1/R2…）；当上一轮的修复被实测否证（现场回放、硬件复测）时，本轮任务卡以\"回退还是继续修\"的显式决策开头，证据优先——绝不叠加在被否证的修复上。",
+  "轮次规划：第 1 轮前承诺总轮数 N 与每轮一句话范围（老板用 rounds 参数锁定时以老板为准，不得增减）；每轮开始依据账本重新安排本轮任务卡——上一轮判决、问题与反驳、remote CI 结转、遗留事项都要处置；每张任务卡必须可追溯到要求条目（R1/R2…）；当上一轮的修复被后续验证否证时，本轮任务卡以\"回退还是继续修\"的显式决策开头，证据优先——绝不叠加在被否证的修复上。",
   "误诊仲裁：算法工程师与测试工程师就某条问题争执时，你只依据证据仲裁；仍不能定 → 重大问题，打断上报老板。",
   "接手先读账本（docs/workflow/ledger.md）：断点续跑，不重做已完成轮；账本同时记录每轮 baseline 哈希与已推送 SHA；被中断或取消的片段恢复时先做闭合复查——丢弃范围内的每项在途工作要么核实仍在、要么在账本记明放弃，先和解再前进，绝不静默跳过。",
   "诚实第一：汇报只引用命令输出与退出码；说不知道；矛盾上报而不是绕过。",
@@ -169,8 +169,8 @@ const ALGO_ZH = [
   "你的开发报告（含每张卡的要求覆盖）只交给总工程师做规划；测试工程师永远看不到它——冷启动是设计使能，不是疏漏。",
   "把失败当失败报告；矛盾上报。绝不造假、绝不绕过门禁、绝不 force 推送。",
   "你运行在廉价模型档，定位是初级工程师：同一问题 3 次迭代仍未解决时不要硬磕——整理最小复现与根因假设，交由高级工程师（强模型）接手。",
-  "修复纪律三则：层归因先于修复——动手前先用能判别的证据钉住缺陷所在层/组件（如区分解码层与渲染层的数据检查），不做\"以防万一\"的跨层修复，无法归因的问题如实上报而不投机修补；诊断必须可证伪——指名能推翻它的实验，不可证伪的解释（\"错觉\"、无判别实验的\"干扰\"）只是猜测，绝不能作为改动依据，失败现场的直接观察永远优先于理论；参照锚定——项目存在参考实现（上游项目、先行实现）时先对照其行为层（初始化值、模式约定、可视化行为都算）再下结论，偏离参考要么在账本说明理由要么与参考对齐，重新发明参考已解决的问题本身就是误诊风险。",
-  "破坏性操作铁律：rm -rf / 删除目录或数据文件 / git reset --hard / git clean -fdx / force push / 改写已推送历史 / 覆盖他人产物，一律只申报不执行——写入 dangerRequests（命令原文、原因、影响范围），等高级工程师裁决后按其批准的写法执行；绝不自行发挥、绝不扩大范围。",
+  "修复纪律三则：层归因先于修复——动手前用能判别的证据钉住缺陷所在层/组件，不做「以防万一」的跨层修复，无法归因就如实上报；诊断必须可证伪——指名能推翻它的实验，不可证伪的解释只是猜测，不能作为改动依据，失败现场的直接观察优先于理论；参照锚定——存在参考实现（上游/先行实现）时先对照其行为层再下结论，偏离参考要么在账本说明理由要么对齐。",
+  "破坏性操作铁律：rm -rf / 删除目录或数据文件 / git reset --hard / git clean -fdx / force push / 改写已推送历史 / 覆盖他人产物，一律只申报不执行——写入 dangerRequests（命令原文、原因、影响范围），等高级工程师裁决后按其批准的写法执行。",
 ].join("\n");
 
 const SENIOR_ZH = [
@@ -187,8 +187,8 @@ const TEST_ZH = [
   "核查上一轮推送在 remote 上的 CI：GitHub remote 且 gh 可用时用 gh run list / gh run view；不可核查则如实写\"无法核查\"，绝不默认通过；失败项列入本轮必修。",
   "独立性绝对：绝不修改被测实现。你只写 selfcheck.py、鲁棒性用例，以及 docs/workflow/requirement_map.md（要求↔实现位置↔可重跑验证命令，表格式并带 requirement-map 标记）的验证列。",
   "破坏性操作判据（与申报义务对齐）：超出批准清单的——数据文件或整目录消失、baseline 之下的历史被改写、force push、既有产物被覆盖——标 blocker 并索要申报与裁决记录；正常重构中的源文件删除不属破坏性操作，但须在提交信息或文档中可追溯；对第三方仓库的 clone，上游只读——推送仍只去约定 remote、绝不 push 上游，收尾前以 git 输出核实上游 refs 原样。",
-  "参照锚定与产物新鲜度：项目存在参考实现（上游/先行实现）时，对可疑行为先对照其行为层（初始化值、约定、可视化行为都算）核查，无理由的偏离即问题；核验所用产物必须由 HEAD 构建——构建布局可暴露产物时核对新旧（源文件不得新于其产物，selfcheck.py 可内置该检查），陈旧二进制上的绿灯一律作废；每条问题必须标注所属层/组件及判别证据。",
-  "验证方式分层与环境决定论：每个结论写明验证手段——真实设备/介质实测、CI 运行、或无设备时的专项冷启动审查替代；替代审查如实写明、绝不写成实测，验证声明先于问题写出以便事后对账。全部验证命令在钉定环境下运行——输出 locale 固定（本地化工具输出以固定 locale 重跑）、系统级配置一律隔离（凭据助手与全局 git 配置绕过而非信任）、场景间凭据状态复位、临时目录不假定持久。",
+  "产物新鲜度与参照锚定：核验所用产物必须由 HEAD 构建——构建布局可暴露产物时核对源文件与产物新旧（selfcheck.py 可内置该检查），陈旧二进制上的绿灯一律作废；存在参考实现（上游/先行实现）时，对可疑行为先对照其行为层核查，无理由的偏离即问题；每条问题标注所属层/组件及判别证据。",
+  "验证命令一律在钉定环境运行：输出 locale 固定（本地化工具以固定 locale 重跑）、系统级配置隔离（凭据助手与全局 git 配置绕过而非信任）、场景间凭据状态复位、临时目录不假定持久；每个结论的验证手段分层声明按每次 verdict 的 coverage 要求执行。",
   "每条问题附复现证据（命令+输出）；修复后必须复跑原始失败检查确认关闭；对工程师的反驳只依据证据仲裁；构建系统都跑不起来、要求自相矛盾这类问题如实标 blocker。",
 ].join("\n");
 
@@ -269,8 +269,8 @@ const push0 = await resolvePushTarget();
 if (push0.note !== "") log("推送目标：" + push0.note);
 const commit0 = await chief.ask<Commitment>(
   "老板的开发要求（原话逐字）：" + requirement + "\n" + (focus ? "老板本次关注点：" + focus + "\n" : "") +
-  (ledger ? "已有账本（末尾摘录，续跑依据）：\n" + ledger.slice(-4000) + "\n若显示本要求已完成 N 轮，resumeFrom = N（从第 N+1 轮续跑，不重做）；否则 0。\n" : "无账本：resumeFrom = 0。\n") +
-  "第 1 轮开工前完成三件事：1) 建 docs/workflow/requirements.md 要求台账——老板原话逐字编号（R1/R2…）+ 内涵解释 + 验收标准，一条不落；若存在会改变范围的歧义，先在 blocked.question 里向老板提出（这是唯一的开工前提问）；2) 承诺总轮数 roundsTotal 与每轮一句话范围 roundsOutline" +
+  (ledger ? "已有账本（头部目录+末尾详情，续跑依据）：\n" + (ledger.length > 6000 ? ledger.slice(0, 1600) + "\n……（中间省略）……\n" + ledger.slice(-3200) : ledger) + "\n若显示本要求已完成 N 轮，resumeFrom = N（从第 N+1 轮续跑，不重做）；否则 0。\n" : "无账本：resumeFrom = 0。\n") +
+  "第 1 轮开工前完成三件事：1) 建 docs/workflow/requirements.md 要求台账——文件头一行权威分工（requirements.md=要求正本、requirement_map.md=验证正本、ledger.md=历史正本）；老板原话逐字编号（R1/R2…）+ 内涵解释 + 验收标准，一条不落；若存在会改变范围的歧义，先在 blocked.question 里向老板提出（这是唯一的开工前提问）；2) 承诺总轮数 roundsTotal 与每轮一句话范围 roundsOutline" +
   (roundsArg > 0 ? "（老板已锁定 rounds=" + roundsArg + "，必须采用，不得增减）" : "（由你规划，定死即不得再加，除非打断上报）") +
   "；3) 本地提交该台账。返回 Commitment。" + CHIEF_BLOCK_NOTE,
 );
@@ -421,8 +421,11 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   for (let attempt = 1; attempt <= 10; attempt++) {
     verdict = await tester.ask<TestVerdict>(
       (attempt === 1
-        ? "冷启动上岗。baseline 提交：" + (baseline || "（空树，本仓库首提交）") + "。本轮 diff 体量：" + sizeNote + "。审查 " + diffHint + " 与代码库本身：diff 审查、鲁棒性测试、selfcheck.py（严格构建/全量测试+鲁棒性/本地 CI 等价 + canary 标记）、更新 docs/workflow/requirement_map.md 验证列。"
-        : "算法工程师已返修（amend 并入本轮提交），其返修申报（只作对账线索，结论仍以你重跑的检查为准）：" + JSON.stringify(lastFix) + "\n逐条复检：修复项重跑原始失败检查确认关闭；反驳项只依据证据仲裁——反驳成立则撤回问题，不成立则保留并说明。") +
+        ? "冷启动上岗。baseline 提交：" + (baseline || "（空树，本仓库首提交）") + "。本轮 diff 体量：" + sizeNote + "。审查 " + diffHint + " 与代码库本身：diff 审查、鲁棒性测试、selfcheck.py（严格构建/全量测试+鲁棒性/本地 CI 等价 + canary 标记）、更新 docs/workflow/requirement_map.md 验证列；这些测试设施的改动 git add -A && git commit --amend --no-edit 并入本轮提交（测试套件属于本轮交付）。"
+        : (lastFix
+            ? "算法工程师已返修（amend 并入本轮提交），其返修申报（只作对账线索，结论仍以你重跑的检查为准）：" + JSON.stringify(lastFix) + "\n"
+            : "上一轮未过的机械项（selfcheck.py/requirement_map.md）已发回你补齐，工程侧无返修。\n") +
+      "逐条复检：修复项重跑原始失败检查确认关闭；反驳项只依据证据仲裁——反驳成立则撤回问题，不成立则保留并说明。") +
       (cards.remoteCiIssues.length > 0 ? "\n另：上一轮 remote CI 必修项已由算法工程师处理：" + cards.remoteCiIssues.join("; ") : "") +
       (approvedDanger.length > 0
         ? "\n本轮经裁决批准的危险操作，只允许这些写法：" + approvedDanger.join("；")
@@ -476,6 +479,15 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     if (attempt === 10) {
       gate = (verdict.passed ? "" : "测试未过；") + (canary ? "" : "缺 canary；") + (mapOk ? "" : "要求映射表缺失；") + (dangerConsistent ? "" : "危险操作申报-裁决-执行不一致；") + (exitCode === 0 ? "" : "selfcheck exit " + exitCode);
       break;
+    }
+    if (verdict.findings.length === 0) {
+      // 纯机械项失败（无问题清单）：selfcheck.py 与映射表是测试工程师的设施，发回其所有者补齐——不占工程师生级通道
+      lastFix = null;
+      await tester.ask<string>(
+        "机械门禁未达标（canary=" + (canary ? "有" : "无") + "；requirement_map=" + (mapOk ? "有效" : "缺失") + "；selfcheck exit=" + (canary ? exitCode : "未运行") + "），而你的 verdict 没有问题清单。selfcheck.py 与 requirement_map.md 归你所有：补齐或修复它们，改动 git add -A && git commit --amend --no-edit 并入本轮提交；若 selfcheck 暴露的是实现缺陷，在下一次 verdict 中作为问题提出（附复现证据）。返回一句话。",
+      );
+      headA = await HEAD0();
+      continue;
     }
     const juniorAsk = attempt <= 3; // 初级 3 次迭代未解决 → 升级高级工程师（强模型档）
     if (!juniorAsk) escalations++;
@@ -547,7 +559,17 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     branch = "main";
   }
   if (push0.target !== "") {
-    await algo.ask<string>("门禁已全绿。推送本轮提交到约定 remote：git push " + push0.target + " HEAD:" + branch + "（绝不 --force）。返回一句话。");
+    // 推送由编排器直接执行并核验（git 为字面量命令、目标在参数中）：不依赖任何 agent 的转述，失败即如实记录
+    let pushExit = -1;
+    for (let t = 0; t < 2 && pushExit !== 0; t++) {
+      try {
+        const p = await world.run("git", ["push", push0.target, "HEAD:" + branch], { timeoutMs: 300000 });
+        pushExit = p.exitCode;
+        if (pushExit !== 0) log("第 " + (t + 1) + " 次推送退出码 " + pushExit + "：" + (p.stderr || p.stdout || "").slice(0, 200));
+      } catch {
+        log("第 " + (t + 1) + " 次推送命令未启动（如实记录）");
+      }
+    }
     try {
       const ls = await world.run("git", ["ls-remote", push0.target, "refs/heads/" + branch], { timeoutMs: 120000 });
       const remoteHead = ((ls.stdout || "").split("\t")[0] || "").trim();
@@ -555,19 +577,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
         pushState = "已推送并核验（" + headA.slice(0, 7) + "@" + push0.target + "/" + branch + "）";
         lastPushed = headA;
       } else {
-        await algo.ask<string>("推送核验失败（remote HEAD=" + remoteHead.slice(0, 7) + " ≠ 本地 " + headA.slice(0, 7) + "）。重推一次 git push " + push0.target + " HEAD:" + branch + "（不 force），返回一句话。");
-        try {
-          const ls2 = await world.run("git", ["ls-remote", push0.target, "refs/heads/" + branch], { timeoutMs: 120000 });
-          const rh2 = ((ls2.stdout || "").split("\t")[0] || "").trim();
-          if (rh2 === headA && headA !== "") {
-            pushState = "已推送并核验（重试后）";
-            lastPushed = headA;
-          } else {
-            pushState = "推送核验失败（如实上报：remote=" + rh2.slice(0, 7) + "）";
-          }
-        } catch {
-          pushState = "推送核验失败（ls-remote 不可用，如实上报）";
-        }
+        pushState = "推送核验失败（如实上报：remote=" + remoteHead.slice(0, 7) + "）";
       }
     } catch {
       pushState = "推送核验失败（ls-remote 不可达，如实上报）";
@@ -579,10 +589,18 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
 
   phase("总工记账");
   const archived = await chief.ask<string>(
-    "把第 " + round + " 轮追加到 docs/workflow/ledger.md：任务卡、开发摘要、危险操作裁决（" + dangerLog + "）、测试判决（问题 " + findingsCount + " / 反驳 " + rebuttedCount + " / 升级 " + escalations + "）、门禁 " + gate + "、覆盖声明（" + (verdict.coverage || "").slice(0, 300) + "）、baseline " + (baseline || "空树").slice(0, 7) + "、推送 " + pushState + "、遗留与否决（deferred/declined，各带理由，无则写“无”）、下一轮方向。然后 git add -A && git commit（账本小提交）" +
-    (push0.target !== "" ? "并推送（git push " + push0.target + "，不 force）" : "") + "，返回一句话。",
+    "把第 " + round + " 轮记入 docs/workflow/ledger.md（头部维护一行一轮的目录：本轮先更新目录行、再追加详情）：任务卡、开发摘要、危险操作裁决（" + dangerLog + "）、测试判决（问题 " + findingsCount + " / 反驳 " + rebuttedCount + " / 升级 " + escalations + "）、门禁 " + gate + "、覆盖声明（" + (verdict.coverage || "").slice(0, 300) + "）、baseline " + (baseline || "空树").slice(0, 7) + "、推送 " + pushState + "、遗留与否决（deferred/declined，各带理由，无则写“无”）、下一轮方向。然后 git add -A && git commit（账本小提交），返回一句话。",
   );
   const headLedger = await HEAD0();
+  if (push0.target !== "" && headLedger !== "") {
+    // 账本提交同样由编排器直接推送并核验：全程无 agent 转述
+    try {
+      const pl = await world.run("git", ["push", push0.target, "HEAD:" + branch], { timeoutMs: 300000 });
+      if (pl.exitCode !== 0) log("账本提交推送退出码 " + pl.exitCode + "：" + (pl.stderr || "").slice(0, 200) + "——如实记录");
+    } catch {
+      log("账本提交推送未启动（如实记录）");
+    }
+  }
   log("第 " + round + " 轮记账 " + (headLedger !== "" && headLedger !== headA ? "已落地（" + headLedger.slice(0, 7) + "）" : "需人工复核"));
   if (push0.target !== "" && headLedger !== "") {
     try {
@@ -618,7 +636,7 @@ const interruptNote = finalVerdict
   : "";
 const reported = await chief.ask<FinalReport>(
     interruptNote + (interrupted ? "" : roundsTotal + " 轮硬停（或提前完工）。") +
-    "以 docs/workflow/requirements.md 与账本为唯一依据，写《最终汇报》到 docs/workflow/final_report.md：逐条要求（原话逐字）→结果→证据（requirementOutcomes，没有条目的要求不算完成）；与老板要求相悖的偏离逐条说明（deviations）；最终状态（提交/推送/CI/测试/已知局限）；只有老板能做的决策清单（decisionList）；遗留与否决各设固定小节（deferred/declined，各带理由——记录在案的延后是决策而非遗漏，被否决的想法不得下轮重新提案；deferred/declined/processLessons 字段如实填写，无则空数组）；流程教训一节——本轮循环自身如何失败或险些失败，提炼为检查单条目，老板采纳的教训持久化并随下次运行加载；一句建议。git add -A && git commit" +
+    "以 docs/workflow/requirements.md 与账本为唯一依据，写《最终汇报》到 docs/workflow/final_report.md：逐条要求（原话逐字）→结果→证据（requirementOutcomes，没有条目的要求不算完成）；与老板要求相悖的偏离逐条说明（deviations）；最终状态（提交/推送/CI/测试/已知局限）；只有老板能做的决策清单（decisionList）；遗留与否决各设固定小节（deferred/declined，各带理由——记录在案的延后是决策而非遗漏，被否决的想法不得下轮重新提案；deferred/declined/processLessons 字段如实填写，无则空数组）；流程教训一节——本轮循环自身如何失败或险些失败，提炼为检查单条目（每条=规则+为什么+适用范围）；老板采纳的教训持久化并随下次运行加载（被证伪的教训标记废弃、不与新教训并存；加载时先对照当前仓库核实仍适用）；一句建议。git add -A && git commit" +
       (push0.target !== "" ? "并推送约定 remote（不 force）" : "") + "。返回 FinalReport。",
 );
 const md = [
