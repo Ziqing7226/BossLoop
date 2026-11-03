@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Robust Engineering Loop (v0.3.1), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
+description: Robust Engineering Loop (v0.3.2), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
 args:
   requirement:
     type: string
@@ -159,6 +159,8 @@ const CHIEF_EN = [
   "Round planning: commit to N rounds with a one-line scope each before round 1 (a boss-locked rounds value is final — no adding or dropping); each round re-plan from the ledger — last round's verdict, findings and rebuttals, remote-CI carryover and leftovers must all be disposed of; every work card traces to a requirement entry (R1/R2...); when last round's fix was contradicted by validation (later validation), this round's cards open with an explicit rollback-vs-fix-forward decision, evidence first — a contradicted fix is never stacked on.",
   "Misdiagnosis arbitration: when the engineers dispute a finding, arbitrate on evidence only; if still undecided -> major issue, interrupt and report to the boss.",
   "Take over by reading the ledger (docs/workflow/ledger.md): resume, never redo; the ledger also records each round's baseline hash and pushed SHAs. Resuming after an interrupt or a cancelled stretch opens with a closure review of the discarded range: every in-flight item is either verified present or dropped with a ledger note — lost work is reconciled before new rounds, never silently skipped.",
+  "Git write scope: run only the git add/commit/amend an ask names; pushes are executed and verified by the orchestrator — never push yourself, and never run reset/rebase/tag or any other repository-writing git operation.",
+  "Boss directives file: the orchestrator attaches the current content of docs/workflow/boss_directives.md to every round's card ask (instructions the boss issues mid-run; may be empty) — turn each into work cards and log its application in the ledger; it carries run steering only, not a replacement for the requirement ledger; when it disagrees with earlier boss requirements, the latest boss instruction wins and is recorded honestly.",
   "Honesty first: reports quote command outputs and exit codes only; say what you don't know; escalate contradictions instead of working around them.",
 ].join("\n");
 
@@ -170,6 +172,8 @@ const ALGO_EN = [
   "Your dev report (with per-card requirement coverage) goes to the Chief for planning only; the Test Engineer never sees it — the cold start is by design, not an oversight.",
   "Report failures as failures; escalate contradictions. Never fake, never bypass the gate, never force-push.",
   "Repair discipline, three rules: layer attribution before repair — pin the layer/component the defect lives in with discriminating evidence first; no \"just in case\" cross-layer fixes, and an unattributable finding is reported as such, never patched speculatively. Falsifiability — a diagnosis names the experiment that would refute it; an unfalsifiable story is a conjecture and never justifies a change; direct observation of the failure outranks theory. Reference anchoring — when a reference implementation exists (upstream project, prior art), check it first at its behavior layer before concluding; a divergence is either justified in the ledger or aligned with the reference.",
+  "Context discipline: redirect long command output to a file and take summaries via tail/grep — never page through it; read only relevant excerpts of reference material (files touched by this round's diff are exempt — they fall under the tester's full-read duty); take only decision-relevant excerpts of oversized tool output.",
+  "Git write scope: run only the git add/commit/amend an ask names; pushes are executed by the orchestrator — never push yourself, and never run reset/rebase/tag or other repository-writing git operations.",
   "Destructive-operation rule: rm -rf / deleting directories or data files / git reset --hard / git clean -fdx / force push / rewriting pushed history / overwriting others' artifacts are declared, never executed unilaterally — put them in dangerRequests (exact command, reason, blast radius) and wait for the Senior Engineer's ruling, then run exactly the approved form.",
   "You run on the cheap tier as the junior engineer: when the same problem survives 3 fix attempts, stop grinding — write up the minimal reproduction and a root-cause hypothesis and hand it to the Senior Engineer (strong model).",
 ].join("\n");
@@ -183,6 +187,9 @@ const SENIOR_EN = [
 const TEST_EN = [
   "You are the Test Engineer, cold-started: you work only from the diff (baseline..HEAD) and the repository itself, never from the author's narrative; nobody will hand you the dev report — author claims anchor a verifier, and this is by design.",
   "Diff review: review what actually changed, not what was claimed: new code, changed behavior, docs-vs-implementation consistency — and doc quality (professional, concise, free of redundant or duplicated information) is a finding when lacking; user-facing claims are audited too — every claim the diff introduces (README, docs, release notes) maps to a mechanism or a re-runnable check, and each number keeps one source.",
+  "Full-read duty: every file touched by this round's diff must be read in full (including the context around the changes) — never conclude from a few paragraphs; skimming is allowed only for repository areas outside this round's diff and must be declared in coverage; for every deeply-read file, coverage states the checks actually performed with line anchors (file:line) for later reconciliation.",
+  "Context discipline: redirect long command output to a file and take summaries via tail/grep; the full-read duty overrides excerpt reading for diff-touched files; take only decision-relevant excerpts of oversized tool output.",
+  "Git write scope: run only the git add/commit/amend an ask names (test fixtures amend into the round commit); pushes are executed by the orchestrator — never push yourself, and never run other repository-writing git operations.",
   "Write and maintain robustness tests: boundary and adversarial inputs, perturbation scenarios where applicable; create/maintain selfcheck.py at the repo root aggregating, per the project profile: a strict build (warnings are errors: -Werror / /WX / -D warnings / deny(warnings), per language), the full test suite + robustness cases, and the local CI equivalent (if the repo has CI, it must run green locally). The suite falsifies, not just exercises: every mechanism the diff adds ships with a negative check (a tampered input that must fail, an injection that must be refused) — \"verified\" means a refutation attempt failed, never that a happy path passed.",
   "selfcheck.py must contain a deliberately-broken canary case marked `canary` (the orchestrator verifies it by search) — a suite that cannot go red proves nothing.",
   "Check the previous round's push on the remote: on GitHub remotes with gh available use gh run list / gh run view; if uncheckable, say so honestly — an unchecked CI is never reported as passed; failures become mandatory fix items this round.",
@@ -268,8 +275,23 @@ try {
 }
 const push0 = await resolvePushTarget();
 if (push0.note !== "") log("Push target: " + push0.note);
+let repoRoot = "";
+try {
+  const tr = await world.run("git", ["rev-parse", "--show-toplevel"], { timeoutMs: 60000 });
+  repoRoot = (tr.stdout || "").trim();
+} catch {
+  repoRoot = "";
+}
+let bossDirectives0 = "";
+try {
+  bossDirectives0 = (await files.read("docs/workflow/boss_directives.md")).trim();
+} catch {
+  bossDirectives0 = "";
+}
 const commit0 = await chief.ask<Commitment>(
   "Boss's requirement (verbatim): " + requirement + "\n" + (focus ? "Boss focus: " + focus + "\n" : "") +
+  (bossDirectives0 ? "[Boss directives file docs/workflow/boss_directives.md] (instructions the boss issued — apply each one):\n" + bossDirectives0 + "\n" : "") +
+  (repoRoot ? "Repo root: " + repoRoot + " (flag it honestly if the ledger records a different root).\n" : "") +
   (ledger ? "Existing ledger (head index + tail detail; the resume basis):\n" + (ledger.length > 6000 ? ledger.slice(0, 1600) + "\n... (middle omitted) ...\n" + ledger.slice(-3200) : ledger) + "\nIf it shows N rounds already completed for this requirement, resumeFrom = N (continue at round N+1, never redo); otherwise 0.\n" : "No ledger: resumeFrom = 0.\n") +
   "Before round 1, three things: 1) create docs/workflow/requirements.md — headed by one authority line (requirements.md = requirement record; requirement_map.md = verification record; ledger.md = history record), then the boss's words verbatim, numbered (R1/R2...), each with interpretation and acceptance criteria, none dropped; if a scope-changing ambiguity exists, raise it in blocked.question first (the only pre-start question); 2) commit to roundsTotal with a one-line scope per round in roundsOutline" +
   (roundsArg > 0 ? " (the boss locked rounds=" + roundsArg + " — adopt it, no adding or dropping)" : " (planned by you; once fixed, no extension except via interrupt)") +
@@ -293,13 +315,13 @@ const startRound = Math.max(1, Math.min(roundsTotal + 1, Math.round(commit0.resu
 if (startRound > 1) log("Ledger shows " + (startRound - 1) + " round(s) done; resuming at round " + startRound);
 
 const algo = agent("Algorithm Engineer", persona(ALGO_EN + PROFILE_LINE, CHEAP)); // cheap tier: junior engineer
-const senior = agent("Senior Engineer", persona(ALGO_EN + SENIOR_EN + PROFILE_LINE, STRONG)); // strong tier: escalation path + destructive-operation authority
+const senior = agent("Senior Engineer", persona(ALGO_EN + SENIOR_EN + PROFILE_LINE, STRONG)); // strong tier: destructive-operation authority (escalation rework runs as one-shot instances)
 
 /** Destructive-operation review: the executor only declares; an independent strong tier rules (junior -> Senior Engineer; escalation-phase Senior -> Chief) — the ruler is never the declarer, never the boss */
 async function adjudicateDanger(reqs: DangerRequest[], requester: string, requesterTier: string, byChief: boolean): Promise<DangerReview> {
   const askText =
     "Destructive-operation review. Requester: " + requester + " (" + requesterTier + "). Rule on each request:\n" + JSON.stringify(reqs) +
-    "\nJudge by: is the blast radius precisely bounded, is it reversible, is there a narrower safe equivalent (scoped path, dry-run first, back up first, list affected files first)? Reject by default; use approve-with-change with a safeForm when a safer equivalent exists; approve only when necessary and safe. " +
+    "\nJudge by: is the blast radius precisely bounded, is it reversible, is there a narrower safe equivalent (scoped path, dry-run first, back up first, list affected files first)? Reject by default; use approve-with-change with a safeForm when a safer equivalent exists; approve only when necessary and safe. Approval carries conditions: back up first so it is reversible, stop on failure; if bounded retries (2-3) still fail, park and report rather than switching to a larger-blast-radius alternative. " +
     "Never hand the decision back to the user: only when the round cannot proceed at all without the operation, say so and recommend an interrupt. Return DangerReview (decisions map one-to-one to the requests).";
   const raw = byChief
     ? await chief.ask<DangerReview>(askText)
@@ -323,19 +345,43 @@ let lastPushed = ""; // last round's pushed SHA (for the next round's remote-CI 
 let plan = String(commit0.roundsOutline || "");
 let finalVerdict: FinalReport | null = null;
 let interrupted = false;
+let ungatedHead = false; // an interrupt with a red gate leaves an un-gated commit at HEAD — the final report must not push
+let branch = "main";
+try {
+  const b = await world.run("git", ["rev-parse", "--abbrev-ref", "HEAD"], { timeoutMs: 60000 });
+  branch = (b.stdout || "").trim() || "main";
+} catch {
+  branch = "main";
+}
 
 for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   const baseline = await HEAD0();
+  let bossNote = "";
+  try {
+    bossNote = (await files.read("docs/workflow/boss_directives.md")).trim();
+  } catch {
+    bossNote = "";
+  }
   phase("Chief issues cards");
   const cards = await chief.ask<RoundCards>(
     "Round " + round + "/" + roundsTotal + ". Requirements live in docs/workflow/requirements.md; planning basis:\n" + String(plan).slice(0, 4000) + "\n" +
     (lastPushed ? "Last round pushed " + lastPushed.slice(0, 7) + ": first check its remote CI status on (" + (push0.target || "not configured") + ") via gh run list/view; if uncheckable, say so honestly; failures go into remoteCiIssues as mandatory fix items.\n" : "") +
+    (bossNote ? "[Boss directives file (read this round)] apply each item, log application in the ledger:\n" + bossNote + "\n" : "") +
     "Issue this round's work cards: one sentence each, traceable to requirement entries; dispose of last round's findings, rebuttals and leftovers one by one. Set done=true only if every requirement is closed and the gate is green." + CHIEF_BLOCK_NOTE,
   );
   if (cards.blocked) {
     const ir = await chief.ask<string>(
-      "Interrupted per blocked (before round " + round + " started). Complete docs/workflow/interrupt_report.md, git add -A && git commit (and push to " + (push0.target || "no agreed remote") + ", no force), return a one-sentence summary.",
+      "Interrupted per blocked (before round " + round + " started). Complete docs/workflow/interrupt_report.md, git add -A && git commit, return a one-sentence summary.",
     );
+    if (push0.target !== "") {
+      // The interrupt-report commit is pushed by the orchestrator (the tree holds only gated work plus this docs commit)
+      try {
+        const pi = await world.run("git", ["push", push0.target, "HEAD:" + branch], { timeoutMs: 300000 });
+        if (pi.exitCode !== 0) log("Interrupt-report push exit code " + pi.exitCode + " — recorded honestly");
+      } catch {
+        log("Interrupt-report push failed to launch (recorded honestly)");
+      }
+    }
     await artifact.markdown("interrupt", "# Interrupt Report (round " + round + ")\n\n" + ir + "\n\n---\nAfter the boss decides, rerun this workflow with the decision note (the ledger holds the checkpoint).\n", { title: "Interrupt Report", description: "Major issue: awaiting the boss's decision" });
     finalVerdict = { verdict: "interrupted", requirementOutcomes: [], deviations: [], state: ir, decisionList: [cards.blocked.question], advice: "Interrupted on a major issue; awaiting the boss" };
     interrupted = true;
@@ -396,7 +442,6 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   }
 
   phase("Test Engineer cold-start gate");
-  const tester = agent("Test Engineer R" + round, persona(TEST_EN + PROFILE_LINE, CHEAP)); // fresh instance per round: cold start; cheap tier
   const diffHint = baseline ? "git diff " + baseline + "..HEAD" : "git show HEAD (the repository's first commit)";
   // Coverage-statement aid: the orchestrator only measures and reports the diff size — no threshold line; the deep-vs-skim tradeoff is declared by the tester and reconciled later
   let diffLines = -1;
@@ -420,6 +465,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   let lastFix: FixOutcome | null = null;
 
   for (let attempt = 1; attempt <= 10; attempt++) {
+    const tester = agent("Test Engineer-R" + round + "-A" + attempt, persona(TEST_EN + PROFILE_LINE, CHEAP)); // one-shot instance: bounded context, evidence travels in the task card
     verdict = await tester.ask<TestVerdict>(
       (attempt === 1
         ? "Cold start. Baseline commit: " + (baseline || "(empty tree — this repo's first commit)") + ". Diff size this round: " + sizeNote + ". Review " + diffHint + " and the repository itself: diff review, robustness tests, selfcheck.py (strict build / full tests + robustness / local CI equivalent + canary marker), and update the verification column of docs/workflow/requirement_map.md; amend the test-fixture changes (selfcheck.py, robustness cases, requirement_map.md) into the round commit with git add -A && git commit --amend --no-edit — the test suite is part of this round's delivery."
@@ -431,7 +477,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       (approvedDanger.length > 0
         ? "\nDestructive operations approved by ruling this round — only these forms are allowed: " + approvedDanger.join("; ")
         : "\nNo destructive operation was approved this round: data files or whole directories vanishing, history below the baseline rewritten, a force push, or existing artifacts overwritten in the diff or history is an unapproved destructive operation — mark it blocker (source-file deletions in an ordinary refactor excepted).") +
-      " Return TestVerdict (every finding needs reproduction evidence). The verdict must carry a coverage statement: which files/areas you reviewed deeply (logic changes, gate-relevant, danger-operation sites) and which you only skimmed, plus the means of verification for each conclusion (a real-device test, a CI run, or a specialist cold review standing in where no device exists — worded as such, never as hands-on) — it is written before you know where the problems are; any later problem in a skimmed or substituted area is reconciled against it.",
+      " Return TestVerdict (every finding needs reproduction evidence). The verdict must carry a coverage statement: which files/areas you reviewed deeply (logic changes, gate-relevant, danger-operation sites) and which you only skimmed (skims only outside this round's diff; deep-read files carry line anchors file:line), plus the means of verification for each conclusion (a real-device test, a CI run, or a specialist cold review standing in where no device exists — worded as such, never as hands-on) — it is written before you know where the problems are; any later problem in a skimmed or substituted area is reconciled against it.",
     );
     findingsCount = verdict.findings.length;
     try {
@@ -492,7 +538,9 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     }
     const juniorAsk = attempt <= 3; // 3 failed junior attempts -> escalate to the Senior Engineer (strong tier)
     if (!juniorAsk) escalations++;
-    const fixer = juniorAsk ? algo : senior;
+    const fixer = juniorAsk
+      ? agent("Rework-R" + round + "-A" + attempt, persona(ALGO_EN + PROFILE_LINE, CHEAP))
+      : agent("Senior-rework-R" + round + "-A" + attempt, persona(ALGO_EN + SENIOR_EN + PROFILE_LINE, STRONG)); // one-shot instances: evidence travels in the task card, context stays bounded
     const fix = await fixer.ask<FixOutcome>(
       (juniorAsk ? "" : "[Escalation] The junior engineer could not solve the following in 3 attempts. You are the Senior Engineer (strong tier): find the root cause and fix it in one pass; amend into the same round commit.\n") +
       "Gate attempt " + attempt + " failed: " + (verdict.passed ? "(self-report green but selfcheck/map not satisfied)" : JSON.stringify(verdict.findings)) +
@@ -546,20 +594,24 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     await artifact.markdown("interrupt", "# Interrupt Report (round " + round + " gate)\n\n" + ir + "\n\n---\nGate: " + gate + "\nAwaiting the boss's decision.\n", { title: "Interrupt Report", description: "Gate still red after 10 re-checks" });
     finalVerdict = { verdict: "interrupted", requirementOutcomes: [], deviations: [], state: ir, decisionList: ["Round " + round + " gate not passed: " + gate], advice: "Gate persistently red; boss attention needed" };
     interrupted = true;
+    ungatedHead = true;
     break;
   }
   headA = await HEAD0();
 
   phase("Push to the agreed remote");
   let pushState = "not pushed";
-  let branch = "main";
-  try {
-    const b = await world.run("git", ["rev-parse", "--abbrev-ref", "HEAD"], { timeoutMs: 60000 });
-    branch = (b.stdout || "").trim() || "main";
-  } catch {
-    branch = "main";
-  }
   if (push0.target !== "") {
+    // Pre-push check: the remote HEAD should be this round's baseline (pushed and verified last round) — a mismatch means an agent likely pushed inside its session; record loudly
+    try {
+      const pre = await world.run("git", ["ls-remote", push0.target, "refs/heads/" + branch], { timeoutMs: 120000 });
+      const preHead = ((pre.stdout || "").split("\t")[0] || "").trim();
+      if (preHead !== "" && preHead !== baseline && preHead !== lastPushed) {
+        log("Pre-push check anomaly: remote HEAD=" + preHead.slice(0, 7) + ", expected baseline=" + (baseline || "empty tree").slice(0, 7) + " — a session-internal push is suspected; recorded honestly");
+      }
+    } catch {
+      /* ls-remote unreachable: the push outcome itself is recorded honestly */
+    }
     // The orchestrator pushes and verifies directly (literal git command, target in args): no agent paraphrase involved; failures are recorded honestly
     let pushExit = -1;
     for (let t = 0; t < 2 && pushExit !== 0; t++) {
@@ -590,7 +642,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
 
   phase("Chief archives the ledger");
   const archived = await chief.ask<string>(
-    "Record round " + round + " in docs/workflow/ledger.md (keep a one-line-per-round index at its head: update this round's index line first, then append the detail): cards, dev summary, destructive-operation ruling (" + dangerLog + "), test verdict (findings " + findingsCount + " / rebuttals " + rebuttedCount + " / escalated " + escalations + "), coverage statement (" + (verdict.coverage || "").slice(0, 300) + "), gate " + gate + ", baseline " + (baseline || "empty tree").slice(0, 7) + ", push " + pushState + ", deferred/declined sections (with reasons, “none” when empty), next direction. Then git add -A && git commit (the small ledger commit); return one sentence.",
+    "Record round " + round + " in docs/workflow/ledger.md (head carries the repository identity line" + (repoRoot ? ": " + repoRoot : "") + " and the one-line-per-round index: update this round's index line first, then append the detail): cards, dev summary, destructive-operation ruling (" + dangerLog + "), test verdict (findings " + findingsCount + " / rebuttals " + rebuttedCount + " / escalated " + escalations + "), coverage statement (" + (verdict.coverage || "").slice(0, 300) + "), gate " + gate + ", baseline " + (baseline || "empty tree").slice(0, 7) + ", push " + pushState + ", deferred/declined sections (with reasons, “none” when empty), next direction. Then git add -A && git commit (the small ledger commit); return one sentence.",
   );
   const headLedger = await HEAD0();
   if (push0.target !== "" && headLedger !== "") {
@@ -637,9 +689,32 @@ const interruptNote = finalVerdict
   : "";
 const reported = await chief.ask<FinalReport>(
     interruptNote + (interrupted ? "" : roundsTotal + " rounds complete — hard stop (or finished early).") +
-    " Using docs/workflow/requirements.md and the ledger as the only basis, write the Final Report to docs/workflow/final_report.md: every requirement (verbatim) -> outcome -> evidence (requirementOutcomes; a requirement without an entry is not done); deviations from the boss's requirements explained one by one (deviations); final state (commits/pushes/CI/tests/known limitations); decisions only the boss can make (decisionList); two fixed sections — deferred and declined, each with its reason (a recorded deferral is a decision, not an omission; a declined idea is not re-proposed next run); fill the deferred/declined/processLessons fields faithfully (empty arrays when none); a process-lessons section — how the loop itself failed or nearly failed, distilled into checklist entries (each = rule + why + scope); adopted lessons persist and load with the next run (a disproven lesson is marked superseded, never left contradictory; re-validate against the current repo on load); one line of advice. git add -A && git commit" +
-      (push0.target !== "" ? " and push to the agreed remote (no force)" : "") + ". Return FinalReport.",
+    " Using docs/workflow/requirements.md and the ledger as the only basis, write the Final Report to docs/workflow/final_report.md: every requirement (verbatim) -> outcome -> evidence (requirementOutcomes; a requirement without an entry is not done); deviations from the boss's requirements explained one by one (deviations); final state (commits/pushes/CI/tests/known limitations); decisions only the boss can make (decisionList); two fixed sections — deferred and declined, each with its reason (a recorded deferral is a decision, not an omission; a declined idea is not re-proposed next run); fill the deferred/declined/processLessons fields faithfully (empty arrays when none); a process-lessons section — how the loop itself failed or nearly failed, distilled into checklist entries (each = rule + why + scope); adopted lessons persist and load with the next run (a disproven lesson is marked superseded, never left contradictory; re-validate against the current repo on load); one line of advice. git add -A && git commit, return FinalReport.",
 );
+// The final-report commit is pushed and verified by the orchestrator (the closing ask no longer instructs a push; never push with an un-gated commit at HEAD)
+let finalPush = push0.target === "" ? "push skipped: " + push0.note : (ungatedHead ? "not pushed: an un-gated commit is at HEAD (recorded honestly)" : "not pushed");
+if (push0.target !== "") {
+  if (!ungatedHead) {
+    const headFinal = await HEAD0();
+    try {
+      const pf = await world.run("git", ["push", push0.target, "HEAD:" + branch], { timeoutMs: 300000 });
+      if (pf.exitCode === 0) {
+        try {
+          const lf = await world.run("git", ["ls-remote", push0.target, "refs/heads/" + branch], { timeoutMs: 120000 });
+          const rhf = ((lf.stdout || "").split("\t")[0] || "").trim();
+          finalPush = rhf === headFinal && headFinal !== "" ? "pushed & verified (" + headFinal.slice(0, 7) + ")" : "push verification failed (reported honestly: remote=" + rhf.slice(0, 7) + ")";
+        } catch {
+          finalPush = "push executed, verification unavailable (recorded honestly)";
+        }
+      } else {
+        finalPush = "push exit code " + pf.exitCode + " (recorded honestly: " + (pf.stderr || "").slice(0, 200) + ")";
+      }
+    } catch {
+      finalPush = "push failed to launch (recorded honestly)";
+    }
+  }
+  log("Final-report push: " + finalPush);
+}
 const md = [
   "# Final Report",
   "",

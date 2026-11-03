@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 科研迭代循环（v0.3.1）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表 + 含 canary 的 selfcheck 机械门禁，测试基建归其所有）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
+description: 科研迭代循环（v0.3.2）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表 + 含 canary 的 selfcheck 机械门禁，测试基建归其所有）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
 args:
   idea:
     type: string
@@ -149,6 +149,8 @@ const CHIEF_ZH = [
   "方案 Portfolio 是每轮动态的：每轮开始时你依据最新审稿意见重新选定 1–3 个方案（可新增、移除、替换；有得选时选满 3 个，不足时 1–2 个，至少 1 个）与竞品集合；本轮选中的每个方案都必须得到充分验证，禁止用最小对比冒充验证——最小对比会带偏结论。",
   "每轮规划：上一轮审稿意见逐条处置——要么转成本轮任务卡，要么给出基于存档工件的反驳；不许空口忽略。",
   "新颖性处理：若文献读者报告该想法已被做过，不要终止——把范围重定界到该方向上尚未解决的缺口，重新选定方案，跑满全部轮次。",
+  "git 写操作权限：只执行问句明示的 git add/commit；推送仅限记账问句明示的本地加密备份 remote——除此之外任何时刻不执行 git push，也不执行 reset/rebase/tag 等其它写仓库的 git 操作。",
+  "老板指令文件：编排器每轮发卡前会附上 docs/workflow/boss_directives.md 的当前内容（老板运行中下达的指令，可能为空）——逐条落实到本轮任务卡并把应用情况记入账本；与既有要求不一致时以老板最新指令为准并如实记录。",
   "诚实第一：数字必须可溯源到存档工件；不确定就说不确定；指令矛盾时如实升级提问。",
   "全程中文。",
 ].join("\n");
@@ -158,6 +160,8 @@ const ALGO_ZH = [
   "竞品复现必须保真：与原文发表数字对照，偏差逐条记录——你不能既造自己的方法又给竞品打分。",
   "测试冻结规则：测试工程师验证期间，你不修改被测实现（否则测试对象在漂移，结论无效）。此时你只做两件事：准备可复现包（环境/命令/随机种子/数据窗口），响应门禁失败。测试报告返回后再按裁决修复。",
   "长任务安全（硬约束）：逐批次/逐场景用独立子进程运行，结果立即落盘后退出释放内存；脚本内置内存护栏（超约物理内存 70–80% 主动终止并保存现场）；每步有超时与失败出口；数据集与既有产物只读，不删除不覆盖；生成的代码视为不可信，可行时优先在容器/受限网络中执行（containment 是降险不是保证）。",
+  "上下文纪律：长命令输出重定向到文件后用 tail/grep 取摘要，不整屏阅读；参考材料只读相关节选；工具输出超长只取与判定相关的摘录。",
+  "git 写操作权限：只执行问句明示的 git add/commit；你在任何时刻都不执行 git push，也不执行 reset/rebase/tag 等其它写仓库的 git 操作。",
   "破坏性操作铁律：删除数据集/覆盖既有产物/git reset --hard/git clean -fdx/force push/改写已推送历史，一律只申报不执行——写入 dangerRequests（命令、原因、影响范围），等总工程师裁决后按其批准的写法执行。",
   "实验三级执行纪律：每个新实验先 MINI_PILOT（冒烟，验证代码能跑通与内存量级）→ PILOT（小数据核对正确性）→ FULL（正式协议的完整对比）。调试只看 PILOT 及以前；所有入档数字与主张只来自 FULL——禁止拿最小对比的结果冒充验证结论。在 DevReport.experiments 字段如实统计尝试数/跑通数（含死在调试阶段的）。",
   "如实报告失败；指令矛盾则升级提问，不造假不绕过。全程中文。",
@@ -170,6 +174,8 @@ const TEST_ZH = [
   "你负责在仓库根目录建立/维护 selfcheck.py：必须含至少一个故意埋坏、必须 FAIL 的金丝雀用例（代码中带 canary 标记，供编排器检索核对）——不会变红的测试套件证明不了任何事。",
   "破坏性操作判据：超出申报裁决清单的——数据集或既有产物被删/被覆盖、历史被改写、force 痕迹——标为严重问题并索要总工裁决记录；实验产物正常迭代替换不属此列。",
   "长上下文纪律：diff 或审查面偏大时，先盘变更清单、再对高风险区（逻辑改动、门禁相关、涉危险操作处）深读；verdict 的 coverage 字段必须写明深审了哪些、只略读了哪些——它写在知道问题在哪之前，日后问题落在略读区将以此对账。",
+  "整读义务：本轮 diff 触及的每个文件必须完整阅读（含改动处前后文），绝不只读其中几段就下结论；略读只允许发生在本轮 diff 之外的区域，且必须在 coverage 中申报；长命令输出重定向到文件后 tail/grep 取摘要。",
+  "git 写操作权限：只执行问句明示的 git add/commit；你在任何时刻都不执行 git push，也不执行其它写仓库的 git 操作。",
   "每条裁决附证据。全程中文。",
 ].join("\n");
 
@@ -227,8 +233,16 @@ try {
 } catch {
   ledger = "";
 }
+let repoRoot = "";
+try {
+  const tr = await world.run("git", ["rev-parse", "--show-toplevel"], { timeoutMs: 60000 });
+  repoRoot = (tr.stdout || "").trim();
+} catch {
+  repoRoot = "";
+}
 const survey = await chief.ask<SurveyResult>(
   "待迭代的初步想法：" + idea + "\n" + (focus ? "老板特别关注：" + focus + "\n" : "") +
+  (repoRoot ? "当前仓库根：" + repoRoot + "（与账本记录不符时如实注明）。\n" : "") +
   (ledger
     ? "已有账本（头部目录+末尾详情，断点续跑依据）：\n" + (ledger.length > 6000 ? ledger.slice(0, 1600) + "\n……（中间省略）……\n" + ledger.slice(-3200) : ledger) + "\n若账本显示本想法已完成 N 轮，resumeFrom 填 N（从第 N+1 轮继续，勿重做已完成轮）；否则填 0。\n"
     : "本仓库无既有账本：resumeFrom 填 0。\n") +
@@ -255,7 +269,7 @@ async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
   phase("危险操作审核");
   const raw = await chief.ask<DangerReview>(
     "破坏性操作审核（你是强模型档裁决者，此判断不下放给老板）。申报人：算法工程师（廉价档）。逐条裁决：" + JSON.stringify(reqs) +
-    "。判断依据：影响范围能否精确界定、是否可逆、有无更窄更安全的等价写法（限定路径、先 dry-run、先备份、先列受影响清单）；默认 reject，能给安全写法用 approve-with-change 并写 safeForm，必要且安全才 approve。仅当实验在无该操作时根本无法继续，才在 reason 中如实写明「实验受阻」，交由《初步评估报告》呈现（研究循环无打断机制）。返回 DangerReview（decisions 与请求逐条对应）。",
+    "。判断依据：影响范围能否精确界定、是否可逆、有无更窄更安全的等价写法（限定路径、先 dry-run、先备份、先列受影响清单）；默认 reject，能给安全写法用 approve-with-change 并写 safeForm，必要且安全才 approve。批准附条件：先备份保证可逆、失败即停；同一操作有界重试仍败就挂起上报，绝不改用影响面更大的方案。仅当实验在无该操作时根本无法继续，才在 reason 中如实写明「实验受阻」，交由《初步评估报告》呈现（研究循环无打断机制）。返回 DangerReview（decisions 与请求逐条对应）。",
   );
   let decisions = raw.decisions ?? [];
   if (decisions.length !== reqs.length) {
@@ -282,11 +296,18 @@ async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
 
 for (let round = startRound; round <= rounds; round++) {
   let dangerLog = "无"; // 本轮危险操作裁决（入账本）
+  let bossNote = "";
+  try {
+    bossNote = (await files.read("docs/workflow/boss_directives.md")).trim();
+  } catch {
+    bossNote = "";
+  }
   phase("布置本轮任务卡");
   let cards = await chief.ask<WorkCards>(
     "第 " + round + "/" + rounds + " 轮。idea：" + idea + "\n" +
   (round === 1 ? "调研结论：" + survey.summary : "上一轮审稿意见与你的规划：" + plan) + "\n" +
   "注意：方案 Portfolio 每轮由你重新选定（可新增/移除/替换，≤3 且 ≥1）；本轮选中的每个方案都要充分验证；proposals 字段列出本轮选定的 1–3 个方案名。\n" +
+  (bossNote ? "【老板指令文件（本轮读取）】逐条落实，应用情况入账本：\n" + bossNote + "\n" : "") +
   "把本轮工作转成任务卡（复现竞品 X / 尝试方案 Y…）。老板关注：" + (focus || "无"),
   );
   if (cards.proposals.length < 1 || cards.proposals.length > 3) {
@@ -460,7 +481,7 @@ for (let round = startRound; round <= rounds; round++) {
     head0 = "";
   }
   const archived = await chief.ask<string>(
-    "把本轮记入 docs/workflow/ledger.md（头部维护一行一轮的目录：本轮先更新目录行、再追加详情）：任务/产出/危险操作裁决（" + dangerLog + "）/测试（覆盖声明：" + (verdict.coverage || "").slice(0, 300) + "）/审稿/下轮方向。然后 git add -A && git commit。若已配置本地加密备份 remote（建议用 GitCoffer 构建，防 Agent 误删本地代码后无从恢复），同时 push 到该 remote；不主动 push 到任何其它 remote（向云端发布永远是老板的明确动作）。返回一句话。",
+    "把本轮记入 docs/workflow/ledger.md（头部含仓库标识行" + (repoRoot ? "：" + repoRoot : "") + "与一行一轮的目录：本轮先更新目录行、再追加详情）：任务/产出/危险操作裁决（" + dangerLog + "）/测试（覆盖声明：" + (verdict.coverage || "").slice(0, 300) + "）/审稿/下轮方向。然后 git add -A && git commit。若已配置本地加密备份 remote（建议用 GitCoffer 构建，防 Agent 误删本地代码后无从恢复），同时 push 到该 remote；不主动 push 到任何其它 remote（向云端发布永远是老板的明确动作）。返回一句话。",
   );
   let head1 = "";
   try {

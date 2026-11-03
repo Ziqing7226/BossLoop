@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Research Iteration Loop (v0.3.1), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3) from the latest reviews; the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map + a mechanical selfcheck gate with a canary, owning the test fixtures); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
+description: Research Iteration Loop (v0.3.2), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3) from the latest reviews; the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map + a mechanical selfcheck gate with a canary, owning the test fixtures); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
 args:
   idea:
     type: string
@@ -146,6 +146,8 @@ const CHIEF_EN = [
   "Survey (web + local paper library): papers you cannot access go to paperRequests for the boss to fetch — non-blocking; proceed with lower confidence, never stall.",
   "How many proposals (≤3) and competitors (≤3) is your in-loop call from survey evidence; the caps are hard.",
   "Each round, turn last round's review issues into work cards (or explicit rebuttals-on-artifacts); let them shape your planning.",
+  "Git write scope: run only the git add/commit an ask names; pushes are limited to the local encrypted backup remote that the ledger ask names — never push otherwise, and never run reset/rebase/tag or other repository-writing git operations.",
+  "Boss directives file: the orchestrator attaches the current content of docs/workflow/boss_directives.md to every round's cards ask (instructions the boss issues mid-run; may be empty) — turn each into this round's work and log its application in the ledger; when it disagrees with earlier requirements, the latest boss instruction wins and is recorded honestly.",
   "Honesty first: every number traces to an archived artifact; say what you don't know; escalate contradictions instead of working around them.",
 ].join("\n");
 
@@ -153,6 +155,8 @@ const ALGO_EN = [
   "You are the Algorithm Engineer: build proposals / reproduce competitors. End-to-end real runs only; every number carries its exact definition (data, window, units, per-accumulator meaning); before comparing against prior work, record a caliber table (each competitor's raw convention, dataset, metric definition) and report headline numbers in convention-independent units.",
   "Competitor reproductions must be faithful: checked against the published numbers, deviations documented — you must not grade the competitors while building your own method.",
   "Test freeze: while the Test Engineer verifies, you do not modify the implementation under test (a moving target makes the verdict void). You only prepare the reproducibility package (env/commands/seeds/data window) and respond to gate failures; fix per the verdict once the report lands.",
+  "Context discipline: redirect long command output to a file and take summaries via tail/grep — never page through it; read only relevant excerpts of reference material; take only decision-relevant excerpts of oversized tool output.",
+  "Git write scope: run only the git add/commit an ask names; never push yourself, and never run reset/rebase/tag or other repository-writing git operations.",
   "Destructive-operation rule: deleting datasets, overwriting existing artifacts, git reset --hard, git clean -fdx, force push or rewriting pushed history are declared, never executed unilaterally — put them in dangerRequests (command, reason, blast radius) and run exactly what the Chief approves.",
   "Long-run safety (hard constraint): one subprocess per batch/scene, results written to disk immediately then exit to free memory; a memory guardrail in code (terminate and preserve evidence past ~70-80% of physical memory); timeouts and failure exits on every step; run every new experiment in three stages (MINI_PILOT smoke / PILOT small-data correctness / FULL full-protocol comparison) - stages before FULL are for debugging only, all archived numbers and claims come from FULL runs; datasets and existing artifacts read-only — never delete or overwrite; treat generated code as untrusted and prefer containerized or network-restricted execution where available (containment is risk reduction, not a guarantee).",
   "Report failures as failures; escalate contradictions. Never fake or bypass.",
@@ -165,6 +169,8 @@ const TEST_EN = [
   "You create/maintain selfcheck.py at the repo root: it must contain at least one deliberately-broken canary case that must FAIL, marked `canary` so the orchestrator can verify it by search — a suite that cannot go red proves nothing.",
   "Long-context discipline: when the diff or review surface is large, inventory the changes first, then deep-read the high-risk areas (logic changes, gate-relevant, danger-operation sites); the verdict's coverage field must state what was reviewed deeply and what was only skimmed — it is written before you know where the problems are, and any later problem in a skimmed area is reconciled against it.",
   "Every verdict carries evidence.",
+  "Full-read duty: every file touched by this round's diff must be read in full (including the context around the changes) — never conclude from a few paragraphs; skims live only outside this round's diff and are declared in coverage; redirect long command output to a file and take summaries via tail/grep.",
+  "Git write scope: run only the git add/commit an ask names; never push yourself, and never run other repository-writing git operations.",
   "Destructive-operation criterion: beyond the declared-and-ruled list — datasets or existing artifacts deleted or overwritten, history rewritten, force traces — is a serious finding; demand the Chief's ruling record. Ordinary iteration replacing experiment artifacts is not in this class.",
 ].join("\n");
 
@@ -222,8 +228,16 @@ try {
 } catch {
   ledger = "";
 }
+let repoRoot = "";
+try {
+  const tr = await world.run("git", ["rev-parse", "--show-toplevel"], { timeoutMs: 60000 });
+  repoRoot = (tr.stdout || "").trim();
+} catch {
+  repoRoot = "";
+}
 const survey = await chief.ask<SurveyResult>(
   "Rough idea to iterate on: " + idea + "\n" + (focus ? "Boss focus: " + focus + "\n" : "") +
+  (repoRoot ? "Repo root: " + repoRoot + " (flag it honestly if the ledger records a different root).\n" : "") +
   (ledger
     ? "Existing ledger (head index + tail detail; the resume basis):\n" + (ledger.length > 6000 ? ledger.slice(0, 1600) + "\n... (middle omitted) ...\n" + ledger.slice(-3200) : ledger) + "\nIf it shows N rounds already completed for this idea, set resumeFrom = N (continue at round N+1; never redo finished rounds); otherwise 0.\n"
     : "No ledger in this repo: set resumeFrom = 0.\n") +
@@ -250,7 +264,7 @@ async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
   phase("Destructive-operation review");
   const raw = await chief.ask<DangerReview>(
     "Destructive-operation review (you are the strong-tier authority; this ruling is never handed to the boss). Requester: Algorithm Engineer (cheap tier). Rule on each request: " + JSON.stringify(reqs) +
-    ". Judge by: is the blast radius bounded, is it reversible, is there a narrower safe equivalent (scoped path, dry-run first, back up first, list affected files first)? Reject by default; use approve-with-change with safeForm when a safer equivalent exists; approve only when necessary and safe. Only when the experiment cannot proceed at all without the operation, say so in reason as 'experiment blocked' — it surfaces in the Preliminary Evaluation Report (this loop has no interrupt mechanism). Return DangerReview (decisions map one-to-one to the requests).",
+    ". Judge by: is the blast radius bounded, is it reversible, is there a narrower safe equivalent (scoped path, dry-run first, back up first, list affected files first)? Reject by default; use approve-with-change with safeForm when a safer equivalent exists; approve only when necessary and safe. Approval carries conditions: back up first so it is reversible, stop on failure; if bounded retries still fail, park and report rather than switching to a larger-blast-radius alternative. Only when the experiment cannot proceed at all without the operation, say so in reason as 'experiment blocked' — it surfaces in the Preliminary Evaluation Report (this loop has no interrupt mechanism). Return DangerReview (decisions map one-to-one to the requests).",
   );
   let decisions = raw.decisions ?? [];
   if (decisions.length !== reqs.length) {
@@ -277,11 +291,18 @@ async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
 
 for (let round = startRound; round <= rounds; round++) {
   let dangerLog = "none"; // this round's destructive-operation rulings (into the ledger)
+  let bossNote = "";
+  try {
+    bossNote = (await files.read("docs/workflow/boss_directives.md")).trim();
+  } catch {
+    bossNote = "";
+  }
   phase("Issue work cards");
   let cards = await chief.ask<WorkCards>(
     "Round " + round + "/" + rounds + ". Idea: " + idea + "\n" +
     (round === 1 ? "Survey conclusion: " + survey.summary : "Last round's reviews and your planning: " + plan) + "\n" +
     "The proposal portfolio is re-selected by you every round (add/drop/replace, ≤3 and ≥1); every proposal selected this round must be fully validated; list the 1-3 selected proposal names in the proposals field.\n" +
+    (bossNote ? "[Boss directives file (read this round)] apply each item, log application in the ledger:\n" + bossNote + "\n" : "") +
     "Turn this round's work into cards (reproduce competitor X / try proposal Y...). Boss focus: " + (focus || "none"),
   );
   if (cards.proposals.length < 1 || cards.proposals.length > 3) {
@@ -455,7 +476,7 @@ for (let round = startRound; round <= rounds; round++) {
     head0 = "";
   }
   const archived = await chief.ask<string>(
-    "Record this round in docs/workflow/ledger.md (keep a one-line-per-round index at its head: update this round's index line first, then append the detail) — task/build/destructive-operation ruling (" + dangerLog + ")/test (coverage statement: " + (verdict.coverage || "").slice(0, 300) + ")/reviews/next direction. Then git add -A && git commit. If an encrypted local backup remote is configured (recommended: build one with GitCoffer, so agent-caused deletions are always recoverable), also push there; never push to any other remote on your own (publishing to the cloud is always the boss's explicit action). Return one sentence.",
+    "Record this round in docs/workflow/ledger.md (head carries the repository identity line" + (repoRoot ? ": " + repoRoot : "") + " and a one-line-per-round index: update this round's index line first, then append the detail) — task/build/destructive-operation ruling (" + dangerLog + ")/test (coverage statement: " + (verdict.coverage || "").slice(0, 300) + ")/reviews/next direction. Then git add -A && git commit. If an encrypted local backup remote is configured (recommended: build one with GitCoffer, so agent-caused deletions are always recoverable), also push there; never push to any other remote on your own (publishing to the cloud is always the boss's explicit action). Return one sentence.",
   );
   let head1 = "";
   try {
