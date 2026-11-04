@@ -268,7 +268,7 @@ if (ledger === "") {
     ledger = "";
   }
 }
-if (legacyLayout) log("检测到旧版布局的账本（docs/workflow/ledger.md）：开工前先整体迁移——账本/映射表/selfcheck.py 移入 Agents/，简报、指令文件与评估报告移入 docs/");
+if (legacyLayout) log("检测到旧版布局的账本（docs/workflow/ledger.md）：开工前先整体迁移（一律 git mv，绝不删除）——账本/映射表/selfcheck.py 移入 Agents/，简报、指令文件与评估报告移入 docs/");
 let repoRoot = "";
 try {
   const tr = await world.run("git", ["rev-parse", "--show-toplevel"], { timeoutMs: 60000 });
@@ -296,7 +296,7 @@ const survey = await chief.ask<SurveyResult>(
   "待迭代的初步想法：" + idea + "\n" + (focus ? "老板特别关注：" + focus + "\n" : "") +
   (repoRoot ? "当前仓库根：" + repoRoot + "（与账本记录不符时如实注明）。\n" : "") +
   (repoWarn !== "" ? "【环境警告】" + repoWarn + "——本轮照常推进；在账本记明。\n" : "") +
-  (legacyLayout ? "【迁移】检测到旧版布局：先把 docs/workflow/ 下的 ledger.md、claim_map.md 与仓库根的 selfcheck.py 迁入 Agents/，boss_directives.md、brief/evaluation_report 移入 docs/，git add -A && git commit 后再续跑。\n" : "") +
+  (legacyLayout ? "【迁移】检测到旧版布局：用 git mv 把 docs/workflow/ 下的 ledger.md、claim_map.md 与仓库根的 selfcheck.py 移入 Agents/，boss_directives.md、brief/evaluation_report 移入 docs/，git add -A && git commit 后再续跑。\n" : "") +
   (ledger
     ? "已有账本（头部目录+末尾详情，断点续跑依据）：\n" + (ledger.length > 6000 ? ledger.slice(0, 1600) + "\n……（中间省略）……\n" + ledger.slice(-3200) : ledger) + "\n若账本显示本想法已完成 N 轮，resumeFrom 填 N（从第 N+1 轮继续，勿重做已完成轮）；否则填 0。\n"
     : "本仓库无既有账本：resumeFrom 填 0。\n") +
@@ -324,7 +324,7 @@ async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
   phase("危险操作审核");
   const raw = await chief.ask<DangerReview>(
     "破坏性操作审核（你是强模型档裁决者，此判断不下放给老板）。申报人：算法工程师（廉价档）。逐条裁决：" + JSON.stringify(reqs) +
-    "。判断依据：影响范围能否精确界定、是否可逆、有无更窄更安全的等价写法（限定路径、先 dry-run、先备份、先列受影响清单）；默认 reject，能给安全写法用 approve-with-change 并写 safeForm，必要且安全才 approve。批准附条件：先备份保证可逆、失败即停；同一操作有界重试仍败就挂起上报，绝不改用影响面更大的方案。仅当实验在无该操作时根本无法继续，才在 reason 中如实写明「实验受阻」，交由《初步评估报告》呈现（研究循环无打断机制）。返回 DangerReview（decisions 与请求逐条对应）。",
+    "。判断依据：影响范围能否精确界定、是否可逆、有无更窄更安全的等价写法（限定路径、先 dry-run、先备份、先列受影响清单）；默认 reject，能给安全写法用 approve-with-change 并写 safeForm，必要且安全才 approve。批准附条件：先备份保证可逆、失败即停；同一操作有界重试仍败就挂起（在账本记明并进入《初步评估报告》，不再尝试），绝不改用影响面更大的方案。仅当实验在无该操作时根本无法继续，才在 reason 中如实写明「实验受阻」，交由《初步评估报告》呈现（研究循环无打断机制）。返回 DangerReview（decisions 与请求逐条对应）。",
   );
   let decisions = raw.decisions ?? [];
   if (decisions.length !== reqs.length) {
@@ -545,12 +545,12 @@ for (let round = startRound; round <= rounds; round++) {
   const settled = await Promise.allSettled(
     Array.from({ length: n }, (_, i) =>
       agent("审稿人-r" + round + "-" + (i + 1), tiered ? { model: STRONG } : undefined).ask<Review>(
-        invite.brief + "\n\n你是相邻领域（与本研究方向相关但不重叠）的独立审稿人，只读：对稿件与证据映射提出尖锐质询（附证据出处），并给出下一轮迭代建议，给 severity。小心数字幻觉：好的数据表现不代表好的情况——严谨考虑稿件数字的含义是不是表面那么简单，支撑它的理论可能本身有错，而漂亮的数字会加固这一理论幻觉。如无法判断，如实说明。",
+        invite.brief + "\n\n你是相邻领域（与本研究方向相关但不重叠）的独立审稿人。评审只依据简报及其所指材料——不翻看简报之外的仓库内容、git 历史与账本（盲审纪律），只读不改任何文件：对稿件与证据映射提出尖锐质询（附证据出处），并给出下一轮迭代建议，给 severity。小心数字幻觉：好的数据表现不代表好的情况——严谨考虑稿件数字的含义是不是表面那么简单，支撑它的理论可能本身有错，而漂亮的数字会加固这一理论幻觉。如无法判断，如实说明。",
       ),
     ),
   );
   const readerRev = await reader.ask<Review>(
-    "通读文献后审稿（只读）。稿件摘要：" + paper.slice(0, 500) + "\n核对引用与叙事、查新、提问，并给出迭代建议。小心数字幻觉：好的数据表现不代表好的情况——严谨考虑稿件数字的含义是不是表面那么简单，支撑它的理论可能本身有错，而漂亮的数字会加固这一理论幻觉。nearestWorks 必填：最相近的 3 篇工作与差异维度。",
+    "通读文献后审稿（材料范围：稿件摘要、所引参考文献——含 docs/refs/ 论文库——与网络检索；不翻看账本、git 历史或源码工作区）。稿件摘要：" + paper.slice(0, 500) + "\n核对引用与叙事、查新、提问，并给出迭代建议。小心数字幻觉：好的数据表现不代表好的情况——严谨考虑稿件数字的含义是不是表面那么简单，支撑它的理论可能本身有错，而漂亮的数字会加固这一理论幻觉。nearestWorks 必填：最相近的 3 篇工作与差异维度。",
   );
   const reviews: Review[] = settled.map((s) =>
     s.status === "fulfilled" ? s.value : { summary: "该审稿人未完成", issues: [], iteration: [], severity: "minor" },
@@ -571,7 +571,7 @@ for (let round = startRound; round <= rounds; round++) {
     head0 = "";
   }
   const archived = await chief.ask<string>(
-    "把本轮记入 Agents/ledger.md（头部含仓库标识行" + (repoRoot ? "：" + repoRoot : "") + "与一行一轮的目录：本轮先更新目录行、再追加详情）：任务/产出/危险操作裁决（" + dangerLog + "）/测试（覆盖声明：" + (verdict.coverage || "").slice(0, 300) + "；视觉审阅：" + visualNoteR.slice(0, 200) + "）/审稿/下轮方向。然后 git add -A && git commit。若已配置本地加密备份 remote（建议用 GitCoffer 构建，防 Agent 误删本地代码后无从恢复），同时 push 到该 remote；不主动 push 到任何其它 remote（向云端发布永远是老板的明确动作）。返回一句话。",
+    "把本轮记入 Agents/ledger.md（头部含仓库标识行" + (repoRoot ? "：" + repoRoot : "") + "与一行一轮的目录：本轮先更新目录行、再追加详情）：任务/产出/危险操作裁决（" + dangerLog + "）/测试（覆盖声明：" + (verdict.coverage || "").slice(0, 300) + "；视觉审阅：" + visualNoteR.slice(0, 200) + "）/审稿/下轮方向。然后 git add -A && git commit。若 git remote 中恰有一个名称含 gitcoffer 的 remote（老板约定的本地加密备份，建议用 GitCoffer 构建，防 Agent 误删本地代码后无从恢复），push 到它；无法唯一识别（零个或多个）就不推送并如实记录——绝不 push 到其它任何 remote（向云端发布永远是老板的明确动作）。返回一句话。",
   );
   let head1 = "";
   try {

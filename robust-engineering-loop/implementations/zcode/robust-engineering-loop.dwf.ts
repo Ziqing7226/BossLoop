@@ -172,7 +172,7 @@ const CHIEF_ZH = [
   "歧义即重大问题候选：老板原话填不进规格表时（例：某个数字既可读成分箱宽度也可读成坐标轴范围），不得按字面挑一种照办——原样引用原话写进简报的「不确定」，或据此判定是否改变范围而决定打断。",
   "文件两类化（交付纪律，分界线就是位置）：不在 Agents/ 下的都是老板面向的——老板原话提及的交付物、docs/ 下的简报、指令文件 docs/boss_directives.md（老板写入）、最终汇报与中断报告；Agents/ 下的一切都是工程脚手架——账本、要求台账、映射表、Agents/selfcheck.py、测试调试脚本、被证伪的历史、面向 Agent 的文档。交付遵循奥卡姆剃刀：整理交付只用 git mv 把脚手架移入 Agents/，绝不删除文件——删除是老板的动作；老板只看非 Agents/ 的部分；若需要老板亲自翻 Agents/，说明工作流出了问题。",
   "打断策略：重大问题（要求不可行、会改变范围的歧义、需要加轮、门禁复核 10 次仍未过）→ 立即打断循环并写 docs/interrupt_report.md 向老板说明；破坏性操作本身不是打断事由——按危险操作条款裁决（初级申报→高级工程师；升级阶段高级工程师申报→你），仅当裁决后本轮仍完全无法推进才打断上报；小问题（范围内的实现细节、工具选择、顺序调整）→ 你自行决断并在账本记录。范围、进度、质量标准、预算这类老板级取舍不许被你降级成小问题。",
-  "轮次规划：第 1 轮前承诺总轮数 N 与每轮一句话范围（老板用 rounds 参数锁定时以老板为准，不得增减）；每轮开始依据账本重新安排本轮任务卡——上一轮判决、问题与反驳、remote CI 结转、遗留事项都要处置；每张任务卡必须可追溯到要求条目（R1/R2…）；当上一轮的修复被后续验证否证时，本轮任务卡以\"回退还是继续修\"的显式决策开头，证据优先——绝不叠加在被否证的修复上。",
+  "轮次规划：第 1 轮前承诺总轮数 N 与每轮一句话范围（老板用 rounds 参数锁定时以老板为准，不得增减）；每轮开始依据账本重新安排本轮任务卡——上一轮判决、问题与反驳、remote CI 结转、遗留事项都要处置；每张任务卡必须可追溯到要求条目（R1/R2…）；当上一轮的修复被后续验证否证时，本轮任务卡以\"回退还是继续修\"的显式决策开头（回退=用一笔新的普通提交恢复原行为，绝不改写历史），证据优先——绝不叠加在被否证的修复上。",
   "每轮发卡前先检查 requirements.md 的待答问题：有未答项时，本轮任务卡先安排作答（回答成本极低，却直接影响老板判断）。",
   "奥卡姆剃刀：你的自主决定天然倾向「加东西」（加模块、加检查、加配置）——每个增加复杂度的决定必须写明预期价值，否则默认不做；凡是增加复杂度的自主决定，不能只写账本，必须进《最终汇报》的自主决定清单。",
   "误诊仲裁：算法工程师与测试工程师就某条问题争执时，你只依据证据仲裁；仍不能定 → 重大问题，打断上报老板。",
@@ -303,7 +303,7 @@ if (ledger === "") {
     ledger = "";
   }
 }
-if (legacyLayout) log("检测到旧版布局的账本（docs/workflow/ledger.md）：开工前先整体迁移——账本/要求台账/映射表/selfcheck.py 移入 Agents/，简报、指令文件与最终汇报移入 docs/");
+if (legacyLayout) log("检测到旧版布局的账本（docs/workflow/ledger.md）：开工前先整体迁移（一律 git mv，绝不删除）——账本/要求台账/映射表/selfcheck.py 移入 Agents/，简报、指令文件与最终汇报移入 docs/");
 try {
   const st = await world.run("git", ["status", "--porcelain"], { timeoutMs: 60000 });
   if ((st.stdout || "").trim() !== "") log("警告：工作树不干净——请从干净工作树开始；已如实记入账本");
@@ -353,7 +353,7 @@ const commit0 = await chief.ask<Commitment>(
   (bossDirectives0 ? "【老板指令文件 docs/boss_directives.md】（老板下达的指令，逐条落实）：\n" + bossDirectives0 + "\n" : "") +
   (repoRoot ? "当前仓库根：" + repoRoot + "（与账本记录不符时如实注明）。\n" : "") +
   (repoWarn !== "" ? "【环境警告】" + repoWarn + "——本轮照常推进，但推送/提交核验可能不可用；在账本记明。\n" : "") +
-  (legacyLayout ? "【迁移】检测到旧版布局：先把 docs/workflow/ 下的 ledger.md、requirements.md、requirement_map.md 与仓库根的 selfcheck.py 迁入 Agents/，boss_directives.md、brief/final_report 移入 docs/，git add -A && git commit 后再续跑。\n" : "") +
+  (legacyLayout ? "【迁移】检测到旧版布局：用 git mv 把 docs/workflow/ 下的 ledger.md、requirements.md、requirement_map.md 与仓库根的 selfcheck.py 移入 Agents/，boss_directives.md、brief/final_report 移入 docs/，git add -A && git commit 后再续跑。\n" : "") +
   (ledger ? "已有账本（头部目录+末尾详情，续跑依据）：\n" + (ledger.length > 6000 ? ledger.slice(0, 1600) + "\n……（中间省略）……\n" + ledger.slice(-3200) : ledger) + "\n若显示本要求已完成 N 轮，resumeFrom = N（从第 N+1 轮续跑，不重做）；否则 0。\n" : "无账本：resumeFrom = 0。\n") +
   "第 1 轮开工前完成四件事：1) 建 Agents/requirements.md 要求台账——文件头一行权威分工（Agents/requirements.md=要求正本、Agents/requirement_map.md=验证正本、Agents/ledger.md=历史正本）；四节必备：逐句清点（每条消息逐句标 已登记Rn/不适用/需澄清）、要求逐字编号（R1/R2…）+ 内涵解释 + 可机械判定的验收标准、产物规格表（轴/定义域/分辨率/颜色编码/合格判据）、待答问题（疑问句逐条登记）；若存在会改变范围的歧义，先在 blocked.question 里向老板提出（这是唯一的开工前提问）；2) 承诺总轮数 roundsTotal 与每轮一句话范围 roundsOutline" +
   (roundsArg > 0 ? "（老板已锁定 rounds=" + roundsArg + "，必须采用，不得增减）" : "（由你规划，定死即不得再加，除非打断上报）") +
@@ -383,7 +383,7 @@ const senior = agent("高级工程师", persona(ALGO_ZH + SENIOR_ZH + PROFILE_LI
 async function adjudicateDanger(reqs: DangerRequest[], requester: string, requesterTier: string, byChief: boolean): Promise<DangerReview> {
   const askText =
     "破坏性操作审核。申报人：" + requester + "（" + requesterTier + "）。逐条裁决以下请求：\n" + JSON.stringify(reqs) +
-    "\n判断依据：影响范围能否精确界定、是否可逆、有无更窄更安全的等价写法（限定路径、dry-run 先行、先备份、先列出受影响清单）。默认 reject；能给安全写法时用 approve-with-change 并在 safeForm 写明；必要且安全才 approve。批准附条件：先备份保证可逆、失败即停；同一操作有界重试（2–3 次）仍败就挂起上报，绝不改用影响面更大的替代方案。" +
+    "\n判断依据：影响范围能否精确界定、是否可逆、有无更窄更安全的等价写法（限定路径、dry-run 先行、先备份、先列出受影响清单）。默认 reject；能给安全写法时用 approve-with-change 并在 safeForm 写明；必要且安全才 approve。批准附条件：先备份保证可逆、失败即停；同一操作有界重试（2–3 次）仍败就挂起（在账本记明、不再尝试），绝不改用影响面更大的替代方案。" +
     "绝不把判断交回用户：仅当整轮任务在无该操作时根本无法继续，才在 reason 中写明并建议打断。返回 DangerReview（decisions 与请求逐条对应）。";
   const raw = byChief
     ? await chief.ask<DangerReview>(askText)

@@ -263,7 +263,7 @@ if (ledger === "") {
     ledger = "";
   }
 }
-if (legacyLayout) log("Legacy-layout ledger found (docs/workflow/ledger.md): migrate before working — ledger/map/selfcheck.py into Agents/, directives, brief and the evaluation report into docs/");
+if (legacyLayout) log("Legacy-layout ledger found (docs/workflow/ledger.md): migrate before working (git mv only, never delete) — ledger/map/selfcheck.py into Agents/, directives, brief and the evaluation report into docs/");
 let repoRoot = "";
 try {
   const tr = await world.run("git", ["rev-parse", "--show-toplevel"], { timeoutMs: 60000 });
@@ -291,7 +291,7 @@ const survey = await chief.ask<SurveyResult>(
   "Rough idea to iterate on: " + idea + "\n" + (focus ? "Boss focus: " + focus + "\n" : "") +
   (repoRoot ? "Repo root: " + repoRoot + " (flag it honestly if the ledger records a different root).\n" : "") +
   (repoWarn !== "" ? "[Environment warning] " + repoWarn + " — proceed anyway; record it in the ledger.\n" : "") +
-  (legacyLayout ? "[Migration] Legacy layout detected: first move docs/workflow/{ledger,claim_map}.md and the root selfcheck.py into Agents/, and {boss_directives,brief,evaluation_report}.md into docs/, git add -A && git commit, then resume.\n" : "") +
+  (legacyLayout ? "[Migration] Legacy layout detected: git mv docs/workflow/{ledger,claim_map}.md and the root selfcheck.py into Agents/, and {boss_directives,brief,evaluation_report}.md into docs/, git add -A && git commit, then resume.\n" : "") +
   (ledger
     ? "Existing ledger (head index + tail detail; the resume basis):\n" + (ledger.length > 6000 ? ledger.slice(0, 1600) + "\n... (middle omitted) ...\n" + ledger.slice(-3200) : ledger) + "\nIf it shows N rounds already completed for this idea, set resumeFrom = N (continue at round N+1; never redo finished rounds); otherwise 0.\n"
     : "No ledger in this repo: set resumeFrom = 0.\n") +
@@ -319,7 +319,7 @@ async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
   phase("Destructive-operation review");
   const raw = await chief.ask<DangerReview>(
     "Destructive-operation review (you are the strong-tier authority; this ruling is never handed to the boss). Requester: Algorithm Engineer (cheap tier). Rule on each request: " + JSON.stringify(reqs) +
-    ". Judge by: is the blast radius bounded, is it reversible, is there a narrower safe equivalent (scoped path, dry-run first, back up first, list affected files first)? Reject by default; use approve-with-change with safeForm when a safer equivalent exists; approve only when necessary and safe. Approval carries conditions: back up first so it is reversible, stop on failure; if bounded retries still fail, park and report rather than switching to a larger-blast-radius alternative. Only when the experiment cannot proceed at all without the operation, say so in reason as 'experiment blocked' — it surfaces in the Preliminary Evaluation Report (this loop has no interrupt mechanism). Return DangerReview (decisions map one-to-one to the requests).",
+    ". Judge by: is the blast radius bounded, is it reversible, is there a narrower safe equivalent (scoped path, dry-run first, back up first, list affected files first)? Reject by default; use approve-with-change with safeForm when a safer equivalent exists; approve only when necessary and safe. Approval carries conditions: back up first so it is reversible, stop on failure; if bounded retries still fail, park it (recorded in the ledger and surfaced in the Preliminary Evaluation Report, no further attempts) rather than switching to a larger-blast-radius alternative. Only when the experiment cannot proceed at all without the operation, say so in reason as 'experiment blocked' — it surfaces in the Preliminary Evaluation Report (this loop has no interrupt mechanism). Return DangerReview (decisions map one-to-one to the requests).",
   );
   let decisions = raw.decisions ?? [];
   if (decisions.length !== reqs.length) {
@@ -540,12 +540,12 @@ for (let round = startRound; round <= rounds; round++) {
   const settled = await Promise.allSettled(
     Array.from({ length: n }, (_, i) =>
       agent("Reviewer-r" + round + "-" + (i + 1), tiered ? { model: STRONG } : undefined).ask<Review>(
-        invite.brief + "\n\nYou are an independent reviewer from an adjacent (related but non-overlapping) field, read-only: raise sharp issues against the manuscript and evidence map (with evidence), propose next-round iterations, and give a severity. Beware number hallucination: a good-looking number is not a good outcome — scrutinize whether what a manuscript number means is really as simple as it appears; the theory behind it may itself be wrong, and the flattering number reinforces that illusion. Say so if you cannot judge something.",
+        invite.brief + "\n\nYou are an independent reviewer from an adjacent (related but non-overlapping) field. Review only from the brief and the materials it points to — do not open other repo content, git history or the ledger (blind-review discipline); read-only, change nothing: raise sharp issues against the manuscript and evidence map (with evidence), propose next-round iterations, and give a severity. Beware number hallucination: a good-looking number is not a good outcome — scrutinize whether what a manuscript number means is really as simple as it appears; the theory behind it may itself be wrong, and the flattering number reinforces that illusion. Say so if you cannot judge something.",
       ),
     ),
   );
   const readerRev = await reader.ask<Review>(
-    "Review after reading the references (read-only). Manuscript summary: " + paper.slice(0, 500) + "\nVerify citations and narrative, check for missed recent work, ask questions, propose iterations. Beware number hallucination: a good-looking number is not a good outcome — scrutinize whether what a manuscript number means is really as simple as it appears; the theory behind it may itself be wrong, and the flattering number reinforces that illusion. nearestWorks is mandatory: the 3 closest works and the difference dimension.",
+    "Review after reading the references (materials: the manuscript summary, the cited references including the docs/refs/ paper library, and web search — not the ledger, git history or other workspace content). Manuscript summary: " + paper.slice(0, 500) + "\nVerify citations and narrative, check for missed recent work, ask questions, propose iterations. Beware number hallucination: a good-looking number is not a good outcome — scrutinize whether what a manuscript number means is really as simple as it appears; the theory behind it may itself be wrong, and the flattering number reinforces that illusion. nearestWorks is mandatory: the 3 closest works and the difference dimension.",
   );
   const reviews: Review[] = settled.map((s) =>
     s.status === "fulfilled" ? s.value : { summary: "reviewer did not finish", issues: [], iteration: [], severity: "minor" },
@@ -566,7 +566,7 @@ for (let round = startRound; round <= rounds; round++) {
     head0 = "";
   }
   const archived = await chief.ask<string>(
-    "Record this round in Agents/ledger.md (head carries the repository identity line" + (repoRoot ? ": " + repoRoot : "") + " and a one-line-per-round index: update this round's index line first, then append the detail) — task/build/destructive-operation ruling (" + dangerLog + ")/test (coverage statement: " + (verdict.coverage || "").slice(0, 300) + "; visual review: " + visualNoteR.slice(0, 200) + ")/reviews/next direction. Then git add -A && git commit. If an encrypted local backup remote is configured (recommended: build one with GitCoffer, so agent-caused deletions are always recoverable), also push there; never push to any other remote on your own (publishing to the cloud is always the boss's explicit action). Return one sentence.",
+    "Record this round in Agents/ledger.md (head carries the repository identity line" + (repoRoot ? ": " + repoRoot : "") + " and a one-line-per-round index: update this round's index line first, then append the detail) — task/build/destructive-operation ruling (" + dangerLog + ")/test (coverage statement: " + (verdict.coverage || "").slice(0, 300) + "; visual review: " + visualNoteR.slice(0, 200) + ")/reviews/next direction. Then git add -A && git commit. If exactly one remote whose name contains gitcoffer exists (the boss's agreed encrypted local backup — build one with GitCoffer, so agent-caused deletions are always recoverable), push to it; when it cannot be identified uniquely (none or several), do not push and record that honestly — never push to any other remote on your own (publishing to the cloud is always the boss's explicit action). Return one sentence.",
   );
   let head1 = "";
   try {
