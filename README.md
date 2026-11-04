@@ -9,6 +9,8 @@
 ![Validated on ZCode](https://img.shields.io/badge/validated%20on-ZCode-orange)
 [![Docs](https://img.shields.io/badge/docs-中文-red)](README.zh-CN.md)
 
+![BossLoop — bounded AI-team loops that work for the boss](assets/hero-banner.jpg)
+
 </div>
 
 bossloop is a collection of open-source agent workflows: an autonomous AI team — a chief who plans, an engineer who builds, a cold-start tester who attacks the work — iterates in bounded rounds, ships only what passes a fully green gate, and reports to you, the boss. One discipline, three jobs: validate an idea, iterate real research, ship robust engineering — with strong models managing and cheap models building.
@@ -20,15 +22,23 @@ bossloop is a collection of open-source agent workflows: an autonomous AI team �
 | **Idea Validation & Research Iteration** | Start from a rough idea. Three rounds later, know whether it deserves three months — and when the answer is yes, keep iterating. | [Research Iteration Loop](research-iteration-loop/SPEC.md) |
 | **Engineering Development** | Give it a requirement. Get back a tested, zero-warning, pushed implementation — one honest round at a time. | [Robust Engineering Loop](robust-engineering-loop/SPEC.md) |
 
+![BossLoop: the boss feeds an idea or a requirement into either loop, and the report comes back](assets/two-loops.jpg)
+
 **Validation is not a dead end.** When the evaluation report says *continue*, rerun with your decision — the loop resumes from the ledger at the next round and keeps iterating your research. It carried a real project through nine rounds across three runs.
+
+![One round: bounded rounds, a cold-start gate, fixes loop back, only green goes out](assets/how-it-works.jpg)
 
 ## Why bossloop
 
 Hand a command to an AI and you spend the evening supervising its untested output. Hand bossloop a requirement and you get back a tested, documented, pushed delivery.
 
+![Without bossloop: late-night chaos; with bossloop: read the report](assets/before-after.jpg)
+
 - **Low cost.** Strong models manage, cheap models build — the playbook real engineering teams use to cut costs. The cheap tier can be a locally deployed open model (e.g. Qwen3.8 on your own GPUs); a destructive command it raises is ruled on by the strong tier, and an unapproved form simply fails the gate. Cheaper tokens, larger jobs.
 - **High quality.** The loop adversarially tests itself: a cold-start tester attacks every round without ever reading the author's claims, gates are mechanical and carry a must-fail canary, findings need reproduction evidence, and rework iterates until everything is green.
 - **Minimal supervision.** The whole pipeline is a workflow — bounded rounds, ledger checkpoints, automatic junior→senior escalation. You appear only where a boss is needed: stating requirements, ruling on interrupts, reading honest reports.
+
+![Strong models manage, cheap models build](assets/low-cost.jpg)
 
 Cheaper tokens. Self-iteration. Solid output.
 
