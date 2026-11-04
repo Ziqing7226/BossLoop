@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 科研迭代循环（v0.3.2）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表 + 含 canary 的 selfcheck 机械门禁，测试基建归其所有）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
+description: 科研迭代循环（v0.3.3）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表 + 含 canary 的 selfcheck 机械门禁，测试基建归其所有）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
 args:
   idea:
     type: string
@@ -67,6 +67,15 @@ interface TestVerdict {
   issues: string[];
   /** 覆盖声明：深审了哪些文件/区域、只略读了哪些（先于判定写出，供日后对账） */
   coverage: string;
+  /** 本轮产出的产物路径（含图像/图表；.gitignore 里的也要列，供视觉审阅定位）；无则空数组 */
+  artifacts?: string[];
+}
+
+interface VisualVerdict {
+  /** 一句话总评 */
+  summary: string;
+  /** 逐张图的问题（文件名 + 一句话 + 看到的现象）；没有则空数组 */
+  issues: string[];
 }
 
 interface Invite {
@@ -137,26 +146,35 @@ interface EvalReport {
   risks: string[];
   /** 逐字引用每位审稿人的结论，不得改写 */
   reviewerQuotes: string[];
+  /** 待答问题：老板原话里的疑问句 → 直接答案（含形态）→ 证据位置 */
+  questionAnswers?: { q: string; a: string; evidence: string }[];
+  /** 自主决定清单：决定｜理由｜若否决的后果｜奥卡姆自评（增加复杂度还是删减） */
+  autonomousDecisions?: { decision: string; reason: string; ifRejected: string; occam: string }[];
   /** 给老板的一句建议 */
   advice: string;
 }
 
 const CHIEF_ZH = [
   "你是总工程师。使命：在有限轮数内判断 args.idea 是否值得深挖，并把它迭代推进——不是把它做完美。",
-  "接手先读账本（docs/workflow/ledger.md）：若本想法已有记录，从断点轮继续，不重做已完成轮。",
+  "接手先读账本（Agents/ledger.md）：若本想法已有记录，从断点轮继续，不重做已完成轮。",
+  "开局理解简报 docs/brief.md（立项后、开工前，≤1 页，三节必备）：①逐句清点——老板原话（idea、focus、boss_directives）逐句切分，每句标「已落实 Rn / 不适用（理由）/ 需澄清」；②产物规格表——本轮要交付的东西（图、表、报告、稿件章节）各写清轴/定义域/单位/合格判据（可被机械判定），老板原话里每个数字与格式词必须落到某一行；③待答问题——疑问句逐条登记（原文、登记时间、答复状态）。写完直接开工，绝不为「等老板过目」停机空转。",
+  "对老板原话必须得出一个自洽的理解方向、正确把握主旨；把握不准的绝不臆断——在简报中原样引用老板原话并标注「不确定」，工程师在开发、测试过程中可能就理解了。逐字保真不等于语义保真：照抄字面而理解错，是最危险的失败；老板原话填不进规格表时（例：某个数字既可读成分箱宽度也可读成横轴范围），不得按字面挑一种照办。",
+  "每轮规划前先查待答问题：有未答项时，本轮任务卡先安排作答（回答成本极低，却直接影响老板判断）。",
+  "奥卡姆剃刀：自主决定天然倾向「加东西」（加模块、加方案、加指标）——每个增加复杂度的决定必须写明预期价值，否则默认不做；凡是增加复杂度的决定，不能只写账本，必须进《初步评估报告》的自主决定清单。",
+  "文件两类化（交付纪律，分界线就是位置）：不在 Agents/ 下的都是老板面向的——老板原话提及的交付物、稿件、docs/ 下的简报、指令文件 docs/boss_directives.md（老板写入）与评估报告；Agents/ 下的一切都是工程脚手架——账本、映射表、Agents/selfcheck.py、测试调试脚本、被证伪的历史、面向 Agent 的文档。老板只看非 Agents/ 的部分；若需要老板亲自翻 Agents/，说明工作流出了问题。",
   "调研（网络检索+本地论文库）：拿不到原文的论文列入 paperRequests 供老板代取——非阻塞，先降置信度推进，绝不空等。",
   "方案数（≤3）与竞品复现数（≤3）由你依据调研在循环内决定，上限不可突破。",
   "方案 Portfolio 是每轮动态的：每轮开始时你依据最新审稿意见重新选定 1–3 个方案（可新增、移除、替换；有得选时选满 3 个，不足时 1–2 个，至少 1 个）与竞品集合；本轮选中的每个方案都必须得到充分验证，禁止用最小对比冒充验证——最小对比会带偏结论。",
   "每轮规划：上一轮审稿意见逐条处置——要么转成本轮任务卡，要么给出基于存档工件的反驳；不许空口忽略。",
   "新颖性处理：若文献读者报告该想法已被做过，不要终止——把范围重定界到该方向上尚未解决的缺口，重新选定方案，跑满全部轮次。",
   "git 写操作权限：只执行问句明示的 git add/commit；推送仅限记账问句明示的本地加密备份 remote——除此之外任何时刻不执行 git push，也不执行 reset/rebase/tag 等其它写仓库的 git 操作。",
-  "老板指令文件：编排器每轮发卡前会附上 docs/workflow/boss_directives.md 的当前内容（老板运行中下达的指令，可能为空）——逐条落实到本轮任务卡并把应用情况记入账本；与既有要求不一致时以老板最新指令为准并如实记录。",
+  "老板指令文件：编排器每轮发卡前会附上 docs/boss_directives.md 的当前内容（老板运行中下达的指令，可能为空）——逐条落实到本轮任务卡并把应用情况记入账本；与既有要求不一致时以老板最新指令为准并如实记录。",
   "诚实第一：数字必须可溯源到存档工件；不确定就说不确定；指令矛盾时如实升级提问。",
   "全程中文。",
 ].join("\n");
 
 const ALGO_ZH = [
-  "你是算法工程师：实现方案/复现竞品。端到端真实跑，每个数字注明口径（数据、窗口、单位、每个累加器含义）；与已有工作对比前先建口径对照表（各家原始约定/数据集/指标定义），主张数字优先用口径无关单位。",
+  "你是算法工程师：实现方案/复现竞品。端到端真实跑，每个数字注明口径（数据、窗口、单位、每个累加器含义）；与已有工作对比前先建口径对照表（各家原始约定/数据集/指标定义），主张数字优先用口径无关单位。测试与调试脚本、过程性产物一律写进 Agents/；仓库根与 docs/ 只留面向老板的交付物——研究中鼓励多探索多测试，交付时奥卡姆剃刀。",
   "竞品复现必须保真：与原文发表数字对照，偏差逐条记录——你不能既造自己的方法又给竞品打分。",
   "测试冻结规则：测试工程师验证期间，你不修改被测实现（否则测试对象在漂移，结论无效）。此时你只做两件事：准备可复现包（环境/命令/随机种子/数据窗口），响应门禁失败。测试报告返回后再按裁决修复。",
   "长任务安全（硬约束）：逐批次/逐场景用独立子进程运行，结果立即落盘后退出释放内存；脚本内置内存护栏（超约物理内存 70–80% 主动终止并保存现场）；每步有超时与失败出口；数据集与既有产物只读，不删除不覆盖；生成的代码视为不可信，可行时优先在容器/受限网络中执行（containment 是降险不是保证）。",
@@ -167,11 +185,19 @@ const ALGO_ZH = [
   "如实报告失败；指令矛盾则升级提问，不造假不绕过。全程中文。",
 ].join("\n");
 
+const VISUAL_ZH = [
+  "你是视觉审阅员：只看图，不看代码，也不相信任何自述。用工具打开给定图像，逐张回答三问：①数据是否铺满应定义域（有无大片空白、是否只有极少数据点）；②坐标轴、刻度、单位、图例是否可读且与规格表一致；③这张图能否支撑本轮所声称的结论。",
+  "对照 docs/brief.md 的产物规格表判断「应该是什么样」，而不是凭好看与否。只读，绝不修改任何文件；打不开的图如实说明。",
+].join("\n");
+
 const TEST_ZH = [
   "你是测试工程师：代码审查、正确性 roundtrip（含对抗输入）、跨场景泛化、扰动稳定性。",
   "独立性铁律：只读被测实现，绝不修改它——你动手修，验证就变成自我服务、不再独立。你只写自检与映射表。",
-  "你拥有 claim→evidence 映射表（docs/workflow/claim_map.md）：稿件每个数字 ↔ 存档工件 + 可重跑的检查命令；先写检查，再做主张。文件首行须含 claim-map 标记，正文用表格。",
-  "你负责在仓库根目录建立/维护 selfcheck.py：必须含至少一个故意埋坏、必须 FAIL 的金丝雀用例（代码中带 canary 标记，供编排器检索核对）——不会变红的测试套件证明不了任何事。",
+  "先读 docs/brief.md（逐句清点/产物规格表/待答问题）：验收按规格表的合格判据，而不是只验结构（文件生成了、图非空、颜色合规）。",
+  "你拥有 claim→evidence 映射表（Agents/claim_map.md）：稿件每个数字 ↔ 存档工件 + 可重跑的检查命令；先写检查，再做主张。文件首行须含 claim-map 标记，正文用表格。",
+  "测试期望值只许从规格表或已登记要求派生，绝不从当前实现派生；每条断言的注释写明出处。把误解写成必须通过的测试，是最坏的护城河。",
+  "数字幻觉警示：好的数据表现不代表好的情况——严谨考虑数字代表的含义是不是表面那么简单；支撑它的理论可能本身有错，而漂亮的数字又会加固这一理论幻觉。理解数字含义的前提是对其基础理论有充分认知：对每个头条数字追问——它背后的理论/机制是什么，若理论错了这个数字还说明什么？",
+  "你负责在 Agents/ 下建立/维护 Agents/selfcheck.py（测试与调试脚本一律放 Agents/，仓库根与 docs/ 只留面向老板的交付物）：必须含至少一个故意埋坏、必须 FAIL 的金丝雀用例（代码中带 canary 标记，供编排器检索核对）——不会变红的测试套件证明不了任何事。",
   "破坏性操作判据：超出申报裁决清单的——数据集或既有产物被删/被覆盖、历史被改写、force 痕迹——标为严重问题并索要总工裁决记录；实验产物正常迭代替换不属此列。",
   "长上下文纪律：diff 或审查面偏大时，先盘变更清单、再对高风险区（逻辑改动、门禁相关、涉危险操作处）深读；verdict 的 coverage 字段必须写明深审了哪些、只略读了哪些——它写在知道问题在哪之前，日后问题落在略读区将以此对账。",
   "整读义务：本轮 diff 触及的每个文件必须完整阅读（含改动处前后文），绝不只读其中几段就下结论；略读只允许发生在本轮 diff 之外的区域，且必须在 coverage 中申报；长命令输出重定向到文件后 tail/grep 取摘要。",
@@ -229,10 +255,20 @@ phase("总工程师调研立项");
 const chief = agent("总工程师", persona(CHIEF_ZH + PROFILE_LINE, STRONG)); // 强模型档：分析与规划
 let ledger = "";
 try {
-  ledger = await files.read("docs/workflow/ledger.md");
+  ledger = await files.read("Agents/ledger.md");
 } catch {
   ledger = "";
 }
+let legacyLayout = false; // v0.3.3 之前工作文件在 docs/workflow/——发现即要求总工先迁移再续跑
+if (ledger === "") {
+  try {
+    ledger = await files.read("docs/workflow/ledger.md");
+    legacyLayout = ledger !== "";
+  } catch {
+    ledger = "";
+  }
+}
+if (legacyLayout) log("检测到旧版布局的账本（docs/workflow/ledger.md）：开工前先整体迁移——账本/映射表/selfcheck.py 移入 Agents/，简报、指令文件与评估报告移入 docs/");
 let repoRoot = "";
 try {
   const tr = await world.run("git", ["rev-parse", "--show-toplevel"], { timeoutMs: 60000 });
@@ -240,14 +276,33 @@ try {
 } catch {
   repoRoot = "";
 }
+// 启动仓库体检：工作流假定「工作目录是仓库根」——不成立时大声说明，而不是静默跳过推送
+let repoWarn = "";
+try {
+  const wt = await world.run("git", ["rev-parse", "--is-inside-work-tree"], { timeoutMs: 60000 });
+  const inside = (wt.stdout || "").trim() === "true";
+  const cd = inside ? await world.run("git", ["rev-parse", "--show-cdup"], { timeoutMs: 60000 }) : null;
+  const cdup = cd ? (cd.stdout || "").trim() : "";
+  if (!inside) {
+    repoWarn = "当前目录不是 git 仓库（或 git 不可用）：备份推送将不可用——请从研究仓库的根目录运行本工作流";
+  } else if (cdup !== "" && repoRoot !== "") {
+    repoWarn = "当前目录是仓库的子目录（仓库根为 " + repoRoot + "，需上溯 " + cdup + "）：Agents/ 与 docs/ 将写在当前目录下，与仓库根不一致——建议从仓库根运行";
+  }
+} catch {
+  repoWarn = "仓库状态体检失败（git 不可用）：备份推送将不可用";
+}
+if (repoWarn !== "") log("警告：" + repoWarn + "；已如实记入账本");
 const survey = await chief.ask<SurveyResult>(
   "待迭代的初步想法：" + idea + "\n" + (focus ? "老板特别关注：" + focus + "\n" : "") +
   (repoRoot ? "当前仓库根：" + repoRoot + "（与账本记录不符时如实注明）。\n" : "") +
+  (repoWarn !== "" ? "【环境警告】" + repoWarn + "——本轮照常推进；在账本记明。\n" : "") +
+  (legacyLayout ? "【迁移】检测到旧版布局：先把 docs/workflow/ 下的 ledger.md、claim_map.md 与仓库根的 selfcheck.py 迁入 Agents/，boss_directives.md、brief/evaluation_report 移入 docs/，git add -A && git commit 后再续跑。\n" : "") +
   (ledger
     ? "已有账本（头部目录+末尾详情，断点续跑依据）：\n" + (ledger.length > 6000 ? ledger.slice(0, 1600) + "\n……（中间省略）……\n" + ledger.slice(-3200) : ledger) + "\n若账本显示本想法已完成 N 轮，resumeFrom 填 N（从第 N+1 轮继续，勿重做已完成轮）；否则填 0。\n"
     : "本仓库无既有账本：resumeFrom 填 0。\n") +
   "请完成调研（网络检索 + 本地论文库，如 docs/refs/），返回 SurveyResult。" +
-  "约束：方案与竞品数量由你在 ≤3 内依据证据决定；第一轮结束前必须规划出至少一个完整（FULL 级）端到端对比的落地路径——最小对比不可作为验证。",
+  "约束：方案与竞品数量由你在 ≤3 内依据证据决定；第一轮结束前必须规划出至少一个完整（FULL 级）端到端对比的落地路径——最小对比不可作为验证。" +
+  "\n立项后、第 1 轮开工前写 docs/brief.md（≤1 页，三节标题固定为「逐句清点」「产物规格表」「待答问题」）：逐句清点覆盖老板原话的每一句（idea、focus、boss_directives）、产物规格表覆盖本轮要交付的图/表/报告（轴、定义域、单位、合格判据）、待答问题覆盖所有疑问句；对老板原话必须得出自洽的理解方向、正确把握主旨，把握不准的绝不臆断——原样引用原话并标注「不确定」，工程师在开发、测试中可能就理解了；写完直接开工，不为等老板过目停机。",
 );
 if (survey.paperRequests.length > 0) {
   log("求论文清单（非阻塞，供老板代取）：" + survey.paperRequests.join("；"));
@@ -298,9 +353,16 @@ for (let round = startRound; round <= rounds; round++) {
   let dangerLog = "无"; // 本轮危险操作裁决（入账本）
   let bossNote = "";
   try {
-    bossNote = (await files.read("docs/workflow/boss_directives.md")).trim();
+    bossNote = (await files.read("docs/boss_directives.md")).trim();
   } catch {
     bossNote = "";
+  }
+  if (bossNote === "") {
+    try {
+      bossNote = (await files.read("docs/workflow/boss_directives.md")).trim(); // 旧版布局回退
+    } catch {
+      bossNote = "";
+    }
   }
   phase("布置本轮任务卡");
   let cards = await chief.ask<WorkCards>(
@@ -337,24 +399,52 @@ for (let round = startRound; round <= rounds; round++) {
   }
 
   phase("测试工程师审查测试");
-  const verdict = await tester.ask<TestVerdict>(
+  let verdict = await tester.ask<TestVerdict>(
     "审查开发产出：" + JSON.stringify(dev) + "\n" +
-    "职责：代码审查/roundtrip（含对抗输入）/泛化/扰动稳定性；更新 claim→evidence 映射表（docs/workflow/claim_map.md）；" +
-    "建立或更新仓库根目录 selfcheck.py，必须含必须失败的金丝雀用例。对进入主张或 go/no-go 决策、且经多步聚合的头条数字，从存档中间记录用第二条路径复算（不同分组或公式——不要求第二套实现）；实验须存档足以让复算在分钟级完成的中间记录。不一致即冻结该数字并审计，绝不当作舍入误差放行。单一来源的直接测量免检（roundtrip 与 canary 已覆盖）。发现数字被撤回时，全库检索所有重复该数字的文档（账本历史、README、图表）并列出当轮修正清单。返回 TestVerdict。",
+    "先读 docs/brief.md 的产物规格表：验收按规格表的合格判据，不只验结构。" +
+    "职责：代码审查/roundtrip（含对抗输入）/泛化/扰动稳定性；更新 claim→evidence 映射表（Agents/claim_map.md）；" +
+    "建立或更新 Agents/selfcheck.py，必须含必须失败的金丝雀用例，且期望值只从规格表或已登记要求派生（注释写出处），绝不从当前实现派生。对进入主张或 go/no-go 决策、且经多步聚合的头条数字，从存档中间记录用第二条路径复算（不同分组或公式——不要求第二套实现）；实验须存档足以让复算在分钟级完成的中间记录。不一致即冻结该数字并审计，绝不当作舍入误差放行。单一来源的直接测量免检（roundtrip 与 canary 已覆盖）。发现数字被撤回时，全库检索所有重复该数字的文档（账本历史、README、图表）并列出当轮修正清单。返回 TestVerdict（artifacts 列出本轮产出的图/表路径，含被 .gitignore 的）。",
   );
+  // 图像产物 → 视觉审阅（机械触发）：问题并入本轮问题清单，走既有修复流程；没有图就没有这笔开销
+  const isImgR = (p: string): boolean => /\.(png|jpe?g|svg|webp|gif)$/i.test(p);
+  let imageFilesR: string[] = (verdict.artifacts || []).filter((p) => isImgR(p));
+  try {
+    const stR = await world.run("git", ["status", "--porcelain"], { timeoutMs: 60000 });
+    for (const line of (stR.stdout || "").split("\n")) {
+      const tR = line.trim();
+      if (tR.length < 4) continue;
+      const pR = tR.slice(3).trim();
+      if (isImgR(pR) && imageFilesR.indexOf(pR) < 0) imageFilesR.push(pR);
+    }
+  } catch {
+    /* 检测失败：按无图处理，账本如实记录 */
+  }
+  let visualNoteR = imageFilesR.length === 0 ? "本轮无图像产物：不适用" : "尚未审阅";
+  if (imageFilesR.length > 0) {
+    phase("视觉审阅图像产物");
+    const vvR = await agent("视觉审阅-R" + round, persona(VISUAL_ZH + PROFILE_LINE, STRONG)).ask<VisualVerdict>(
+      "本轮任务：" + cards.title + "。规格见 docs/brief.md 的产物规格表。逐张打开并审阅以下图像（相对工作区路径）：\n" + imageFilesR.join("\n") +
+      "\n三问：数据是否铺满应定义域；坐标轴/刻度/单位/图例是否可读且与规格一致；这张图能否支撑本轮所声称的结论。返回 VisualVerdict（问题写清文件名与你看到的现象）。",
+    );
+    visualNoteR = vvR.summary + ((vvR.issues || []).length > 0 ? "｜问题：" + (vvR.issues || []).join("；") : "");
+    if ((vvR.issues || []).length > 0) {
+      verdict.issues = verdict.issues.concat((vvR.issues || []).map((x) => "【视觉】" + x));
+      log("视觉审阅发现问题，已并入本轮修复清单：" + visualNoteR.slice(0, 300));
+    }
+  }
   let claimMapOk = false;
   try {
-    const map = await files.read("docs/workflow/claim_map.md");
+    const map = await files.read("Agents/claim_map.md");
     claimMapOk = map.includes("claim-map") && map.split("\n").filter((l) => l.trim().startsWith("|")).length >= 2;
   } catch {
     claimMapOk = false;
   }
   if (!claimMapOk) {
     await tester.ask<string>(
-      "docs/workflow/claim_map.md 缺失或不合格（需含 claim-map 标记 + 表格行）。请建立：每行 = 稿件数字 | 存档工件 | 可重跑的检查命令。",
+      "Agents/claim_map.md 缺失或不合格（需含 claim-map 标记 + 表格行）。请建立：每行 = 稿件数字 | 存档工件 | 可重跑的检查命令。",
     );
     try {
-      const map = await files.read("docs/workflow/claim_map.md");
+      const map = await files.read("Agents/claim_map.md");
       claimMapOk = map.includes("claim-map") && map.split("\n").filter((l) => l.trim().startsWith("|")).length >= 2;
     } catch {
       claimMapOk = false;
@@ -362,7 +452,7 @@ for (let round = startRound; round <= rounds; round++) {
   }
   let canary = false;
   try {
-    canary = (await files.grep("canary", "selfcheck.py")).length > 0;
+    canary = (await files.grep("canary", "Agents/selfcheck.py")).length > 0;
   } catch {
     canary = false;
   }
@@ -375,22 +465,22 @@ for (let round = startRound; round <= rounds; round++) {
     let launchErr = "";
     try {
       const r = interpIsPy3
-        ? await world.run("python3", ["selfcheck.py"], { timeoutMs: 3600000 })
-        : await world.run("python", ["selfcheck.py"], { timeoutMs: 3600000 });
+        ? await world.run("python3", ["Agents/selfcheck.py"], { timeoutMs: 3600000 })
+        : await world.run("python", ["Agents/selfcheck.py"], { timeoutMs: 3600000 });
       exitCode = r.exitCode;
       output = (r.stderr || r.stdout || "(无输出)").slice(0, 1500);
     } catch {
       if (!interpIsPy3) {
         interpIsPy3 = true;
         try {
-          const r = await world.run("python3", ["selfcheck.py"], { timeoutMs: 3600000 });
+          const r = await world.run("python3", ["Agents/selfcheck.py"], { timeoutMs: 3600000 });
           exitCode = r.exitCode;
           output = (r.stderr || r.stdout || "(无输出)").slice(0, 1500);
         } catch {
           launchErr = "python 与 python3 均无法启动（请确认解释器可用）";
         }
       } else {
-        launchErr = "selfcheck.py 启动失败或超时";
+        launchErr = "Agents/selfcheck.py 启动失败或超时";
       }
     }
     if (launchErr === "" && exitCode === 0 && canary && claimMapOk) {
@@ -404,7 +494,7 @@ for (let round = startRound; round <= rounds; round++) {
       break;
     }
     try {
-      canary = (await files.grep("canary", "selfcheck.py")).length > 0;
+      canary = (await files.grep("canary", "Agents/selfcheck.py")).length > 0;
     } catch {
       canary = false;
     }
@@ -412,12 +502,12 @@ for (let round = startRound; round <= rounds; round++) {
       ? launchErr
       : "exit " + exitCode + (canary ? "" : "，且缺少 canary 对照用例") + (claimMapOk ? "" : "，且映射表未建立");
     const triage = await tester.ask<string>(
-      "门禁未通过（" + reason + "）。你是 selfcheck.py 与映射表的所有者：若问题在测试基建（脚本/用例/映射表），直接修复；若问题在被测实现，返回给算法工程师的明确修复指令清单（勿改被测实现）；若无法判断，如实说明。输出摘要：\n" + output,
+      "门禁未通过（" + reason + "）。你是 Agents/selfcheck.py 与映射表的所有者：若问题在测试基建（脚本/用例/映射表），直接修复；若问题在被测实现，返回给算法工程师的明确修复指令清单（勿改被测实现）；若无法判断，如实说明。输出摘要：\n" + output,
     );
     const t = triage.trim();
     if (t !== "" && t !== "无") {
       const triageDev = await algo.ask<DevReport>(
-        "测试工程师裁决的修复指令（你不许改 selfcheck.py 与 claim_map.md）：\n" + t.slice(0, 2000) + "\n执行后返回 DevReport。",
+        "测试工程师裁决的修复指令（你不许改 Agents/selfcheck.py 与 claim_map.md）：\n" + t.slice(0, 2000) + "\n执行后返回 DevReport。",
       );
       if ((triageDev.dangerRequests || []).length > 0) {
         dangerLog = (dangerLog === "无" ? "" : dangerLog + "；") + await dangerFlow(triageDev.dangerRequests);
@@ -431,7 +521,7 @@ for (let round = startRound; round <= rounds; round++) {
     "测试结论：" + JSON.stringify(verdict) + "\n门禁：" + gate + "\n把测试问题转成修复/补充实验指令（可为空数组=无需修复）。",
   );
   if (fixes.length > 0) {
-    fixDev = await algo.ask<DevReport>("执行修复与补充实验：" + fixes.join("；") + "\n返回 DevReport。");
+    fixDev = await algo.ask<DevReport>("执行修复与补充实验：" + fixes.join("；") + "\n每条先在本轮代码上复现：过期条目（引用旧版本行号、已被修复、当前复现不了）直接丢弃并说明，绝不据此改动。返回 DevReport。");
     if ((fixDev.dangerRequests || []).length > 0) {
       dangerLog = (dangerLog === "无" ? "" : dangerLog + "；") + await dangerFlow(fixDev.dangerRequests);
     }
@@ -455,12 +545,12 @@ for (let round = startRound; round <= rounds; round++) {
   const settled = await Promise.allSettled(
     Array.from({ length: n }, (_, i) =>
       agent("审稿人-r" + round + "-" + (i + 1), tiered ? { model: STRONG } : undefined).ask<Review>(
-        invite.brief + "\n\n你是相邻领域（与本研究方向相关但不重叠）的独立审稿人，只读：对稿件与证据映射提出尖锐质询（附证据出处），并给出下一轮迭代建议，给 severity。如无法判断，如实说明。",
+        invite.brief + "\n\n你是相邻领域（与本研究方向相关但不重叠）的独立审稿人，只读：对稿件与证据映射提出尖锐质询（附证据出处），并给出下一轮迭代建议，给 severity。小心数字幻觉：好的数据表现不代表好的情况——严谨考虑稿件数字的含义是不是表面那么简单，支撑它的理论可能本身有错，而漂亮的数字会加固这一理论幻觉。如无法判断，如实说明。",
       ),
     ),
   );
   const readerRev = await reader.ask<Review>(
-    "通读文献后审稿（只读）。稿件摘要：" + paper.slice(0, 500) + "\n核对引用与叙事、查新、提问，并给出迭代建议；nearestWorks 必填：最相近的 3 篇工作与差异维度。",
+    "通读文献后审稿（只读）。稿件摘要：" + paper.slice(0, 500) + "\n核对引用与叙事、查新、提问，并给出迭代建议。小心数字幻觉：好的数据表现不代表好的情况——严谨考虑稿件数字的含义是不是表面那么简单，支撑它的理论可能本身有错，而漂亮的数字会加固这一理论幻觉。nearestWorks 必填：最相近的 3 篇工作与差异维度。",
   );
   const reviews: Review[] = settled.map((s) =>
     s.status === "fulfilled" ? s.value : { summary: "该审稿人未完成", issues: [], iteration: [], severity: "minor" },
@@ -481,7 +571,7 @@ for (let round = startRound; round <= rounds; round++) {
     head0 = "";
   }
   const archived = await chief.ask<string>(
-    "把本轮记入 docs/workflow/ledger.md（头部含仓库标识行" + (repoRoot ? "：" + repoRoot : "") + "与一行一轮的目录：本轮先更新目录行、再追加详情）：任务/产出/危险操作裁决（" + dangerLog + "）/测试（覆盖声明：" + (verdict.coverage || "").slice(0, 300) + "）/审稿/下轮方向。然后 git add -A && git commit。若已配置本地加密备份 remote（建议用 GitCoffer 构建，防 Agent 误删本地代码后无从恢复），同时 push 到该 remote；不主动 push 到任何其它 remote（向云端发布永远是老板的明确动作）。返回一句话。",
+    "把本轮记入 Agents/ledger.md（头部含仓库标识行" + (repoRoot ? "：" + repoRoot : "") + "与一行一轮的目录：本轮先更新目录行、再追加详情）：任务/产出/危险操作裁决（" + dangerLog + "）/测试（覆盖声明：" + (verdict.coverage || "").slice(0, 300) + "；视觉审阅：" + visualNoteR.slice(0, 200) + "）/审稿/下轮方向。然后 git add -A && git commit。若已配置本地加密备份 remote（建议用 GitCoffer 构建，防 Agent 误删本地代码后无从恢复），同时 push 到该 remote；不主动 push 到任何其它 remote（向云端发布永远是老板的明确动作）。返回一句话。",
   );
   let head1 = "";
   try {
@@ -517,12 +607,21 @@ for (let round = startRound; round <= rounds; round++) {
 
 phase("初步评估报告");
 const resumeNote = rows.length === 0 ? "账本显示全部轮次已完成，本次运行直接从账本与存档产物出评估报告。" : "";
-const evalResult = await chief.ask<EvalReport>(
+let evalResult = await chief.ask<EvalReport>(
   resumeNote + rounds + " 轮已完成，硬停。全部审稿意见：\n" + plan.slice(0, 6000) + "\n" +
   "轮次记录（含每轮实验死亡率 experiments 字段）：" + JSON.stringify(rows) + "\n" +
   "撰写《初步评估报告》：verdict（继续/转向/停止）、预期成功率（推理依据必须引用实验死亡率趋势与文献读者的新颖性核查结论；并明确标注『这是定性判断的数值化表达，非校准概率』）、创新性（引用最相近 3 篇工作与实质差异维度）、影响力、继续做要注意的点（每条注明对应主张的证据范围——数据集与条件）、" +
-  "reviewerQuotes（逐字引用每位审稿人结论，不得改写）、给老板的建议（含仅老板能做的决策清单：账号、数据、资源类）。写入 docs/workflow/evaluation_report.md。",
+  "reviewerQuotes（逐字引用每位审稿人结论，不得改写）、待答问题逐条（questionAnswers：问题原文→直接答案→证据位置；问「存在哪」时连形态一起答——是 raw 还是派生格式、有没有写出器）、自主决定清单（autonomousDecisions：决定→理由→若否决的后果→奥卡姆自评「增加复杂度还是删减」；凡增加复杂度的决定必须进这一节，不能只写账本）、给老板的建议（含仅老板能做的决策清单：账号、数据、资源类）。" +
+  "这份报告是决策层文档：不写过程流水账（第几次门禁通过、返修几轮、审稿几条——那些在账本）、行话首次出现用白话括注、每节开头一句结论、同一件事只说一次、正文不堆代码路径、以 ≤2 页为目标。收尾同时整理交付：仓库根与 docs/ 只留老板原话提及的交付物、稿件与回应老板问题所必需的文件，全部工作脚手架（账本、映射表、Agents/selfcheck.py、测试调试脚本、被证伪的历史）归入 Agents/——交付遵循奥卡姆剃刀。写入 docs/evaluation_report.md，git add -A && git commit。",
 );
+// 疑问句防蒸发（机械）：老板原话含疑问而报告没有答案即视为漏需求——补答一次，仍缺则如实记录
+const askedQ = ((idea + " " + focus).match(/？|\?/g) || []).length;
+if (askedQ > 0 && (!evalResult.questionAnswers || evalResult.questionAnswers.length === 0)) {
+  evalResult = await chief.ask<EvalReport>(
+    "老板原话含 " + askedQ + " 处疑问，但报告里 questionAnswers 为空——疑问句在登记环节蒸发属漏需求。逐条补答（问题原文→直接答案，含形态→证据位置；确实无法作答的写「无法作答：原因」），写回 docs/evaluation_report.md 并 git add -A && git commit --amend --no-edit，返回完整 EvalReport。",
+  );
+  if (!evalResult.questionAnswers || evalResult.questionAnswers.length === 0) log("报告仍缺待答问题（已如实记录，老板原话含 " + askedQ + " 处疑问）");
+}
 const md = [
   "# 初步评估报告",
   "",
@@ -536,6 +635,12 @@ const md = [
   "",
   "## 继续做要注意的点",
   ...evalResult.risks.map((r) => "- " + r),
+  "",
+  "## 你的问题，答案在这里",
+  (evalResult.questionAnswers && evalResult.questionAnswers.length > 0) ? evalResult.questionAnswers.map((x) => "- 「" + x.q + "」→ " + x.a + "（证据：" + x.evidence + "）") : ["- 无（本次没有疑问句）"],
+  "",
+  "## 自主决定清单（请裁决是否保留）",
+  (evalResult.autonomousDecisions && evalResult.autonomousDecisions.length > 0) ? evalResult.autonomousDecisions.map((x) => "- " + x.decision + "｜理由：" + x.reason + "｜若否决：" + x.ifRejected + "｜奥卡姆：" + x.occam) : ["- 无"],
   "",
   "## 审稿人原话",
   ...evalResult.reviewerQuotes.map((q) => "> " + q),

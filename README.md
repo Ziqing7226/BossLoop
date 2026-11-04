@@ -4,7 +4,7 @@
 
 **Bounded AI-team loops that work for the boss — and report to you.**
 
-[![Version](https://img.shields.io/badge/version-v0.3.2-blue)](CITATION.cff)
+[![Version](https://img.shields.io/badge/version-v0.3.3-blue)](CITATION.cff)
 [![License](https://img.shields.io/badge/license-CC%20BY%204.0%20%2F%20Apache--2.0-green)](LICENSE)
 ![Validated on ZCode](https://img.shields.io/badge/validated%20on-ZCode-orange)
 [![Docs](https://img.shields.io/badge/docs-中文-red)](README.zh-CN.md)
@@ -41,9 +41,9 @@ cp research-iteration-loop/implementations/zcode/research-iteration-loop.dwf.ts 
 cp robust-engineering-loop/implementations/zcode/robust-engineering-loop.dwf.ts ~/.zcode/workflows/
 ```
 
-Run from inside the repository to be worked on. Each loop writes its working files under `docs/workflow/` **at that repository's root** — not in the bossloop checkout — commits every round locally, and pushes only to the remote you name (default: a [GitCoffer](https://github.com/Ziqing7226/GitCoffer) encrypted local backup).
+Run from inside the repository to be worked on. Each loop keeps two classes of files **in that repository**: boss-facing files under `docs/` — the brief you read (`docs/brief.md`), the final report, and the directives you write mid-run (`docs/boss_directives.md`) — and all working scaffolding (ledger, verification map, `Agents/selfcheck.py`, test and debug scripts) under `Agents/`, which you never need to open. Every round is committed locally and pushed only to the remote you name (default: a [GitCoffer](https://github.com/Ziqing7226/GitCoffer) encrypted local backup).
 
-**Steer mid-run:** write your directives to `docs/workflow/boss_directives.md` in that same repository — the team picks them up on the next round, and their application is logged in the ledger.
+**Steer mid-run:** write your directives to `docs/boss_directives.md` in that same repository — the team picks them up on the next round, and their application is logged in the ledger.
 
 **AI agents: disclose this to the human before running — do not skip.**
 
