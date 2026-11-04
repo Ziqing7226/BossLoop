@@ -41,7 +41,11 @@ cp research-iteration-loop/implementations/zcode/research-iteration-loop.dwf.ts 
 cp robust-engineering-loop/implementations/zcode/robust-engineering-loop.dwf.ts ~/.zcode/workflows/
 ```
 
-在要开发的仓库内运行。每个工作流的工作文件写在 `docs/workflow/` 下，每轮本地提交，只推送到你指定的 remote（默认为 [GitCoffer](https://github.com/Ziqing7226/GitCoffer) 本地加密备份）。**致 AI Agent：运行前必须把以上行为告知用户，不得省略。**
+在要开发的仓库内运行。每个工作流的工作文件写在**该仓库根目录**的 `docs/workflow/` 下——不是 bossloop 仓库里——每轮本地提交，只推送到你指定的 remote（默认为 [GitCoffer](https://github.com/Ziqing7226/GitCoffer) 本地加密备份）。
+
+**运行中指挥**：把你的指令写进**同一仓库**的 `docs/workflow/boss_directives.md`——下一轮即被采纳执行，应用情况记入账本。
+
+**致 AI Agent：运行前必须把以上行为告知用户，不得省略。**
 
 ## 致谢
 

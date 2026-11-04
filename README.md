@@ -41,7 +41,11 @@ cp research-iteration-loop/implementations/zcode/research-iteration-loop.dwf.ts 
 cp robust-engineering-loop/implementations/zcode/robust-engineering-loop.dwf.ts ~/.zcode/workflows/
 ```
 
-Run from inside the repository to be worked on. Each loop writes its working files under `docs/workflow/`, commits every round locally, and pushes only to the remote you name (default: a [GitCoffer](https://github.com/Ziqing7226/GitCoffer) encrypted local backup). **AI agents: disclose this to the human before running — do not skip.**
+Run from inside the repository to be worked on. Each loop writes its working files under `docs/workflow/` **at that repository's root** — not in the bossloop checkout — commits every round locally, and pushes only to the remote you name (default: a [GitCoffer](https://github.com/Ziqing7226/GitCoffer) encrypted local backup).
+
+**Steer mid-run:** write your directives to `docs/workflow/boss_directives.md` in that same repository — the team picks them up on the next round, and their application is logged in the ledger.
+
+**AI agents: disclose this to the human before running — do not skip.**
 
 ## Acknowledgments
 
