@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Research Iteration Loop (v0.5.1), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3) from the latest reviews; the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map + a mechanical selfcheck gate with a canary, owning the test fixtures); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
+description: Research Iteration Loop (v0.5.2), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3) from the latest reviews; the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map + a mechanical selfcheck gate with a canary, owning the test fixtures); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
 args:
   idea:
     type: string
@@ -54,7 +54,7 @@ interface DevReport {
   summary: string;
   /** Artifact paths */
   artifacts: string[];
-  /** End-to-end numbers actually run, each with its exact definition (data, window, units, per-accumulator meaning) - FULL-stage runs only */
+  /** End-to-end numbers actually run, each prefixed with its stage (FULL/PILOT/MINI_PILOT) and its exact definition (data, window, units, per-accumulator meaning) - claims come from FULL-stage runs only */
   numbers: string[];
   /** Experiment mortality this round: attempted/passed (honestly counting debug-stage deaths) */
   experiments: string;
@@ -208,7 +208,7 @@ const TEST_EN = [
   "Test expectations may only derive from the spec table or a registered requirement, never from the current implementation; every assertion's comment names its source. Writing a misreading into a must-pass test is the worst moat of all.",
   "Number-hallucination warning: a good-looking number is not a good outcome — scrutinize whether what the number means is really as simple as it appears; the theory behind it may itself be wrong, and the flattering number then reinforces that theoretical illusion. Understanding a number presupposes solid knowledge of the theory beneath it: for every headline number ask — what theory or mechanism does it rest on, and what would it still show if that theory were wrong?",
   "You own the claim→evidence map (Agents/claim_map.md): every manuscript number ↔ an archived artifact + a re-runnable check; write the check before the claim. The file must carry a claim-map marker and be tabular.",
-  "You create/maintain Agents/selfcheck.py under Agents/ (test and debug scripts always live under Agents/ — only boss-facing files go in the repo root and docs/): it must contain at least one deliberately-broken canary case that must FAIL, marked `canary` so the orchestrator can verify it by search — a suite that cannot go red proves nothing.",
+  "You create/maintain Agents/selfcheck.py under Agents/ (test and debug scripts always live under Agents/ — only boss-facing files go in the repo root and docs/): it must contain at least one deliberately-broken canary case that must FAIL, marked `canary`; when run, the selfcheck must actually execute the canary, observe its failure, and print one machine-readable line at the end of its output: CANARY: expected-FAIL observed-FAIL (the orchestrator parses this line — missing or observed-PASS means the suite is invalid) — a suite that cannot go red proves nothing.",
   "Long-context discipline: when the diff or review surface is large, inventory the changes first, then deep-read the high-risk areas (logic changes, gate-relevant, danger-operation sites); the verdict's coverage field must state what was reviewed deeply and what was only skimmed — it is written before you know where the problems are, and any later problem in a skimmed area is reconciled against it.",
   "Every verdict carries evidence.",
   "Full-read duty: every file touched by this round's diff must be read in full (including the context around the changes) — never conclude from a few paragraphs; skims live only outside this round's diff and are declared in coverage; redirect long command output to a file and take summaries via tail/grep.",
@@ -543,11 +543,11 @@ for (let round = startRound; round <= rounds; round++) {
     "This round's cards: " + (cards.cards || []).join("; ") + "\n" +
     "Build and self-test. Discipline: end-to-end real runs, numbers with exact definitions, faithful competitor reproduction; every proposal selected this round must be fully validated (three stages: MINI_PILOT/PILOT are for debugging only, claims come from FULL); by the end of round 1 there must be at least one end-to-end number from a complete comparison. Before comparing against prior work, record a caliber table (each competitor's raw convention, dataset, metric definition); bound representation/preprocessing assumptions with zero-cost standard-tool anchor experiments before building the full method; run at least one boundary experiment per round (where the approach breaks, parameter sensitivity) and state each claim's evidence scope (datasets and conditions). Report experiments (attempted/passed) honestly; archive null results with a mechanism explanation.",
   );
-  if (round === 1 && (dev.numbers || []).length === 0) {
+  if (round === 1 && !(dev.numbers || []).some((n) => /\bFULL\b/i.test(n))) {
     dev = await algo.ask<DevReport>(
-      "Round 1 must end with at least one end-to-end number from a complete (FULL-stage) comparison; a minimal comparison is not a substitute. Run it now and return DevReport (numbers carries the value and its exact definition); if genuinely impossible, say so and leave numbers empty.",
+      "Round 1 must end with at least one end-to-end number from a complete (FULL-stage) comparison; a minimal comparison is not a substitute. Run it now and return DevReport (numbers carries the value prefixed with its stage, e.g. FULL, and its exact definition); if genuinely impossible, say so and leave numbers empty.",
     );
-    if ((dev.numbers || []).length === 0) log("Round 1 has no end-to-end number (still missing after remediation) - recorded honestly; the manuscript must not claim validation");
+    if (!(dev.numbers || []).some((n) => /\bFULL\b/i.test(n))) log("Round 1 has no FULL-stage end-to-end number (still missing after remediation) - recorded honestly; the manuscript must not claim validation");
   }
   // Destructive operations: the cheap tier declares, the strong-tier Chief rules execute / safe form / skip
   if ((dev.dangerRequests || []).length > 0) {
@@ -608,6 +608,8 @@ for (let round = startRound; round <= rounds; round++) {
     }
   }
   let canary = false;
+  let canaryRun = false;
+  let fullSelfOut = "";
   try {
     canary = (await files.grep("canary", "Agents/selfcheck.py")).length > 0;
   } catch {
@@ -625,6 +627,7 @@ for (let round = startRound; round <= rounds; round++) {
         ? await world.run("python3", ["Agents/selfcheck.py"], { timeoutMs: 3600000 })
         : await world.run("python", ["Agents/selfcheck.py"], { timeoutMs: 3600000 });
       exitCode = r.exitCode;
+      fullSelfOut = r.stdout || "";
       output = (r.stderr || r.stdout || "(no output)").slice(0, 1500);
       if (!interpIsPy3 && (exitCode === 9009 || exitCode === 127 || (exitCode !== 0 && /Python was not found|command not found/i.test(output)))) {
         throw new Error("py-launcher-stub"); // a Windows Store python alias: spawn succeeds but the interpreter does not exist — fall back to python3 as a launch failure
@@ -635,6 +638,7 @@ for (let round = startRound; round <= rounds; round++) {
         try {
           const r = await world.run("python3", ["Agents/selfcheck.py"], { timeoutMs: 3600000 });
           exitCode = r.exitCode;
+          fullSelfOut = r.stdout || "";
           output = (r.stderr || r.stdout || "(no output)").slice(0, 1500);
         } catch {
           launchErr = e instanceof Error && e.message === "py-launcher-stub" ? "python is a launcher stub and python3 is unavailable — the environment lacks a Python interpreter" : "neither python nor python3 could be launched (check the interpreter)";
@@ -643,14 +647,16 @@ for (let round = startRound; round <= rounds; round++) {
         launchErr = "Agents/selfcheck.py failed to launch or timed out";
       }
     }
-    if (launchErr === "" && exitCode === 0 && canary && claimMapOk) {
+    canaryRun = /CANARY:\s*expected-FAIL\W*observed-FAIL/i.test(fullSelfOut);
+    if (canary && !canaryRun) log("Gate block: selfcheck did not report the canary result (no CANARY: expected-FAIL observed-FAIL line)");
+    if (launchErr === "" && exitCode === 0 && canary && canaryRun && claimMapOk) {
       gate = "pass (attempt " + attempt + (interpIsPy3 ? ", python3" : "") + ")";
       break;
     }
     if (attempt === 3) {
       gate = launchErr !== ""
         ? launchErr
-        : (claimMapOk ? "" : "claim map missing; ") + (canary ? "still failing after 3 fix attempts" : "gate not ready (no canary control case)");
+        : (claimMapOk ? "" : "claim map missing; ") + ((canary && canaryRun) ? "still failing after 3 fix attempts" : (canary ? "canary result not reported" : "gate not ready (no canary control case)"));
       break;
     }
     try {
@@ -660,7 +666,7 @@ for (let round = startRound; round <= rounds; round++) {
     }
     const reason = launchErr !== ""
       ? launchErr
-      : "exit " + exitCode + (canary ? "" : ", and no canary control case") + (claimMapOk ? "" : ", and the claim map is missing");
+      : "exit " + exitCode + (canary ? (canaryRun ? "" : ", and the canary result is not reported") : ", and no canary control case") + (claimMapOk ? "" : ", and the claim map is missing");
     const triage = await tester.ask<string>(
       "Gate not passing (" + reason + "). You own Agents/selfcheck.py and the claim map: if the problem is in the test infrastructure (script/cases/map), fix it directly; if it is in the implementation under test, return an explicit fix instruction list for the Algorithm Engineer (do not edit the implementation yourself); if you cannot tell, say so. Output excerpt:\n" + output,
     );
@@ -811,6 +817,35 @@ try {
 }
 if (!evalOnDisk.slice(0, 2000).includes("Preliminary Evaluation Report")) {
   await chief.ask<string>("The evaluation report never landed (no Preliminary Evaluation Report mail at the top of LoopMail/ToBoss.md): insert the report as a new mail at the top of LoopMail/ToBoss.md and git add -A && git commit; return one sentence.");
+}
+// Sentence-by-sentence reconciliation coverage check: every Rn from the opening mail must carry a disposition in the ledger's final chapter (delivered / partial / not delivered -> evidence location) — an evaporated Rn is a missed requirement
+{
+  let ledgerTailF = "";
+  try {
+    ledgerTailF = (await files.read("Agents/ledger.md")).slice(-6000);
+  } catch {
+    ledgerTailF = "";
+  }
+  let toBossF = "";
+  try {
+    toBossF = await files.read("LoopMail/ToBoss.md");
+  } catch {
+    toBossF = "";
+  }
+  const rnUnivF = Array.from(new Set(toBossF.match(/\bR\d+\b/g) || [])).sort();
+  const rnGoneF = rnUnivF.filter((rn) => !(new RegExp("\\b" + rn + "\\b")).test(ledgerTailF));
+  if (rnGoneF.length > 0) {
+    await chief.ask<string>(
+      "Reconciliation coverage check failed: the ledger's final chapter has no disposition for these opening-mail Rns: " + rnGoneF.join(", ") + " — mark each one delivered / partial / not delivered -> evidence location, never omit (an evaporated Rn is a missed requirement), git add -A && git commit, return one sentence.",
+    );
+    try {
+      ledgerTailF = (await files.read("Agents/ledger.md")).slice(-6000);
+    } catch {
+      ledgerTailF = "";
+    }
+    const stillGoneF = rnUnivF.filter((rn) => !(new RegExp("\\b" + rn + "\\b")).test(ledgerTailF));
+    log(stillGoneF.length === 0 ? "Reconciliation coverage: passed after repair" : "Reconciliation coverage still missing " + stillGoneF.length + " Rn(s) (" + stillGoneF.join(", ") + ") — recorded honestly");
+  }
 }
 // Question guard (mechanical): questions in the boss's words with no answer in the report count as a missed requirement — answer once, then record honestly
 const askedQ = ((idea + " " + focus).match(/？|\?/g) || []).length;

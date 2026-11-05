@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Robust Engineering Loop (v0.5.1), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
+description: Robust Engineering Loop (v0.5.2), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
 args:
   requirement:
     type: string
@@ -225,7 +225,7 @@ const TEST_EN = [
   "Test expectations may only derive from the spec table or a registered requirement, never from the current implementation; every assertion's comment names its source (Rn or spec row). Writing a misreading into a must-pass test is the worst moat of all.",
   "Number-hallucination warning: a good-looking number is not a good outcome — scrutinize whether what the number means is really as simple as it appears; the theory behind it may itself be wrong, and the flattering number then reinforces that theoretical illusion. Understanding a number presupposes solid knowledge of the theory beneath it: for every headline number ask — what theory or mechanism does it rest on, and what would it still show if that theory were wrong?",
   "Write and maintain robustness tests: boundary and adversarial inputs, perturbation scenarios where applicable; create/maintain Agents/selfcheck.py under Agents/ (test and debug scripts always live under Agents/ — only boss-facing files go in the repo root and docs/; explore freely while building, Occam's razor at delivery), aggregating, per the project profile: a strict build (warnings are errors: -Werror / /WX / -D warnings / deny(warnings), per language), the full test suite + robustness cases, and the local CI equivalent (if the repo has CI, it must run green locally). The suite falsifies, not just exercises: every mechanism the diff adds ships with a negative check (a tampered input that must fail, an injection that must be refused) — \"verified\" means a refutation attempt failed, never that a happy path passed.",
-  "Agents/selfcheck.py must contain a deliberately-broken canary case marked `canary` (the orchestrator verifies it by search) — a suite that cannot go red proves nothing.",
+  "Agents/selfcheck.py must contain a deliberately-broken canary case marked `canary`; when run, the selfcheck must actually execute the canary, observe its failure, and print one machine-readable line at the end of its output: CANARY: expected-FAIL observed-FAIL (the orchestrator parses this line — missing or observed-PASS means the suite is invalid) — a suite that cannot go red proves nothing.",
   "Check the previous round's push on the remote: on GitHub remotes with gh available use gh run list / gh run view; if uncheckable, say so honestly — an unchecked CI is never reported as passed; failures become mandatory fix items this round.",
   "Destructive-operation criterion (aligned with the declaration duty): beyond the approved list — data files or whole directories vanishing, history below the baseline rewritten, a force push, existing artifacts overwritten — is a blocker; demand the declaration and the ruling record. Source-file deletions in an ordinary refactor are not destructive, but must stay traceable. Third-party upstreams are read-only: pushes still go only to the agreed remote, never upstream; before the round closes, upstream refs are verified unchanged, quoted from git output.",
   "Independence is absolute: never edit the implementation under test. You only write Agents/selfcheck.py, the robustness cases, and the verification column of Agents/requirement_map.md (requirement <-> implementation location <-> re-runnable command, tabular with a requirement-map marker).",
@@ -634,6 +634,8 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   let verdict: TestVerdict = { summary: "not started", passed: false, findings: [] , coverage: "not started: no review yet" };
   let gate = "";
   let canary = false;
+  let canaryRun = false;
+  let fullSelfOut = "";
   let mapOk = false;
   let findingsCount = 0;
   let rebuttedCount = 0;
@@ -678,6 +680,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
           ? await world.run("python3", ["Agents/selfcheck.py"], { timeoutMs: 3600000 })
           : await world.run("python", ["Agents/selfcheck.py"], { timeoutMs: 3600000 });
         exitCode = r.exitCode;
+        fullSelfOut = r.stdout || "";
         output = (r.stderr || r.stdout || "(no output)").slice(0, 1500);
         if (!interpIsPy3 && (exitCode === 9009 || exitCode === 127 || (exitCode !== 0 && /Python was not found|command not found/i.test(output)))) {
           throw new Error("py-launcher-stub"); // a Windows Store python alias: spawn succeeds but the interpreter does not exist — fall back to python3 as a launch failure
@@ -688,6 +691,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
           try {
             const r = await world.run("python3", ["Agents/selfcheck.py"], { timeoutMs: 3600000 });
             exitCode = r.exitCode;
+            fullSelfOut = r.stdout || "";
             output = (r.stderr || r.stdout || "(no output)").slice(0, 1500);
           } catch {
             output = e instanceof Error && e.message === "py-launcher-stub" ? "python is a launcher stub and python3 is unavailable — the environment lacks a Python interpreter" : "neither python nor python3 could launch Agents/selfcheck.py";
@@ -699,6 +703,8 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     } else {
       output = "Agents/selfcheck.py lacks the canary marker (a must-fail control case)";
     }
+    canaryRun = /CANARY:\s*expected-FAIL\W*observed-FAIL/i.test(fullSelfOut);
+    if (canary && !canaryRun) log("Gate block: selfcheck did not report the canary result (no CANARY: expected-FAIL observed-FAIL line) — the canary must actually run and be observed failing");
     // Mechanical check: every approved dangerous operation must be declared, ruled on, and executed — all three stages must line up; the executed command must verbatim-match the approved form (a paraphrase does not count)
     let dangerConsistent = dangerTrail.every((e) => e.executed !== "pending confirmation" && !e.executed.startsWith("unconfirmed") && approvedDanger.includes(e.executed));
     if (!dangerConsistent && dangerTrail.some((e) => e.executed.startsWith("unconfirmed"))) {
@@ -714,7 +720,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     }
     if (!commitOk) log("Gate block: this round's commit never landed (commitOk=false) — treated as red");
     if (verdict.passed && (verdict.findings || []).length > 0) log("Gate block: tester passed=true but still carries " + (verdict.findings || []).length + " findings — treated as red");
-    const mechGreen = verdict.passed && exitCode === 0 && canary && mapOk && dangerConsistent && commitOk && (verdict.findings || []).length === 0;
+    const mechGreen = verdict.passed && exitCode === 0 && canary && canaryRun && mapOk && dangerConsistent && commitOk && (verdict.findings || []).length === 0;
     // Image-artifact detection (mechanical): artifacts the tester declares ∪ images added/modified by the diff ∪ untracked images — if there are images, a human-grade eye must look
     const isImg = (p: string): boolean => /\.(png|jpe?g|svg|webp|gif)$/i.test(p);
     imageFiles = (verdict.artifacts || []).filter((p) => isImg(p));
@@ -754,14 +760,14 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       break;
     }
     if (attempt === 10) {
-      gate = (!commitOk ? "commit not landed; " : "") + (verdict.passed ? ((verdict.findings || []).length > 0 ? "passed with findings; " : "") : "test verdict not passed; ") + (canary ? "" : "no canary; ") + (mapOk ? "" : "requirement map missing; ") + (dangerConsistent ? "" : "dangerous-operation declared/ruled/executed mismatch; ") + (visualOk ? "" : "visual review not passed; ") + (exitCode === 0 ? "" : "selfcheck exit " + exitCode);
+      gate = (!commitOk ? "commit not landed; " : "") + (verdict.passed ? ((verdict.findings || []).length > 0 ? "passed with findings; " : "") : "test verdict not passed; ") + (canary ? "" : "no canary; ") + ((canary && !canaryRun) ? "canary result not reported; " : "") + (mapOk ? "" : "requirement map missing; ") + (dangerConsistent ? "" : "dangerous-operation declared/ruled/executed mismatch; ") + (visualOk ? "" : "visual review not passed; ") + (exitCode === 0 ? "" : "selfcheck exit " + exitCode);
       break;
     }
     if ((verdict.findings || []).length === 0) {
       // Purely mechanical failure (no findings): Agents/selfcheck.py and the map are the tester's own fixtures — send them back to their owner, not through the engineer escalation path
       lastFix = null;
       await tester.ask<string>(
-        "The mechanical gate is not satisfied (canary=" + (canary ? "present" : "missing") + "; requirement_map=" + (mapOk ? "valid" : "missing") + "; selfcheck exit=" + (canary ? exitCode : "not run") + ") while your verdict carries no findings. Agents/selfcheck.py and requirement_map.md are yours: fix or complete them and amend the changes into the round commit (git add -A && git commit --amend --no-edit); if selfcheck exposes an implementation defect, file it as a finding (with reproduction evidence) in your next verdict. Return one sentence.",
+        "The mechanical gate is not satisfied (canary=" + (canary ? (canaryRun ? "present (reported)" : "present, no CANARY line") : "missing") + "; requirement_map=" + (mapOk ? "valid" : "missing") + "; selfcheck exit=" + (canary ? exitCode : "not run") + ") while your verdict carries no findings. Agents/selfcheck.py and requirement_map.md are yours: fix or complete them and amend the changes into the round commit (git add -A && git commit --amend --no-edit); if selfcheck exposes an implementation defect, file it as a finding (with reproduction evidence) in your next verdict. Return one sentence.",
       );
       headA = await HEAD0();
       continue;
@@ -774,7 +780,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     const fix = await fixer.ask<FixOutcome>(
       (juniorAsk ? "" : "[Escalation] The junior engineer could not solve the following in 3 attempts. You are the Senior Engineer (strong tier): find the root cause and fix it in one pass; amend into the same round commit.\n") +
       "Gate attempt " + attempt + " failed: " + (verdict.passed ? "(self-report green but selfcheck/map not satisfied)" : JSON.stringify(verdict.findings)) +
-      "\nMechanical state: canary=" + (canary ? "present" : "missing") + "; requirement_map=" + (mapOk ? "valid" : "missing") + "; danger declared/ruled/executed aligned=" + (dangerConsistent ? "yes" : "no") + "; selfcheck exit=" + (canary ? exitCode : "not run") +
+      "\nMechanical state: canary=" + (canary ? (canaryRun ? "present (reported)" : "present, no CANARY line") : "missing") + "; requirement_map=" + (mapOk ? "valid" : "missing") + "; danger declared/ruled/executed aligned=" + (dangerConsistent ? "yes" : "no") + "; selfcheck exit=" + (canary ? exitCode : "not run") +
       (imageFiles.length > 0 ? "; image artifacts: " + imageFiles.join(", ") + "; visual review=" + (visualOk ? "passed" : "failed — " + visualNote) : "") +
       "\nOutput excerpt:\n" + output +
       "\nReproduce every finding first: confirmed -> fix; misdiagnosis -> evidence rebuttal (FixOutcome.rebutted); a stale entry (older line numbers, already fixed, not reproducible on this round's code) is discarded and marked \"stale\" — never code against it. Then git add -A && git commit --amend --no-edit into the round commit. Never rewrite history below the baseline.",
@@ -925,9 +931,41 @@ phase("Final report");
 const interruptNote = finalVerdict
   ? "This run was interrupted. Current state: " + finalVerdict.state + "; points awaiting the boss: " + finalVerdict.decisionList.join("; ") + ". The line-by-line reconciliation is an internal affair: every entry, done or not, goes into the ledger and the reconciliation notes in Agents/requirement_map.md — none omitted; what the boss sees stays in brief form (explanation first, decisions pending, suggested options), never a reconciliation table. verdict must be interrupted."
   : "";
+// Requirement-map coverage check (the mechanical form of "a requirement with no row is not done"; runs only when not interrupted): every Rn in requirements.md must have a reconciliation row in requirement_map.md (word-boundary match, so R1 cannot pass by matching R10)
+let mapGap = "";
+if (!interrupted) {
+  let mapTextF = "";
+  try {
+    mapTextF = await files.read("Agents/requirement_map.md");
+  } catch {
+    mapTextF = "";
+  }
+  let reqTextF = "";
+  try {
+    reqTextF = await files.read("Agents/requirements.md");
+  } catch {
+    reqTextF = "";
+  }
+  const rnAllF = Array.from(new Set(reqTextF.match(/\bR\d+\b/g) || [])).sort();
+  const hasEntryF = (rn: string): boolean => new RegExp("\\b" + rn + "\\b").test(mapTextF);
+  const rnMissingF = rnAllF.filter((rn) => !hasEntryF(rn));
+  if (rnMissingF.length > 0) {
+    await chief.ask<string>(
+      "Requirement-map coverage check failed: Agents/requirement_map.md has no reconciliation row for: " + rnMissingF.join(", ") + " — a requirement with no row is not done. Add the missing rows (requirement <-> implementation site <-> re-runnable verification command); requirements that were dropped or are not applicable get their disposition recorded in the ledger and marked in the map, git add -A && git commit, return one sentence.",
+    );
+    try {
+      mapTextF = await files.read("Agents/requirement_map.md");
+    } catch {
+      mapTextF = "";
+    }
+    const stillF = rnAllF.filter((rn) => !hasEntryF(rn));
+    mapGap = stillF.length === 0 ? "" : "[Mechanical check failed] Agents/requirement_map.md still has no reconciliation row for: " + stillF.join(", ") + " — the final brief must honestly disclose these requirements as unfinished/abandoned, never silently.\n";
+    log(mapGap === "" ? "Requirement-map coverage: passed after repair" : "Requirement-map coverage still missing " + stillF.length + " row(s) — recorded honestly; the final-brief ask will demand disclosure");
+  }
+}
 let reported = await chief.ask<FinalReport>(
     (closingBossNote !== "" ? "[Boss feedback (re-read from LoopMail/FromBoss.md at closing)] The boss wrote the following mid-run with no round left to carry it — handle each item or list it under the mail's decision section, never silently:\n" + closingBossNote + "\n" : "") +
-    interruptNote + (interrupted ? "" : roundsTotal + " rounds complete — hard stop (or finished early).") +
+    mapGap + interruptNote + (interrupted ? "" : roundsTotal + " rounds complete — hard stop (or finished early).") +
     " Using Agents/requirements.md and the ledger as the only basis, append the Final Brief as a new mail at the top of LoopMail/ToBoss.md (the 2026-11-05 boss mail system: ToBoss.md is the Chief's delivery-mail master file — new mails go at the top, appended in reverse order, old mails are never modified; docs/ holds formal content such as REPORT.ipynb and the manuscript; formal files are referenced in mails by relative links as attachments). The boss wants a brief, not a reconciliation (2026-11-05 boss rule): the reconciliation (requirement by requirement -> outcome -> evidence; fill requirementOutcomes faithfully — a requirement without an entry is not done) is your internal affair, going only into Agents/requirement_map.md and the ledger (never touching the tester's verification column), never into the boss's mail as a reconciliation table. Mail writing discipline (the boss's words of 2026-11-05, hard rules): the art of de-redundancy — report the minimum, fastest for the boss to grasp the main line and the whole; no jargon piles (gloss jargon on first use); nothing contrary to fact (numbers and conclusions quote command output and the artifact manifest only); no code-segment or path dumps (evidence pointers listed in one section, no paths in the body). The mail body lets the boss tell at a glance whether the output is what was asked — nine fixed sections: (1) an opening paragraph of progress and verdict (what was done, how it went, whether it meets the boss's requirement; the summary field); (2) the deliverables list (deliverables: one line per artifact — what it is + which sentence of the boss's words it answers (quote <=15 chars) + the attachment link; content worth adopting from historical AI documents is merged here); (3) final state (commits/pushes/tests/known limitations); (4) deviations from the boss's requirements explained one by one (deviations); (5) the decision list (decisionList); (6) open questions answered one by one (questionAnswers: question text -> direct answer -> where the evidence is; when asked where something lives, answer the form too — raw or derived, whether a writer exists); (7) the autonomous-decision list (autonomousDecisions: decision -> reason -> consequence if rejected -> Occam self-assessment \"adds complexity vs simplifies\"; any complexity-increasing decision must be here, never only in the ledger); (8) deferred and declined as fixed subsections (each with its reason — a recorded deferral is a decision, not an omission; a declined idea is not re-proposed next run; fill the deferred/declined/processLessons fields faithfully, empty arrays when none); (9) process lessons (each = rule + why + scope; adopted lessons persist and load with the next run, a disproven lesson is marked superseded and never kept beside a new one; re-validate against the current repo on load) + one line of advice. The mail is a decision-layer document: no process narrative (that is the ledger), one conclusion sentence at the top of each section, each requirement stated once, aiming at two pages or less. At closing, tidy the delivery (2026-11-05 boss rules, hard; sweep the whole repository for historical redundancy first — including leftovers from earlier rounds and runs — not just this round's products): (1) code AND documents the final deliverable does not need (experiment scripts, superseded implementation versions, drafts and intermediate reports — historical redundancy, code and documents alike) -> git mv straight into Agents/; (2) an AI-generated document that has become history -> merge only the content worth adopting into the deliverables wording of the newest ToBoss mail, its body counting as historical redundancy -> git mv into Agents/; (3) docs/ keeps formal content only (the deliverable bodies the boss's words name); the repo root and docs/ pile up no working files; (4) LoopMail/FromBoss.md (written by the boss) stays as it is — what the boss wrote is never modified; (5) any file under LoopMail/ other than ToBoss.md/FromBoss.md is judged case by case — files the boss placed get the FromBoss_ prefix and stay untouched, stray agent-made products are put away per (1)/(2), and anything uncertain is treated as boss-placed; never delete a file throughout. git add -A && git commit, return FinalReport.",
 );
 // Question guard (mechanical): questions in the boss's words with no answer in the report count as a missed requirement — answer once, then record honestly

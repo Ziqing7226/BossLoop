@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 科研迭代循环（v0.5.1）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表 + 含 canary 的 selfcheck 机械门禁，测试基建归其所有）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
+description: 科研迭代循环（v0.5.2）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表 + 含 canary 的 selfcheck 机械门禁，测试基建归其所有）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
 args:
   idea:
     type: string
@@ -54,7 +54,7 @@ interface DevReport {
   summary: string;
   /** 产物文件路径 */
   artifacts: string[];
-  /** 端到端真实跑出的数字，每条注明口径（数据、窗口、单位、每个累加器含义）——只允许 FULL 级实验的数字 */
+  /** 端到端真实跑出的数字，每条以 FULL/PILOT/MINI_PILOT 开头注明层级并注明口径（数据、窗口、单位、每个累加器含义）——主张只允许 FULL 级实验的数字 */
   numbers: string[];
   /** 本轮实验死亡率：尝试数/跑通数（含死在调试阶段的，如实统计） */
   experiments: string;
@@ -544,11 +544,11 @@ for (let round = startRound; round <= rounds; round++) {
     "本轮任务卡：" + (cards.cards || []).join("；") + "\n" +
     "开发并自测。纪律：端到端真实跑、数字注明口径、竞品保真对照；本轮选中的每个方案都必须得到充分验证（三级执行：MINI_PILOT/PILOT 只用于调试，主张只来自 FULL）；第 1 轮结束时必须已有至少一个来自完整对比的端到端数字。与已有工作对比前先建口径对照表（每家原始约定/数据集/指标定义）；表示或预处理假设先用标准工具做零成本锚点实验再决定是否建全量；每轮至少做一个边界实验（方法何时失效、参数多敏感），主张注明证据范围（数据集与条件）。如实报告 experiments（尝试数/跑通数），零结果入档并解释机制。",
   );
-  if (round === 1 && (dev.numbers || []).length === 0) {
+  if (round === 1 && !(dev.numbers || []).some((n) => /\bFULL\b/i.test(n))) {
     dev = await algo.ask<DevReport>(
-      "第 1 轮必须以至少一个来自完整对比（FULL 级）的端到端数字收尾，禁止以最小对比代替。请现在补跑并返回 DevReport（numbers 填入该数字与口径）；若客观上无法做到，如实说明并保持 numbers 为空。",
+      "第 1 轮必须以至少一个来自完整对比（FULL 级）的端到端数字收尾，禁止以最小对比代替。请现在补跑并返回 DevReport（numbers 填入该数字与口径，并以 FULL 开头注明层级）；若客观上无法做到，如实说明并保持 numbers 为空。",
     );
-    if ((dev.numbers || []).length === 0) log("第 1 轮无端到端数字（补救后仍缺）——已如实记录，稿件不得声称已验证");
+    if (!(dev.numbers || []).some((n) => /\bFULL\b/i.test(n))) log("第 1 轮无 FULL 级端到端数字（补救后仍缺）——已如实记录，稿件不得声称已验证");
   }
   // 破坏性操作：廉价档只申报，强档总工裁决执行/改写法/跳过（不下放给老板）
   if ((dev.dangerRequests || []).length > 0) {
@@ -561,7 +561,7 @@ for (let round = startRound; round <= rounds; round++) {
     "审查开发产出。作者自报如下（只当线索与覆盖面提示——每个数字与主张以 claim_map 与存档工件核验为准，绝不因自报而免检）：" + JSON.stringify(dev) + "\n" +
     "本轮 diff = 上一轮存档提交..当前工作树（含未跟踪文件）。先读 LoopMail/ToBoss.md 开局邮件的产物规格表：验收按规格表的合格判据，不只验结构。" +
     "职责：代码审查/roundtrip（含对抗输入）/泛化/扰动稳定性；更新 claim→evidence 映射表（Agents/claim_map.md）；" +
-    "建立或更新 Agents/selfcheck.py，必须含必须失败的金丝雀用例，且期望值只从规格表或已登记要求派生（注释写出处），绝不从当前实现派生。对进入主张或 go/no-go 决策、且经多步聚合的头条数字，从存档中间记录用第二条路径复算（不同分组或公式——不要求第二套实现）；实验须存档足以让复算在分钟级完成的中间记录。不一致即冻结该数字并审计，绝不当作舍入误差放行。单一来源的直接测量免检（roundtrip 与 canary 已覆盖）。发现数字被撤回时，全库检索所有重复该数字的文档（账本历史、README、图表）并列出当轮修正清单。返回 TestVerdict（artifacts 列出本轮产出的图/表路径，含被 .gitignore 的）。",
+    "建立或更新 Agents/selfcheck.py，必须含必须失败的金丝雀用例；selfcheck 运行时必须真实执行该金丝雀并观察到其失败，并在输出末尾打印机器可读一行：CANARY: expected-FAIL observed-FAIL（编排器解析此行核验——缺失或 observed-PASS 视为套件无效）；期望值只从规格表或已登记要求派生（注释写出处），绝不从当前实现派生。对进入主张或 go/no-go 决策、且经多步聚合的头条数字，从存档中间记录用第二条路径复算（不同分组或公式——不要求第二套实现）；实验须存档足以让复算在分钟级完成的中间记录。不一致即冻结该数字并审计，绝不当作舍入误差放行。单一来源的直接测量免检（roundtrip 与 canary 已覆盖）。发现数字被撤回时，全库检索所有重复该数字的文档（账本历史、README、图表）并列出当轮修正清单。返回 TestVerdict（artifacts 列出本轮产出的图/表路径，含被 .gitignore 的）。",
   );
   // 图像产物 → 视觉审阅（机械触发）：问题并入本轮问题清单，走既有修复流程；没有图就没有这笔开销
   const isImgR = (p: string): boolean => /\.(png|jpe?g|svg|webp|gif)$/i.test(p);
@@ -609,6 +609,8 @@ for (let round = startRound; round <= rounds; round++) {
     }
   }
   let canary = false;
+  let canaryRun = false;
+  let fullSelfOut = "";
   try {
     canary = (await files.grep("canary", "Agents/selfcheck.py")).length > 0;
   } catch {
@@ -626,6 +628,7 @@ for (let round = startRound; round <= rounds; round++) {
         ? await world.run("python3", ["Agents/selfcheck.py"], { timeoutMs: 3600000 })
         : await world.run("python", ["Agents/selfcheck.py"], { timeoutMs: 3600000 });
       exitCode = r.exitCode;
+      fullSelfOut = r.stdout || "";
       output = (r.stderr || r.stdout || "(无输出)").slice(0, 1500);
       if (!interpIsPy3 && (exitCode === 9009 || exitCode === 127 || (exitCode !== 0 && /Python was not found|command not found/i.test(output)))) {
         throw new Error("py-launcher-stub"); // Windows Store python 别名：spawn 成功但解释器不存在——按启动失败走 python3 回退
@@ -636,6 +639,7 @@ for (let round = startRound; round <= rounds; round++) {
         try {
           const r = await world.run("python3", ["Agents/selfcheck.py"], { timeoutMs: 3600000 });
           exitCode = r.exitCode;
+          fullSelfOut = r.stdout || "";
           output = (r.stderr || r.stdout || "(无输出)").slice(0, 1500);
         } catch {
           launchErr = e instanceof Error && e.message === "py-launcher-stub" ? "python 为启动器 stub 且 python3 不可用——环境缺 Python 解释器" : "python 与 python3 均无法启动（请确认解释器可用）";
@@ -644,14 +648,16 @@ for (let round = startRound; round <= rounds; round++) {
         launchErr = "Agents/selfcheck.py 启动失败或超时";
       }
     }
-    if (launchErr === "" && exitCode === 0 && canary && claimMapOk) {
+    canaryRun = /CANARY:\s*expected-FAIL\W*observed-FAIL/i.test(fullSelfOut);
+    if (canary && !canaryRun) log("门禁拦截：selfcheck 未报告 canary 执行结果（缺 CANARY: expected-FAIL observed-FAIL 行）");
+    if (launchErr === "" && exitCode === 0 && canary && canaryRun && claimMapOk) {
       gate = "通过（第 " + attempt + " 次尝试" + (interpIsPy3 ? "，python3" : "") + "）";
       break;
     }
     if (attempt === 3) {
       gate = launchErr !== ""
         ? launchErr
-        : (claimMapOk ? "" : "映射表未建立；") + (canary ? "3 次修复后仍失败" : "门禁未就绪（自检缺少 canary 对照用例）");
+        : (claimMapOk ? "" : "映射表未建立；") + ((canary && canaryRun) ? "3 次修复后仍失败" : (canary ? "canary 未报告执行结果" : "门禁未就绪（自检缺少 canary 对照用例）"));
       break;
     }
     try {
@@ -661,7 +667,7 @@ for (let round = startRound; round <= rounds; round++) {
     }
     const reason = launchErr !== ""
       ? launchErr
-      : "exit " + exitCode + (canary ? "" : "，且缺少 canary 对照用例") + (claimMapOk ? "" : "，且映射表未建立");
+      : "exit " + exitCode + (canary ? (canaryRun ? "" : "，且 canary 未报告执行结果") : "，且缺少 canary 对照用例") + (claimMapOk ? "" : "，且映射表未建立");
     const triage = await tester.ask<string>(
       "门禁未通过（" + reason + "）。你是 Agents/selfcheck.py 与映射表的所有者：若问题在测试基建（脚本/用例/映射表），直接修复；若问题在被测实现，返回给算法工程师的明确修复指令清单（勿改被测实现）；若无法判断，如实说明。输出摘要：\n" + output,
     );
@@ -811,6 +817,35 @@ try {
 }
 if (!evalOnDisk.slice(0, 2000).includes("初步评估报告")) {
   await chief.ask<string>("评估报告未落盘（LoopMail/ToBoss.md 头部未见《初步评估报告》邮件）：把报告作为新邮件插入 LoopMail/ToBoss.md 头部并 git add -A && git commit，返回一句话。");
+}
+// 逐句对账覆盖机械核查：开局邮件的每个 Rn 必须在账本终章有处置标注（已交付/部分/未交付→证据位置）——蒸发即漏需求
+{
+  let ledgerTailF = "";
+  try {
+    ledgerTailF = (await files.read("Agents/ledger.md")).slice(-6000);
+  } catch {
+    ledgerTailF = "";
+  }
+  let toBossF = "";
+  try {
+    toBossF = await files.read("LoopMail/ToBoss.md");
+  } catch {
+    toBossF = "";
+  }
+  const rnUnivF = Array.from(new Set(toBossF.match(/\bR\d+\b/g) || [])).sort();
+  const rnGoneF = rnUnivF.filter((rn) => !(new RegExp("\\b" + rn + "\\b")).test(ledgerTailF));
+  if (rnGoneF.length > 0) {
+    await chief.ask<string>(
+      "逐句对账覆盖核查未过：账本终章缺少以下开局邮件 Rn 的处置标注：" + rnGoneF.join("、") + "——每条标 已交付/部分/未交付→证据位置，绝不省略（蒸发即漏需求），git add -A && git commit，返回一句话。",
+    );
+    try {
+      ledgerTailF = (await files.read("Agents/ledger.md")).slice(-6000);
+    } catch {
+      ledgerTailF = "";
+    }
+    const stillGoneF = rnUnivF.filter((rn) => !(new RegExp("\\b" + rn + "\\b")).test(ledgerTailF));
+    log(stillGoneF.length === 0 ? "逐句对账覆盖：补齐后通过" : "逐句对账覆盖仍缺 " + stillGoneF.length + " 条（" + stillGoneF.join("、") + "）——已如实记录");
+  }
 }
 // 疑问句防蒸发（机械）：老板原话含疑问而报告没有答案即视为漏需求——补答一次，仍缺则如实记录
 const askedQ = ((idea + " " + focus).match(/？|\?/g) || []).length;

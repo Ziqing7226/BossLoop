@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 鲁棒工程循环（v0.5.1）：把一句开发要求变成经过冷启动对抗验证的实现。总工建要求台账（老板原话逐字）并承诺 N 轮（老板可锁定）；每轮开发+文档单笔提交 → 冷启动门禁（diff 审查、鲁棒性测试、canary、零警告构建、上一轮 remote CI 结转）→ 先复现再返修（误诊须证据反驳）、amend 并入本轮提交（初级 3 次未解升级高级工程师，10 次未过打断上报）；全绿才推送约定 remote（默认 GitCoffer，append-only 永不 force）；账本断点续跑；破坏性操作申报-裁决-执行三段核验、绝不转交用户；模型分档 tiered/uniform。
+description: 鲁棒工程循环（v0.5.2）：把一句开发要求变成经过冷启动对抗验证的实现。总工建要求台账（老板原话逐字）并承诺 N 轮（老板可锁定）；每轮开发+文档单笔提交 → 冷启动门禁（diff 审查、鲁棒性测试、canary、零警告构建、上一轮 remote CI 结转）→ 先复现再返修（误诊须证据反驳）、amend 并入本轮提交（初级 3 次未解升级高级工程师，10 次未过打断上报）；全绿才推送约定 remote（默认 GitCoffer，append-only 永不 force）；账本断点续跑；破坏性操作申报-裁决-执行三段核验、绝不转交用户；模型分档 tiered/uniform。
 args:
   requirement:
     type: string
@@ -229,7 +229,7 @@ const TEST_ZH = [
   "测试期望值只许从规格表或已登记要求派生，绝不从当前实现派生；每条断言的注释写明出处（Rn 或规格行）。把误解写成必须通过的测试，是最坏的护城河。",
   "数字幻觉警示：好的数据表现不代表好的情况——严谨考虑数字代表的含义是不是表面那么简单；支撑它的理论可能本身有错，而漂亮的数字又会加固这一理论幻觉。理解数字含义的前提是对其基础理论有充分认知：对每个头条数字追问——它背后的理论/机制是什么，若理论错了这个数字还说明什么？",
   "编写并维护鲁棒性测试：边界与对抗输入、适用的扰动场景；并在 Agents/ 下创建/维护 Agents/selfcheck.py（测试与调试脚本一律放 Agents/，仓库根与 docs/ 只放老板面向的文件——开发时鼓励多探索多测试，交付时奥卡姆剃刀），按项目 profile 聚合三件事——严格模式构建（警告即错误：-Werror / /WX / -D warnings / deny(warnings) 等按语言取）、全量测试+鲁棒性用例、本地 CI 等价执行（仓库配了 CI 就必须本地等价跑通）；套件不只演练还要证伪——diff 新增的每个机制都配一条负向检查（篡改输入必须失败、注入必须被拒），\"已验证\"指证伪尝试失败过，而非快乐路径通过。",
-  "Agents/selfcheck.py 必须含一个必须失败的金丝雀用例并带 canary 标记（编排器按标记搜索核验）——不会变红的测试套件证明不了任何事。",
+  "Agents/selfcheck.py 必须含一个必须失败的金丝雀用例并带 canary 标记；selfcheck 运行时必须真实执行该金丝雀并观察到其失败，并在输出末尾打印一行机器可读结果：CANARY: expected-FAIL observed-FAIL（编排器解析此行核验——缺失或 observed-PASS 视为套件无效）——不会变红的测试套件证明不了任何事。",
   "核查上一轮推送在 remote 上的 CI：GitHub remote 且 gh 可用时用 gh run list / gh run view；不可核查则如实写\"无法核查\"，绝不默认通过；失败项列入本轮必修。",
   "独立性绝对：绝不修改被测实现。你只写 Agents/selfcheck.py、鲁棒性用例，以及 Agents/requirement_map.md（要求↔实现位置↔可重跑验证命令，表格式并带 requirement-map 标记）的验证列。",
   "破坏性操作判据（与申报义务对齐）：超出批准清单的——数据文件或整目录消失、baseline 之下的历史被改写、force push、既有产物被覆盖——标 blocker 并索要申报与裁决记录；正常重构中的源文件删除不属破坏性操作，但须在提交信息或文档中可追溯；对第三方仓库的 clone，上游只读——推送仍只去约定 remote、绝不 push 上游，收尾前以 git 输出核实上游 refs 原样。",
@@ -638,6 +638,8 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   let verdict: TestVerdict = { summary: "未开始", passed: false, findings: [] , coverage: "未开始：尚未评审" };
   let gate = "";
   let canary = false;
+  let canaryRun = false;
+  let fullSelfOut = "";
   let mapOk = false;
   let findingsCount = 0;
   let rebuttedCount = 0;
@@ -682,6 +684,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
           ? await world.run("python3", ["Agents/selfcheck.py"], { timeoutMs: 3600000 })
           : await world.run("python", ["Agents/selfcheck.py"], { timeoutMs: 3600000 });
         exitCode = r.exitCode;
+        fullSelfOut = r.stdout || "";
         output = (r.stderr || r.stdout || "(no output)").slice(0, 1500);
         if (!interpIsPy3 && (exitCode === 9009 || exitCode === 127 || (exitCode !== 0 && /Python was not found|command not found/i.test(output)))) {
           throw new Error("py-launcher-stub"); // Windows Store python 别名：spawn 成功但解释器不存在——按启动失败走 python3 回退
@@ -692,6 +695,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
           try {
             const r = await world.run("python3", ["Agents/selfcheck.py"], { timeoutMs: 3600000 });
             exitCode = r.exitCode;
+            fullSelfOut = r.stdout || "";
             output = (r.stderr || r.stdout || "(no output)").slice(0, 1500);
           } catch {
             output = e instanceof Error && e.message === "py-launcher-stub" ? "python 为启动器 stub 且 python3 不可用——环境缺 Python 解释器" : "python 与 python3 均无法启动 Agents/selfcheck.py";
@@ -703,6 +707,8 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     } else {
       output = "Agents/selfcheck.py 缺少 canary 标记（必须失败的金丝雀用例）";
     }
+    canaryRun = /CANARY:\s*expected-FAIL\W*observed-FAIL/i.test(fullSelfOut);
+    if (canary && !canaryRun) log("门禁拦截：selfcheck 未报告 canary 执行结果（缺 CANARY: expected-FAIL observed-FAIL 行）——金丝雀必须真实运行并观察到失败");
     // 机械核查：每条已批准的危险操作必须申报、有裁决、按批准写法执行（三段对得上才算过）；执行写法必须与批准写法逐字一致，转述不算执行一致
     let dangerConsistent = dangerTrail.every((e) => e.executed !== "待执行确认" && !e.executed.startsWith("未确认") && approvedDanger.includes(e.executed));
     if (!dangerConsistent && dangerTrail.some((e) => e.executed.startsWith("未确认"))) {
@@ -718,7 +724,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     }
     if (!commitOk) log("门禁拦截：本轮提交未落地（commitOk=false）——按未过处理");
     if (verdict.passed && (verdict.findings || []).length > 0) log("门禁拦截：测试员 passed=true 但仍带 " + (verdict.findings || []).length + " 条 findings——按未过处理");
-    const mechGreen = verdict.passed && exitCode === 0 && canary && mapOk && dangerConsistent && commitOk && (verdict.findings || []).length === 0;
+    const mechGreen = verdict.passed && exitCode === 0 && canary && canaryRun && mapOk && dangerConsistent && commitOk && (verdict.findings || []).length === 0;
     // 图像产物检测（机械）：测试员申报的产物 ∪ diff 中新增/修改的图片 ∪ 工作树未跟踪的图片——有图就必须有人真的看一眼
     const isImg = (p: string): boolean => /\.(png|jpe?g|svg|webp|gif)$/i.test(p);
     imageFiles = (verdict.artifacts || []).filter((p) => isImg(p));
@@ -758,14 +764,14 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       break;
     }
     if (attempt === 10) {
-      gate = (!commitOk ? "提交未落地；" : "") + (verdict.passed ? ((verdict.findings || []).length > 0 ? "passed 但带 findings；" : "") : "测试未过；") + (canary ? "" : "缺 canary；") + (mapOk ? "" : "要求映射表缺失；") + (dangerConsistent ? "" : "危险操作申报-裁决-执行不一致；") + (visualOk ? "" : "视觉审阅未过；") + (exitCode === 0 ? "" : "selfcheck exit " + exitCode);
+      gate = (!commitOk ? "提交未落地；" : "") + (verdict.passed ? ((verdict.findings || []).length > 0 ? "passed 但带 findings；" : "") : "测试未过；") + (canary ? "" : "缺 canary；") + ((canary && !canaryRun) ? "canary 未报告执行结果；" : "") + (mapOk ? "" : "要求映射表缺失；") + (dangerConsistent ? "" : "危险操作申报-裁决-执行不一致；") + (visualOk ? "" : "视觉审阅未过；") + (exitCode === 0 ? "" : "selfcheck exit " + exitCode);
       break;
     }
     if ((verdict.findings || []).length === 0) {
       // 纯机械项失败（无问题清单）：Agents/selfcheck.py 与映射表是测试工程师的设施，发回其所有者补齐——不占工程师生级通道
       lastFix = null;
       await tester.ask<string>(
-        "机械门禁未达标（canary=" + (canary ? "有" : "无") + "；requirement_map=" + (mapOk ? "有效" : "缺失") + "；selfcheck exit=" + (canary ? exitCode : "未运行") + "），而你的 verdict 没有问题清单。Agents/selfcheck.py 与 requirement_map.md 归你所有：补齐或修复它们，改动 git add -A && git commit --amend --no-edit 并入本轮提交；若 selfcheck 暴露的是实现缺陷，在下一次 verdict 中作为问题提出（附复现证据）。返回一句话。",
+        "机械门禁未达标（canary=" + (canary ? (canaryRun ? "有（已报告）" : "有（缺 CANARY 行）") : "无") + "；requirement_map=" + (mapOk ? "有效" : "缺失") + "；selfcheck exit=" + (canary ? exitCode : "未运行") + "），而你的 verdict 没有问题清单。Agents/selfcheck.py 与 requirement_map.md 归你所有：补齐或修复它们，改动 git add -A && git commit --amend --no-edit 并入本轮提交；若 selfcheck 暴露的是实现缺陷，在下一次 verdict 中作为问题提出（附复现证据）。返回一句话。",
       );
       headA = await HEAD0();
       continue;
@@ -778,7 +784,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     const fix = await fixer.ask<FixOutcome>(
       (juniorAsk ? "" : "【升级】初级工程师已 3 次迭代未解决以下问题。你是高级工程师（强模型档）：先定位根因，一次修对，同样 amend 并入本轮提交。\n") +
       "第 " + attempt + " 次门禁未过：" + (verdict.passed ? "（自检通过但 selfcheck/映射表未达标）" : JSON.stringify(verdict.findings)) +
-      "\n机械状态：canary=" + (canary ? "有" : "无") + "；requirement_map=" + (mapOk ? "有效" : "缺失") + "；危险操作三段一致=" + (dangerConsistent ? "是" : "否") + "；selfcheck exit=" + (canary ? exitCode : "未运行") +
+      "\n机械状态：canary=" + (canary ? (canaryRun ? "有（已报告）" : "有（缺 CANARY 行）") : "无") + "；requirement_map=" + (mapOk ? "有效" : "缺失") + "；危险操作三段一致=" + (dangerConsistent ? "是" : "否") + "；selfcheck exit=" + (canary ? exitCode : "未运行") +
       (imageFiles.length > 0 ? "；图像产物：" + imageFiles.join("、") + "；视觉审阅=" + (visualOk ? "通过" : "未通过——" + visualNote) : "") +
       "\n输出摘录：\n" + output +
       "\n先逐条复现：确认→修复；误诊→证据反驳（FixOutcome.rebutted）；过期条目（引用旧版本行号、已被修复、在本轮代码上复现不了）直接丢弃并在反驳中注明「过期」，绝不据此改代码。然后 git add -A && git commit --amend --no-edit 并入本轮提交。绝不改写 baseline 之下的历史。",
@@ -929,9 +935,41 @@ phase("最终简报");
 const interruptNote = finalVerdict
   ? "【本次运行已打断】现状：" + finalVerdict.state + "；待老板决策点：" + finalVerdict.decisionList.join("；") + "。逐条对账是内部事务：已完成/未完成的每一条写进账本与 Agents/requirement_map.md 的对账标注，不得省略；老板看到的文档保持简报形态（解释开头、待决策、建议选项），不在老板文档里对账。verdict 必须填 interrupted。"
   : "";
+// 要求映射覆盖机械核查（"没有条目的要求不算完成"的机械版；仅未打断时运行）：requirements.md 的每个 Rn 必须在 requirement_map.md 留有对账条目（词边界匹配，防 R1 误匹配 R10）
+let mapGap = "";
+if (!interrupted) {
+  let mapTextF = "";
+  try {
+    mapTextF = await files.read("Agents/requirement_map.md");
+  } catch {
+    mapTextF = "";
+  }
+  let reqTextF = "";
+  try {
+    reqTextF = await files.read("Agents/requirements.md");
+  } catch {
+    reqTextF = "";
+  }
+  const rnAllF = Array.from(new Set(reqTextF.match(/\bR\d+\b/g) || [])).sort();
+  const hasEntryF = (rn: string): boolean => new RegExp("\\b" + rn + "\\b").test(mapTextF);
+  const rnMissingF = rnAllF.filter((rn) => !hasEntryF(rn));
+  if (rnMissingF.length > 0) {
+    await chief.ask<string>(
+      "要求映射覆盖核查未过：Agents/requirement_map.md 缺少以下要求的对账条目：" + rnMissingF.join("、") + "——没有条目的要求不算完成。逐条补映射（要求↔实现位置↔可重跑验证命令）；已放弃/不适用的要求在台账记明原因并在映射表标注处置，git add -A && git commit，返回一句话。",
+    );
+    try {
+      mapTextF = await files.read("Agents/requirement_map.md");
+    } catch {
+      mapTextF = "";
+    }
+    const stillF = rnAllF.filter((rn) => !hasEntryF(rn));
+    mapGap = stillF.length === 0 ? "" : "【机械核查未过】Agents/requirement_map.md 仍缺以下要求的对账条目：" + stillF.join("、") + "——最终简报必须如实披露这些要求的未完成/放弃状态，绝不静默。\n";
+    log(mapGap === "" ? "要求映射覆盖：补齐后通过" : "要求映射覆盖仍缺 " + stillF.length + " 条——已如实记录，将在最终简报问句中要求披露");
+  }
+}
 let reported = await chief.ask<FinalReport>(
     (closingBossNote !== "" ? "【老板反馈（收尾时重读 LoopMail/FromBoss.md）】以下为老板运行中写入、尚无轮次可落实的指令——逐条处置或在邮件「待老板决策」节列明，绝不静默：\n" + closingBossNote + "\n" : "") +
-    interruptNote + (interrupted ? "" : roundsTotal + " 轮硬停（或提前完工）。") +
+    mapGap + interruptNote + (interrupted ? "" : roundsTotal + " 轮硬停（或提前完工）。") +
     "以 Agents/requirements.md 与账本为唯一依据，把《最终简报》作为一封新邮件追加到 LoopMail/ToBoss.md 头部（2026-11-05 老板邮件化体系：ToBoss.md＝总工交付邮件正本，新邮件插头部、倒序追加、旧邮件永不删改；docs/＝正式内容如 REPORT.ipynb 与论文本体；正式文件在邮件中以相对链接作附件引用）。老板要的是简报，不是对账（2026-11-05 老板规则）：对账（要求逐条→结果→证据，requirementOutcomes 如实填写，没有条目的要求不算完成）是你的内部事务，只进 Agents/requirement_map.md 与台账（不动测试工程师的验证列），绝不以对账表形式出现在老板邮件正文。邮件写作纪律（2026-11-05 老板原话，硬性）：去冗余的艺术——最少的汇报、最快让老板把握主线和全貌；禁止堆砌黑话（行话首次出现用白话括注）；禁止与事实不符（数字与结论只引用命令输出与产物 manifest）；禁止堆砌代码段与路径指引（证据指针集中一节列，正文不堆路径）。邮件正文=让老板一眼判断产出是不是所要的东西，九节固定：① 一段话进展与结论（做了什么、结果如何、达到老板要求没有；summary 字段）；② 交付清单（deliverables：每个交付物一句话——是什么＋对应老板哪句要求（引用原话 ≤15 字）＋附件链接；历史 AI 文档中值得采纳且有意义的内容在此合并表述）；③ 最终状态（提交/推送/测试/已知局限）；④ 与老板要求相悖的偏离逐条说明（deviations）；⑤ 待老板决策清单（decisionList）；⑥ 待答问题逐条（questionAnswers：问题原文→直接答案→证据位置；问「存在哪」时连形态一起答——是 raw 还是派生格式、有没有写出器）；⑦ 自主决定清单（autonomousDecisions：决定→理由→若否决的后果→奥卡姆自评「增加复杂度还是删减」；凡增加复杂度的决定必须进这一节，不能只写账本）；⑧ 遗留与否决固定小节（deferred/declined，各带理由——记录在案的延后是决策而非遗漏，被否决的想法不得下轮重新提案；deferred/declined/processLessons 字段如实填写，无则空数组）；⑨ 流程教训（每条=规则+为什么+适用范围；老板采纳的教训持久化并随下次运行加载，被证伪的教训标记废弃、不与新教训并存；加载时先对照当前仓库核实仍适用）+一句建议。邮件是决策层文档：不写过程流水账（第几次门禁通过、反驳几次、返修几轮——那些在账本）、每节开头一句结论、同一条要求只说一次、以 ≤2 页为目标。收尾清理（2026-11-05 老板规则，硬性；先全仓盘点历史冗余——包括此前各轮与各次运行遗留的——再动手，不只整理本轮产物）：① 凡非最终产出需要的代码与文档（实验脚本、被替换的实现版本、草稿与中间报告等历史冗余，包括代码和文档）→ 直接 git mv 进 Agents/；② AI 生成且已成历史的文档 → 只把值得采纳且有意义的内容并入 ToBoss 最新邮件的交付清单表述，文档本体算作历史冗余 git mv 进 Agents/；③ docs/ 只保留正式内容（老板原话提及的交付物本体），仓库根与 docs/ 不堆工作文件；④ LoopMail/FromBoss.md（老板写入）原样保留、绝不改动老板写下的内容；⑤ LoopMail/ 下异于 ToBoss.md/FromBoss.md 的文件逐一判定归属——老板放置的文件名加前缀 FromBoss_ 并原样保留，agent 自己散落的按①②归位，拿不准的一律按老板放置处理；全程绝不删除文件。git add -A && git commit，返回 FinalReport。",
 );
 // 疑问句防蒸发（机械）：老板原话含疑问而汇报没有答案即视为漏需求——补答一次，仍缺则如实记录
