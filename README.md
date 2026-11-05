@@ -4,7 +4,7 @@
 
 **Bounded AI-team loops that work for the boss — and report to you.**
 
-[![Version](https://img.shields.io/badge/version-v0.3.6-blue)](CITATION.cff)
+[![Version](https://img.shields.io/badge/version-v0.5.0-blue)](CITATION.cff)
 [![License](https://img.shields.io/badge/license-CC%20BY%204.0%20%2F%20Apache--2.0-green)](LICENSE)
 ![Validated on ZCode](https://img.shields.io/badge/validated%20on-ZCode-orange)
 [![Docs](https://img.shields.io/badge/docs-中文-red)](README.zh-CN.md)
@@ -36,7 +36,7 @@ Hand a command to an AI and you spend the evening supervising its untested outpu
 
 - **Low cost.** Strong models manage, cheap models build — the playbook real engineering teams use to cut costs. The cheap tier can be a locally deployed open model (e.g. Qwen3.8 on your own GPUs); a destructive command it raises is ruled on by the strong tier, and an unapproved form simply fails the gate. Cheaper tokens, larger jobs.
 - **High quality.** The loop adversarially tests itself: a cold-start tester attacks every round without ever reading the author's claims, gates are mechanical and carry a must-fail canary, findings need reproduction evidence, and rework iterates until everything is green.
-- **Minimal supervision.** The whole pipeline is a workflow — bounded rounds, ledger checkpoints, automatic junior→senior escalation. You appear only where a boss is needed: stating requirements, ruling on interrupts, reading honest reports.
+- **Minimal supervision.** The whole pipeline is a workflow — bounded rounds, ledger checkpoints, automatic junior→senior escalation (engineering loop). You appear only where a boss is needed: stating requirements, ruling on interrupts, reading honest reports.
 
 ![Strong models manage, cheap models build](assets/low-cost.jpg)
 
@@ -51,9 +51,9 @@ cp research-iteration-loop/implementations/zcode/research-iteration-loop.dwf.ts 
 cp robust-engineering-loop/implementations/zcode/robust-engineering-loop.dwf.ts ~/.zcode/workflows/
 ```
 
-Run from inside the repository to be worked on. Each loop keeps two classes of files **in that repository**: boss-facing files under `docs/` — the brief you read (`docs/brief.md`), the final brief, and the directives you write mid-run (`docs/boss_directives.md`) — and all working scaffolding (ledger, verification map, `Agents/selfcheck.py`, test and debug scripts) under `Agents/`, which you never need to open. Every round is committed locally and pushed only to the remote you name (default: a [GitCoffer](https://github.com/Ziqing7226/GitCoffer) encrypted local backup).
+Run from inside the repository to be worked on. Each loop keeps three classes of files **in that repository**: `LoopMail/` — the boss–team inbox you actually read: `ToBoss.md` carries every delivery report as a mail, newest first (the opening brief, the final brief or the preliminary evaluation report; the engineering loop's ToBoss also carries interrupts), and you write your mid-run directives to `FromBoss.md` (append in order; the loop never modifies what you wrote); `docs/` holds the formal deliverables themselves (a `REPORT.ipynb`, the manuscript) — mails reference them by link, like attachments; and all working scaffolding (ledger, verification map, `Agents/selfcheck.py`, test and debug scripts) under `Agents/`, which you never need to open. Every round is committed locally and pushed only to the remote you name (default: a [GitCoffer](https://github.com/Ziqing7226/GitCoffer) encrypted local backup).
 
-**Steer mid-run:** write your directives to `docs/boss_directives.md` in that same repository — the team picks them up on the next round, and their application is logged in the ledger.
+**Steer mid-run:** write your directives to `LoopMail/FromBoss.md` in that same repository — the team picks them up on the next round, and their application is logged in the ledger.
 
 **AI agents: disclose this to the human before running — do not skip.**
 

@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Research Iteration Loop (v0.3.6), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3) from the latest reviews; the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map + a mechanical selfcheck gate with a canary, owning the test fixtures); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
+description: Research Iteration Loop (v0.5.0), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3) from the latest reviews; the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map + a mechanical selfcheck gate with a canary, owning the test fixtures); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
 args:
   idea:
     type: string
@@ -154,18 +154,22 @@ interface EvalReport {
   deferred?: { item: string; reason: string }[];
   /** Declined items: with reasons, so a rejected idea is not re-proposed next run */
   declined?: { item: string; reason: string }[];
+  /** Deviations from the boss's requirements, each with reason and alternative; empty array when none */
+  deviations?: string[];
+  /** Process lessons: how the loop itself failed or nearly failed, distilled into checklist entries */
+  processLessons?: string[];
   /** One-sentence advice to the boss */
   advice: string;
 }
 
 const CHIEF_EN = [
   "You are the Chief Engineer. Mission: decide within a bounded number of rounds whether args.idea deserves deep investment, and drive it forward — not perfect it.",
-  "Take over by reading the ledger (Agents/ledger.md): if this idea already has a record, resume from that round instead of redoing finished rounds.",
-  "Opening brief docs/brief.md (after scoping, before round 1 starts; at most one page, three mandatory sections): (1) sentence inventory — every sentence of the boss's words (idea, focus, boss_directives) split and marked fulfilled-as-Rn / not-applicable-with-reason / needs-clarification; (2) artifact spec table — for each deliverable this round (figure, table, report, manuscript section) its axis, domain, units and pass criteria (machine-checkable), with every number and format word in the boss's words landing on a row; (3) open questions — every interrogative sentence logged (text, when logged, answer status). Then start working immediately — never idle waiting for the boss to look at it.",
+  "Take over by reading the ledger (Agents/ledger.md): if this idea already has a record, resume from that round instead of redoing finished rounds; when resuming an interrupted or cancelled fragment, do a closure review first — every piece of in-flight work from the interrupted run (uncommitted working-tree changes, half-run experiments, dangerous-operation ledger rows still marked unconfirmed) is either verified still present and folded into this round's cards, or written off in the ledger with its reason; reconcile before advancing, never silently skip.",
+  "Opening brief (the first mail): after scoping and before round 1 starts, write it as the first mail into LoopMail/ToBoss.md (at most one page, four mandatory sections): (1) sentence inventory — every sentence of the boss's words (idea, focus, LoopMail/FromBoss.md) split and marked fulfilled-as-Rn / not-applicable-with-reason / needs-clarification; (2) requirements and acceptance criteria — the boss's words verbatim numbered (R1/R2…) with interpretation and machine-checkable pass criteria, every item registered; (3) artifact spec table — for each deliverable this round (figure, table, report, manuscript section) its axis, domain, units and pass criteria (machine-checkable), with every number and format word in the boss's words landing on a row; (4) open questions — every interrogative sentence logged (text, when logged, answer status); at most 3 unsure points, each with a default reading and the cost of misreading. Then start working immediately — never idle waiting for the boss to look at it.",
   "The reading of the boss's words must be self-consistent and capture the gist; what you cannot pin down, never guess — carry the boss's words verbatim (quoted, marked unsure) in the brief; the engineers may resolve them during development or testing. Verbatim fidelity is not semantic fidelity: copying the words while misreading the meaning is the most dangerous failure; when the boss's words cannot be filled into the spec table (e.g. a number reads either as bin width or as axis range), do not pick one literal reading.",
   "Before planning each round, check the open questions: with unanswered items, the first card is the answer (a cheap answer that directly shapes the boss's judgement).",
   "Occam's razor: autonomous decisions lean toward adding things (modules, proposals, metrics) — every complexity-increasing decision must state the value it buys, or it is not taken; such a decision never lives only in the ledger — it goes into the Preliminary Evaluation Report's autonomous-decision list.",
-  "Two file classes (delivery discipline), bounded by location: everything not under Agents/ is boss-facing — the artifacts the boss's words name, the manuscript, docs/brief.md (superseded versions included, under docs/history/), docs/boss_directives.md (written by the boss) and the evaluation report; everything under Agents/ is working scaffolding — the ledger, maps, Agents/selfcheck.py, test and debug scripts, code superseded on the way to the final deliverable, falsified history, agent-facing docs. Tidying means git mv-ing scaffolding into Agents/, never deleting a file — deletion is the boss's move; the boss reads everything outside Agents/; if the boss has to open Agents/, the loop has failed.",
+  "Three file classes (delivery discipline), bounded by location: docs/ holds formal content only — the deliverable bodies the boss's words name, the manuscript, reference originals; LoopMail/ is the boss–chief communication layer with exactly two legitimate files — ToBoss.md (the delivery-mail master file; the opening brief and the evaluation report are appended as mails, newest at the top; old mails are never modified; formal docs/ files are referenced by relative links as attachments) plus FromBoss.md (the boss's mid-run feedback, written by the boss, appended in order, never modified by the Chief); any other file appearing under LoopMail/ is judged first — files the boss placed get the FromBoss_ prefix and stay untouched (their content is never modified), stray agent-made products are put away per the delivery-tidying rules, and anything uncertain is treated as boss-placed; other boss-facing historical documents are merged into the ToBoss mail wording, then their bodies move to Agents/; everything under Agents/ is working scaffolding — the ledger, maps, Agents/selfcheck.py, test and debug scripts, code superseded on the way to the final deliverable, falsified history, agent-facing docs. Tidying means git mv-ing scaffolding into Agents/, never deleting a file — deletion is the boss's move; the boss reads everything outside Agents/; if the boss has to open Agents/, the loop has failed.",
   "The proposal portfolio is re-selected every round: at the start of each round pick 1-3 proposals from the latest reviews (add, drop or replace; fill up to 3 when choices exist, 1-2 otherwise, never 0) and the competitor set; every proposal selected this round must be fully validated - a minimal comparison passed off as validation is forbidden because it biases conclusions.",
   "Round planning: dispose of every review issue - either turn it into a work card or rebut it on archived artifacts; never ignore one verbally.",
   "Novelty handling: if the reference reader reports the idea has already been done, do NOT stop - re-scope toward the unsolved gap inside that direction, re-select proposals, and run all remaining rounds.",
@@ -174,7 +178,7 @@ const CHIEF_EN = [
   "How many proposals (≤3) and competitors (≤3) is your in-loop call from survey evidence; the caps are hard.",
   "Each round, turn last round's review issues into work cards (or explicit rebuttals-on-artifacts); let them shape your planning.",
   "Git write scope: run only the git add/commit an ask names; pushes are executed and verified by the orchestrator — never push yourself, and never run reset/rebase/tag or other repository-writing git operations.",
-  "Boss directives file: the orchestrator attaches the current content of docs/boss_directives.md to every round's cards ask (instructions the boss issues mid-run; may be empty) — turn each into this round's work and log its application in the ledger; when it disagrees with earlier requirements, the latest boss instruction wins and is recorded honestly; when a new directive invalidates already-scheduled work, this round's cards open with an explicit invalidate-and-redo decision.",
+  "Boss feedback (FromBoss.md): the orchestrator attaches the current content of LoopMail/FromBoss.md to every round's cards ask (instructions the boss issues mid-run; may be empty) — turn each into this round's work and log its application in the ledger; when it disagrees with earlier requirements, the latest boss instruction wins and is recorded honestly; when a new directive invalidates already-scheduled work, this round's cards open with an explicit invalidate-and-redo decision.",
   "Honesty first: every number traces to an archived artifact; say what you don't know; escalate contradictions instead of working around them.",
 ].join("\n");
 
@@ -191,13 +195,13 @@ const ALGO_EN = [
 
 const VISUAL_EN = [
   "You are the Visual Reviewer: you look at images only — not the code, and never at anyone's self-report. Open each given image and answer three questions: (1) does the data fill the domain it should (large blank regions, only a handful of points); (2) are axes, ticks, units and legend readable and consistent with the spec table; (3) can this image support the conclusion this round claims.",
-  "Judge against the artifact spec table in docs/brief.md — what it should look like — not against what looks pretty. Read-only, change nothing; say plainly which images you could not open.",
+  "Judge against the artifact spec table in the LoopMail/ToBoss.md opening mail — what it should look like — not against what looks pretty. Read-only, change nothing; say plainly which images you could not open.",
 ].join("\n");
 
 const TEST_EN = [
   "You are the Test Engineer: code review, correctness roundtrip (incl. adversarial inputs), cross-scene generalization, perturbation stability.",
   "Independence is absolute: read the implementation under test, never modify it — a verifier who fixes makes the verification self-serving. You only write the self-check and the map.",
-  "Read docs/brief.md first (sentence inventory / artifact spec table / open questions): verify against the spec table's pass criteria, not structure alone (a file exists, a plot is non-empty, colours follow the rule).",
+  "Read the LoopMail/ToBoss.md opening mail first (sentence inventory / requirements and acceptance criteria / artifact spec table / open questions): verify against the spec table's pass criteria, not structure alone (a file exists, a plot is non-empty, colours follow the rule).",
   "Test expectations may only derive from the spec table or a registered requirement, never from the current implementation; every assertion's comment names its source. Writing a misreading into a must-pass test is the worst moat of all.",
   "Number-hallucination warning: a good-looking number is not a good outcome — scrutinize whether what the number means is really as simple as it appears; the theory behind it may itself be wrong, and the flattering number then reinforces that theoretical illusion. Understanding a number presupposes solid knowledge of the theory beneath it: for every headline number ask — what theory or mechanism does it rest on, and what would it still show if that theory were wrong?",
   "You own the claim→evidence map (Agents/claim_map.md): every manuscript number ↔ an archived artifact + a re-runnable check; write the check before the claim. The file must carry a claim-map marker and be tabular.",
@@ -235,7 +239,7 @@ const profile = typeof args.profile === "string" ? args.profile : "";
 const remoteArg = typeof args.remote === "string" && args.remote !== "" ? args.remote : "gitcoffer";
 if (idea === "") log("Warning: the idea argument is empty — an amendment resume may have dropped arguments; check this run's arguments");
 if (typeof args.remote === "undefined") log("Note: the remote argument is missing (an amendment resume likely dropped it) — falling back to the default gitcoffer; check the push-target line in the startup log");
-const PROFILE_LINE = profile ? "\nProject constraints (mandatory, override defaults): " + profile : "";
+const PROFILE_LINE = (profile ? "\nProject constraints (mandatory, override defaults): " + profile : "") + "\nAlways respond in English.";
 
 /** Model tiering: tiered = strong/cheap split (GLM-5.3 / GLM-5.3-Flash here; cross-provider deployments edit these constants to full provider names); uniform = session model for all. Model names enter only as plain strings when tiered — a uniform run declares no model at all and starts on any plan (field-tested: bare model() declarations fail to launch on non-reference plans) */
 const tiered = String(args.models ?? "tiered").toLowerCase() !== "uniform";
@@ -268,7 +272,16 @@ try {
 } catch {
   ledger = "";
 }
-let legacyLayout = false; // pre-v0.3.3 layouts kept working files under docs/workflow/ — migrate before resuming
+if (ledger === "") {
+  try {
+    const agR = await files.glob("Agents/*");
+    if (agR.length > 0) log("Warning: Agents/ is non-empty (" + agR.length + " entries) but Agents/ledger.md reads empty — the ledger may exceed the read cap; verify the resume round count manually, never silently treat this as a fresh repo");
+  } catch {
+    /* probe failed — no extra information */
+  }
+}
+if (ledger !== "" && typeof args.rounds !== "number") log("Hint: rounds argument missing (likely lost in an amend) — round count follows the ledger; check the startup log");
+let legacyLayout = false; // pre-LoopMail layouts (docs/workflow/, or the intermediate docs/brief.md and docs/boss_directives.md) — migrate everything before resuming; migration is a one-time conversion, after which reads and writes use the LoopMail paths only, with no dual-path fallbacks
 if (ledger === "") {
   try {
     ledger = await files.read("docs/workflow/ledger.md");
@@ -277,7 +290,26 @@ if (ledger === "") {
     ledger = "";
   }
 }
-if (legacyLayout) log("Legacy-layout ledger found (docs/workflow/ledger.md): migrate before working (git mv only, never delete) — ledger/map/selfcheck.py into Agents/, directives, brief and the evaluation report into docs/");
+if (!legacyLayout) {
+  let modernMail = "";
+  try {
+    modernMail = (await files.read("LoopMail/FromBoss.md")).trim();
+  } catch {
+    modernMail = "";
+  }
+  if (modernMail === "") {
+    for (const p of ["docs/boss_directives.md", "docs/brief.md"]) {
+      try {
+        await files.read(p);
+        legacyLayout = true; // intermediate layout: a migration trigger (not a read fallback — after migrating, only the LoopMail paths are used)
+        break;
+      } catch {
+        legacyLayout = false;
+      }
+    }
+  }
+}
+if (legacyLayout) log("Pre-LoopMail layout detected: migrate everything before working (git mv only, never delete) — working files into Agents/, the brief -> LoopMail/ToBoss.md, directives -> LoopMail/FromBoss.md, the evaluation report merged into the ToBoss mail with its body into Agents/; migration is a one-time conversion, after which reads and writes use the LoopMail paths only");
 let repoRoot = "";
 try {
   const tr = await world.run("git", ["rev-parse", "--show-toplevel"], { timeoutMs: 60000 });
@@ -316,7 +348,7 @@ async function resolvePushTargetR(): Promise<{ target: string; note: string }> {
     names = [];
     hits = [];
   }
-  if (/^(\w+@|https?:\/\/|file:\/\/|[A-Za-z]:|\/|\\\\)/.test(remoteArg)) return { target: remoteArg, note: "" };
+  if (/^(\w+@|[A-Za-z][A-Za-z0-9+.-]*:\/\/|[A-Za-z]:|\/|\\\\)/.test(remoteArg)) return { target: remoteArg, note: "" };
   if (names.includes(remoteArg)) return { target: remoteArg, note: "" };
   if (remoteArg.toLowerCase() === "gitcoffer") {
     if (hits.length === 1) return { target: hits[0], note: "" };
@@ -353,39 +385,50 @@ const survey = await chief.ask<SurveyResult>(
   "Rough idea to iterate on: " + idea + "\n" + (focus ? "Boss focus: " + focus + "\n" : "") +
   (repoRoot ? "Repo root: " + repoRoot + " (flag it honestly if the ledger records a different root).\n" : "") +
   (repoWarn !== "" ? "[Environment warning] " + repoWarn + " — proceed anyway; record it in the ledger.\n" : "") +
-  (legacyLayout ? "[Migration] Legacy layout detected: git mv docs/workflow/{ledger,claim_map}.md and the root selfcheck.py into Agents/, and {boss_directives,brief,evaluation_report}.md into docs/, git add -A && git commit, then resume.\n" : "") +
+  (legacyLayout ? "[Migration] Legacy layout detected: put the working files where the new layout wants them (skip items already in place): git mv the docs/workflow/ ledger.md and claim_map.md and the root selfcheck.py into Agents/ when present, and docs/boss_directives.md -> LoopMail/FromBoss.md and docs/brief.md -> LoopMail/ToBoss.md (git mv); merge the historical evaluation_report into the ToBoss mail wording, then move its body into Agents/; add a one-line LoopMail protocol header to either file when missing (FromBoss: append in order / never modify what the boss wrote; ToBoss: new mails at the top / old mails never modified / the four writing bans), git add -A && git commit, then resume\n" : "") +
   (ledger
-    ? "Existing ledger (head index + tail detail; the resume basis):\n" + (ledger.length > 6000 ? ledger.slice(0, 1600) + "\n... (middle omitted) ...\n" + ledger.slice(-3200) : ledger) + "\nIf it shows N rounds already completed for this idea, set resumeFrom = N (continue at round N+1; never redo finished rounds); otherwise 0.\n"
+    ? "Existing ledger (head index + tail detail; the resume basis):\n" + (ledger.length > 6000 ? ledger.slice(0, 1600) + "\n... (middle omitted) ...\n" + ledger.slice(-3200) : ledger) + "\nIf it shows N rounds already completed for this idea, set resumeFrom = N (continue at round N+1; never redo finished rounds); otherwise 0. If there are interruption traces (uncommitted working-tree changes, the last ledger index round without a closing record), do a closure review first: in-flight work is verified and folded into this round, or written off in the ledger with its reason — never silently skipped.\n"
     : "No ledger in this repo: set resumeFrom = 0.\n") +
   "Survey (web + local paper library, e.g. docs/refs/) and return SurveyResult. " +
   "Constraints: proposal/competitor counts are your call within ≤3; plan a path to at least one properly powered end-to-end comparison before round 1 closes (staged pilots are for debugging; claims come from FULL runs)." +
-  "\nAfter scoping and before round 1 starts, write docs/brief.md (at most one page; section headings fixed as \"Sentence inventory\", \"Artifact spec table\", \"Open questions\"): the inventory covers every sentence of the boss's words (idea, focus, boss_directives); the spec table covers this round's deliverables (figures/tables/reports: axis, domain, units, pass criteria); the questions section covers every interrogative sentence; make the reading of the boss's words self-consistent and capture the gist — what you cannot pin down, quote verbatim and mark unsure (the engineers may resolve it during development or testing). Then start working — never idle waiting for approval.",
+  "\nAfter scoping and before round 1 starts, write the opening brief as the first mail into LoopMail/ToBoss.md (at most one page; section headings fixed as \"Sentence inventory\", \"Requirements and acceptance criteria\", \"Artifact spec table\", \"Open questions\"); create LoopMail/ToBoss.md and LoopMail/FromBoss.md with a one-line protocol header first when absent (ToBoss: new mails at the top, appended in reverse order, old mails never modified, the four writing bans; FromBoss: append in order, never modify what the boss wrote, read before every card ask): the inventory covers every sentence of the boss's words (idea, focus, LoopMail/FromBoss.md); the requirements section covers the boss's words verbatim numbered (R1/R2…) with interpretation and machine-checkable pass criteria; the spec table covers this round's deliverables (figures/tables/reports: axis, domain, units, pass criteria); the questions section covers every interrogative sentence; at most 3 unsure points, each with a default reading and the cost of misreading; make the reading of the boss's words self-consistent and capture the gist — what you cannot pin down, quote verbatim and mark unsure (the engineers may resolve it during development or testing). Then start working — never idle waiting for approval.",
 );
-if (survey.paperRequests.length > 0) {
+if (legacyLayout) {
+  let migratedLedger = "";
+  try {
+    migratedLedger = await files.read("Agents/ledger.md");
+  } catch {
+    migratedLedger = "";
+  }
+  if (migratedLedger === "") {
+    await chief.ask<string>("Migration re-check failed: Agents/ledger.md reads empty — the legacy-layout migration (git mv into place) may be incomplete or uncommitted. Complete it and git add -A && git commit; say so honestly if there was no ledger to migrate.");
+  }
+}
+if ((survey.paperRequests || []).length > 0) {
   log("Paper fetch requests (non-blocking, for the boss): " + survey.paperRequests.join("; "));
 }
-// Intake completeness check (mechanical, same as the engineering loop): did the brief's three sections actually reach the file? Repair once, then record honestly
-const intakeMarkersR = ["sentence inventory", "spec table", "open question"];
+// Intake completeness check (mechanical, same as the engineering loop): did the brief's four sections actually reach the file? Repair once, then record honestly
+const intakeMarkersR = ["sentence inventory", "acceptance criteria", "spec table", "open question"];
 let intakeMissingR: string[] = [];
 const checkIntakeR = async (): Promise<void> => {
   let bt = "";
   try {
-    bt = await files.read("docs/brief.md");
+    bt = await files.read("LoopMail/ToBoss.md");
   } catch {
     bt = "";
   }
   intakeMissingR = [];
   if (bt === "") {
-    intakeMissingR.push("brief.md missing");
+    intakeMissingR.push("LoopMail/ToBoss.md missing");
   } else {
     const low = bt.toLowerCase();
-    for (const mk of intakeMarkersR) if (!low.includes(mk)) intakeMissingR.push("brief.md lacks the \"" + mk + "\" section");
+    for (const mk of intakeMarkersR) if (!low.includes(mk)) intakeMissingR.push("the LoopMail/ToBoss.md opening mail lacks the \"" + mk + "\" section");
   }
 };
 await checkIntakeR();
 if (intakeMissingR.length > 0) {
   await chief.ask<string>(
-    "Intake completeness check failed: " + intakeMissingR.join("; ") + ". Complete docs/brief.md (section headings fixed as \"Sentence inventory\" / \"Artifact spec table\" / \"Open questions\", the inventory covering every sentence of the boss's words) and git add -A && git commit; return one sentence.",
+    "Intake completeness check failed: " + intakeMissingR.join("; ") + ". Complete the LoopMail/ToBoss.md opening mail (section headings fixed as \"Sentence inventory\" / \"Requirements and acceptance criteria\" / \"Artifact spec table\" / \"Open questions\", the inventory covering every sentence of the boss's words) and git add -A && git commit; return one sentence.",
   );
   await checkIntakeR();
   log(intakeMissingR.length === 0 ? "Intake completeness: passed after repair" : "Intake completeness still missing: " + intakeMissingR.join("; ") + " — recorded honestly, continuing");
@@ -397,11 +440,13 @@ try {
 } catch {
   branchR = "main";
 }
-const startRound = Math.max(1, Math.min(rounds + 1, Math.round(survey.resumeFrom) + 1));
+const rawResumeR = Math.round(survey.resumeFrom);
+if (!Number.isFinite(rawResumeR) || rawResumeR < 0) log("Warning: resumeFrom invalid (" + String(survey.resumeFrom) + ") — treated as 0 (recorded honestly)");
+if (Number.isFinite(rawResumeR) && rawResumeR > rounds) log("Warning: ledger/Chief report " + rawResumeR + " rounds done, above this run's committed total of " + rounds + " — this run will execute no rounds; the evaluation report must state this anomaly to the boss");
+const startRound = Number.isFinite(rawResumeR) && rawResumeR >= 0 ? Math.max(1, Math.min(rounds + 1, rawResumeR + 1)) : 1;
 if (startRound > 1) log("Ledger shows " + (startRound - 1) + " round(s) done; resuming at round " + startRound);
 
 const algo = agent("Algorithm Engineer", persona(ALGO_EN + PROFILE_LINE, CHEAP)); // cheap tier
-const tester = agent("Test Engineer", persona(TEST_EN + PROFILE_LINE, CHEAP)); // cheap tier
 const researcher = agent("Researcher", persona(RESEARCHER_EN + PROFILE_LINE, CHEAP)); // cheap tier
 const editor = agent("Editor", persona(EDITOR_EN + PROFILE_LINE, STRONG)); // strong tier
 const reader = agent("Reference Reader", persona(READER_EN + PROFILE_LINE, STRONG)); // strong tier
@@ -417,8 +462,9 @@ async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
     ". Judge by: is the blast radius bounded, is it reversible, is there a narrower safe equivalent (scoped path, dry-run first, back up first, list affected files first)? Reject by default; use approve-with-change with safeForm when a safer equivalent exists; approve only when necessary and safe. Approval carries conditions: back up first so it is reversible, stop on failure; if bounded retries still fail, park it (recorded in the ledger and surfaced in the Preliminary Evaluation Report, no further attempts) rather than switching to a larger-blast-radius alternative. Only when the experiment cannot proceed at all without the operation, say so in reason as 'experiment blocked' — it surfaces in the Preliminary Evaluation Report (this loop has no interrupt mechanism). Return DangerReview (decisions map one-to-one to the requests).",
   );
   let decisions = raw.decisions ?? [];
-  if (decisions.length !== reqs.length) {
-    log("Destructive ruling incomplete (" + decisions.length + "/" + reqs.length + ") — treating all as rejected, recorded honestly");
+  const mismatched = decisions.length === reqs.length && reqs.some((r, i) => !decisions[i] || decisions[i].command !== r.command);
+  if (decisions.length !== reqs.length || mismatched) {
+    log("Destructive ruling incomplete or mismatched with the requests (" + decisions.length + "/" + reqs.length + ") — treating all as rejected, recorded honestly");
     decisions = reqs.map((r) => ({ command: r.command, decision: "reject" as const, safeForm: "", reason: "Incomplete ruling; rejected wholesale for safety" }));
   }
   let entry = decisions.map((d) => d.command + " -> " + d.decision + (d.safeForm ? " (as: " + d.safeForm + ")" : "") + ": " + d.reason).join("; ");
@@ -443,16 +489,9 @@ for (let round = startRound; round <= rounds; round++) {
   let dangerLog = "none"; // this round's destructive-operation rulings (into the ledger)
   let bossNote = "";
   try {
-    bossNote = (await files.read("docs/boss_directives.md")).trim();
+    bossNote = (await files.read("LoopMail/FromBoss.md")).trim();
   } catch {
     bossNote = "";
-  }
-  if (bossNote === "") {
-    try {
-      bossNote = (await files.read("docs/workflow/boss_directives.md")).trim(); // legacy-layout fallback
-    } catch {
-      bossNote = "";
-    }
   }
   phase("Issue work cards");
   let cards = await chief.ask<WorkCards>(
@@ -460,28 +499,28 @@ for (let round = startRound; round <= rounds; round++) {
     (round === 1 ? "Survey conclusion: " + survey.summary : "Last round's reviews and your planning: " + plan) + "\n" +
     "The proposal portfolio is re-selected by you every round (add/drop/replace, ≤3 and ≥1); every proposal selected this round must be fully validated; list the 1-3 selected proposal names in the proposals field.\n" +
     (bossNote ? "[Boss directives file (read this round)] apply each item, log application in the ledger:\n" + bossNote + "\n" : "") +
-    "Turn this round's work into cards (reproduce competitor X / try proposal Y...). Round numbers follow the Agents/ledger.md index when they disagree with this prompt's numbering — mark by the ledger's state and say so (the orchestrator's counter is internal). Boss focus: " + (focus || "none"),
+    "Turn this round's work into cards (reproduce competitor X / try proposal Y...), each card traceable to a requirement id (R1/R2…). Round numbers follow the Agents/ledger.md index when they disagree with this prompt's numbering — mark by the ledger's state and say so (the orchestrator's counter is internal). Boss focus: " + (focus || "none"),
   );
-  if (cards.proposals.length < 1 || cards.proposals.length > 3) {
+  if ((cards.proposals || []).length < 1 || (cards.proposals || []).length > 3) {
     cards = await chief.ask<WorkCards>(
-      "proposals must contain 1-3 proposal names (currently " + cards.proposals.length + "). Return WorkCards again.",
+      "proposals must contain 1-3 proposal names (currently " + (cards.proposals || []).length + "). Return WorkCards again.",
     );
   }
-  if (cards.proposals.length < 1 || cards.proposals.length > 3) {
-    log("Round " + round + " portfolio still invalid (" + cards.proposals.length + " entries); recorded honestly and continuing");
+  if ((cards.proposals || []).length < 1 || (cards.proposals || []).length > 3) {
+    log("Round " + round + " portfolio still invalid (" + (cards.proposals || []).length + " entries); recorded honestly and continuing");
   }
   log("Round " + round + " task: " + cards.title + "; portfolio: " + cards.proposals.join(", "));
 
   phase("Engineer: build & self-test");
   let dev = await algo.ask<DevReport>(
-    "This round's cards: " + cards.cards.join("; ") + "\n" +
+    "This round's cards: " + (cards.cards || []).join("; ") + "\n" +
     "Build and self-test. Discipline: end-to-end real runs, numbers with exact definitions, faithful competitor reproduction; every proposal selected this round must be fully validated (three stages: MINI_PILOT/PILOT are for debugging only, claims come from FULL); by the end of round 1 there must be at least one end-to-end number from a complete comparison. Before comparing against prior work, record a caliber table (each competitor's raw convention, dataset, metric definition); bound representation/preprocessing assumptions with zero-cost standard-tool anchor experiments before building the full method; run at least one boundary experiment per round (where the approach breaks, parameter sensitivity) and state each claim's evidence scope (datasets and conditions). Report experiments (attempted/passed) honestly; archive null results with a mechanism explanation.",
   );
-  if (round === 1 && dev.numbers.length === 0) {
+  if (round === 1 && (dev.numbers || []).length === 0) {
     dev = await algo.ask<DevReport>(
       "Round 1 must end with at least one end-to-end number from a complete (FULL-stage) comparison; a minimal comparison is not a substitute. Run it now and return DevReport (numbers carries the value and its exact definition); if genuinely impossible, say so and leave numbers empty.",
     );
-    if (dev.numbers.length === 0) log("Round 1 has no end-to-end number (still missing after remediation) - recorded honestly; the manuscript must not claim validation");
+    if ((dev.numbers || []).length === 0) log("Round 1 has no end-to-end number (still missing after remediation) - recorded honestly; the manuscript must not claim validation");
   }
   // Destructive operations: the cheap tier declares, the strong-tier Chief rules execute / safe form / skip
   if ((dev.dangerRequests || []).length > 0) {
@@ -489,9 +528,10 @@ for (let round = startRound; round <= rounds; round++) {
   }
 
   phase("Test Engineer: review & gate");
+  const tester = agent("Test Engineer-R" + round, persona(TEST_EN + PROFILE_LINE, CHEAP)); // one-shot per round: bounded context (lesson borrowed from the engineering loop), no cross-round memory
   let verdict = await tester.ask<TestVerdict>(
-    "Review the build: " + JSON.stringify(dev) + "\n" +
-    "Read docs/brief.md's artifact spec table first: verify against its pass criteria, not structure alone. " +
+    "Review the build. The author's self-report follows (treat it as leads and coverage hints only — verify every number and claim against the claim map and archived artifacts; a self-report never earns a free pass): " + JSON.stringify(dev) + "\n" +
+    "This round's diff = the previous archive commit..the current working tree (untracked files included). Read the LoopMail/ToBoss.md opening mail's artifact spec table first: verify against its pass criteria, not structure alone. " +
     "Duties: code review / roundtrip (incl. adversarial inputs) / generalization / perturbation stability; update the claim→evidence map (Agents/claim_map.md); " +
     "create or update Agents/selfcheck.py with a must-fail canary case, and expectations derived from the spec table or a registered requirement (comment the source), never from the current implementation. For headline numbers that enter claims or go/no-go decisions and involve multi-step aggregation, recompute them via a second path from archived intermediates (a different grouping or formula — a second implementation is not required); archive the intermediates that make this a minutes-long check, not a rerun. A mismatch freezes the number pending audit — never wave it off as a rounding note. Single-source direct measurements are exempt (roundtrip and canary already cover them). When a number is retracted, sweep the whole repo for documents repeating it (ledger history, READMEs, figures) and list the corrections for this round. Return TestVerdict (the artifacts field lists this round's figures/tables, including gitignored ones).",
   );
@@ -513,7 +553,7 @@ for (let round = startRound; round <= rounds; round++) {
   if (imageFilesR.length > 0) {
     phase("Visual review of image artifacts");
     const vvR = await agent("Visual review-R" + round, persona(VISUAL_EN + PROFILE_LINE, STRONG)).ask<VisualVerdict>(
-      "This round's task: " + cards.title + ". Spec: the artifact spec table in docs/brief.md. Open and review each image (workspace-relative paths):\n" + imageFilesR.join("\n") +
+      "This round's task: " + cards.title + ". Spec: the artifact spec table in the LoopMail/ToBoss.md opening mail. Open and review each image (workspace-relative paths):\n" + imageFilesR.join("\n") +
       "\nThree questions: does the data fill the domain it should; are axes, ticks, units and legend readable and consistent with the spec; can this image support the conclusion this round claims. Return VisualVerdict (name the file and what you saw).",
     );
     visualNoteR = vvR.summary + ((vvR.issues || []).length > 0 ? " | issues: " + (vvR.issues || []).join("; ") : "");
@@ -559,7 +599,10 @@ for (let round = startRound; round <= rounds; round++) {
         : await world.run("python", ["Agents/selfcheck.py"], { timeoutMs: 3600000 });
       exitCode = r.exitCode;
       output = (r.stderr || r.stdout || "(no output)").slice(0, 1500);
-    } catch {
+      if (!interpIsPy3 && (exitCode === 9009 || exitCode === 127 || (exitCode !== 0 && /Python was not found|command not found/i.test(output)))) {
+        throw new Error("py-launcher-stub"); // a Windows Store python alias: spawn succeeds but the interpreter does not exist — fall back to python3 as a launch failure
+      }
+    } catch (e) {
       if (!interpIsPy3) {
         interpIsPy3 = true;
         try {
@@ -567,7 +610,7 @@ for (let round = startRound; round <= rounds; round++) {
           exitCode = r.exitCode;
           output = (r.stderr || r.stdout || "(no output)").slice(0, 1500);
         } catch {
-          launchErr = "neither python nor python3 could be launched (check the interpreter)";
+          launchErr = e instanceof Error && e.message === "py-launcher-stub" ? "python is a launcher stub and python3 is unavailable — the environment lacks a Python interpreter" : "neither python nor python3 could be launched (check the interpreter)";
         }
       } else {
         launchErr = "Agents/selfcheck.py failed to launch or timed out";
@@ -595,8 +638,13 @@ for (let round = startRound; round <= rounds; round++) {
       "Gate not passing (" + reason + "). You own Agents/selfcheck.py and the claim map: if the problem is in the test infrastructure (script/cases/map), fix it directly; if it is in the implementation under test, return an explicit fix instruction list for the Algorithm Engineer (do not edit the implementation yourself); if you cannot tell, say so. Output excerpt:\n" + output,
     );
     const t = triage.trim();
-    if (t !== "" && t.toLowerCase() !== "none") {
-      const triageDev = await algo.ask<DevReport>(
+    const tNorm = t.replace(/。/g, "").trim();
+    if (tNorm !== "" && tNorm !== "无" && tNorm.toLowerCase() !== "none") {
+      const fixer = attempt === 2
+        ? agent("Strong-repair-R" + round + "-A" + attempt, persona(ALGO_EN + PROFILE_LINE, STRONG)) // the last fix chance runs on the strong tier (escalation channel borrowed from the engineering loop); triage authority stays with the tester
+        : algo;
+      const triageDev = await fixer.ask<DevReport>(
+        (attempt === 2 ? "[Escalation] The previous fix did not resolve it. You are the strong-tier repair instance: locate the root cause first and fix it in one move." : "") +
         "Fix instructions ruled by the Test Engineer (you must not edit Agents/selfcheck.py or claim_map.md):\n" + t.slice(0, 2000) + "\nExecute and return DevReport.",
       );
       if ((triageDev.dangerRequests || []).length > 0) {
@@ -619,7 +667,7 @@ for (let round = startRound; round <= rounds; round++) {
 
   phase("Researcher: revise manuscript");
   const paper = await researcher.ask<string>(
-    "Engineering and testing are done; this is your only revision window this round. Dev report: " + JSON.stringify(dev) +
+    "Engineering and testing are done; this is your only revision window this round." + (round === 1 && (dev.numbers || []).length === 0 ? "[Prohibition] Round 1 has no FULL end-to-end number — the manuscript must not claim validation; mark the affected claims as unverified.\n" : "") + "Dev report: " + JSON.stringify(dev) +
     "\nFix / extra-experiment report (its new numbers are equally citable): " + JSON.stringify(fixDev) + "\nTest verdict: " + verdict.summary +
     "\nRevise docs/paper_draft.md truthfully: only mapped numbers, [TODO] for gaps. Return a short revision summary.",
   );
@@ -661,7 +709,7 @@ for (let round = startRound; round <= rounds; round++) {
     head0 = "";
   }
   const archived = await chief.ask<string>(
-    "Record this round in Agents/ledger.md (head carries the repository identity line" + (repoRoot ? ": " + repoRoot : "") + " and a one-line-per-round index: update this round's index line first, then append the detail) — task/build/destructive-operation ruling (" + dangerLog + ")/test (coverage statement: " + (verdict.coverage || "").slice(0, 300) + "; visual review: " + visualNoteR.slice(0, 200) + ")/reviews/next direction. Then git add -A && git commit (the backup push is executed and verified by the orchestrator — you never push; publishing to the cloud is always the boss's explicit action). Return one sentence.",
+    "Record this round in Agents/ledger.md (head carries the repository identity line" + (repoRoot ? ": " + repoRoot : "") + " and a one-line-per-round index: update this round's index line first, then append the detail) — task/build/HEAD before archive " + (head0 || "empty tree").slice(0, 7) + "/destructive-operation ruling (" + dangerLog + ")/test (coverage statement: " + (verdict.coverage || "").slice(0, 300) + "; visual review: " + visualNoteR.slice(0, 200) + ")/reviews/next direction. Then git add -A && git commit (the backup push is executed and verified by the orchestrator — you never push; publishing to the cloud is always the boss's explicit action). Return one sentence.",
   );
   let head1 = "";
   try {
@@ -721,16 +769,27 @@ const resumeNote = rows.length === 0 ? "The ledger shows all rounds already comp
 let evalResult = await chief.ask<EvalReport>(
   resumeNote + rounds + " rounds complete — hard stop. All reviews:\n" + plan.slice(0, 6000) + "\n" +
   "Round records: " + JSON.stringify(rows) + "\n" +
+  (startRound > 1 ? "[Evidence scope] This run resumed at round " + startRound + ": the reviews and round records above cover this run's rounds only — the report must state its evidence scope explicitly, never letting the boss believe it covers all rounds.\n" : "") +
+  "If the round records show round 1 had no end-to-end number, the report must state it plainly: no FULL number in round 1, the manuscript must not claim validation.\n" +
   "Write the Preliminary Evaluation Report: verdict (continue/pivot/stop), expected success with reasoning that cites the experiment-mortality trend and the reader's novelty check, plus an explicit note that it is a qualitative judgement expressed numerically rather than a calibrated probability, novelty grounded in the 3 closest works, impact, points to watch if continued (each annotated with the evidence scope of the claim it concerns — datasets and conditions), " +
   "questionAnswers (question text -> direct answer -> where the evidence is; when asked where something lives, answer the form too — raw or derived, whether a writer exists), autonomousDecisions (decision -> reason -> consequence if rejected -> Occam self-assessment \"adds complexity vs simplifies\"; any complexity-increasing decision must be here, never only in the ledger), " +
-  "deferred and declined fixed sections (each item with its reason — a recorded deferral is a decision, not an omission; a declined idea is not re-proposed next run; fill both fields faithfully, empty arrays when none), reviewerQuotes (verbatim, never paraphrased), and one line of advice including a decision list of things only the boss can do (accounts, data, resources). " +
-  "This is a decision-layer document: no process narrative (which attempt went green, how many reworks, how many review comments — that is the ledger), gloss jargon on first use, one conclusion sentence at the top of each section, each item stated once, no code paths in the body, aiming at two pages or less. At closing, tidy the delivery (git mv only, never delete — deleting files is the boss's move): (1) code and experiment scripts not needed for the final deliverable -> Agents/; (2) AI-generated documents that have become history -> merge any content worth adopting into the evaluation report first, then move the document itself -> Agents/; (3) superseded versions of the brief -> never deleted, never overwritten, never into Agents/ (they are boss-facing) -> under docs/history/, docs/ keeps the latest only; (4) files the boss wrote or supplied (docs/boss_directives.md, the docs/refs/ paper library) stay as they are; (5) the rest of the working scaffolding (ledger, maps, Agents/selfcheck.py, test and debug scripts, falsified history) all lives under Agents/ — the repo root and docs/ hold only boss-facing files (the artifacts the boss's words name, the manuscript, docs/brief.md, the evaluation report, plus what answering the boss requires). Write it to docs/evaluation_report.md, git add -A && git commit.",
+  "deferred and declined fixed sections (each item with its reason — a recorded deferral is a decision, not an omission; a declined idea is not re-proposed next run; fill both fields faithfully, empty arrays when none), reviewerQuotes (verbatim, never paraphrased), deviations from the boss's requirements explained one by one (deviations: deviation + reason + the alternative chosen; empty array when none), process lessons (processLessons: each = rule + why + scope; lessons the boss adopts persist and load with the next run, a disproven lesson is marked superseded), and one line of advice including a decision list of things only the boss can do (accounts, data, resources). " +
+  "Reconciliation close-out (internal affair): mark every Rn from the opening mail's sentence inventory as delivered/partial/undelivered -> where the evidence is, into the ledger's closing chapter and the reconciliation column of Agents/claim_map.md — never as a reconciliation table in the boss's mail; an \"implemented\" without an entry does not count. This report is a decision-layer document and is appended as a new mail at the top of LoopMail/ToBoss.md (the 2026-11-05 boss mail system: ToBoss.md is the Chief's delivery-mail master file — new mails go at the top, appended in reverse order, old mails are never modified; docs/ holds formal content such as the manuscript and REPORT.ipynb; formal files are referenced in mails by links as attachments; writing discipline (the boss's words of 2026-11-05, hard rules): the art of de-redundancy — report the minimum, fastest for the boss to grasp the main line and the whole, no jargon piles (gloss jargon on first use), nothing contrary to fact (numbers and conclusions quote command output and the artifact manifest only), no code-segment or path dumps (evidence pointers listed in one section, no paths in the body)): no process narrative (which attempt went green, how many reworks, how many review comments — that is the ledger), one conclusion sentence at the top of each section, each item stated once, aiming at two pages or less. At closing, tidy the delivery (2026-11-05 boss rules, hard; sweep the whole repository for historical redundancy first — including leftovers from earlier rounds and runs — then move, with git mv only, never deleting — deleting files is the boss's move): (1) code AND documents the final deliverable does not need (experiment scripts, superseded implementation versions, drafts and intermediate reports — historical redundancy, code and documents alike) -> git mv straight into Agents/; (2) an AI-generated document that has become history -> merge only the content worth adopting into the deliverables wording of the newest ToBoss mail, its body counting as historical redundancy -> git mv into Agents/; (3) docs/ keeps formal content only (the manuscript and its kin); the repo root and docs/ pile up no working files; (4) files the boss wrote or supplied (LoopMail/FromBoss.md, the docs/refs/ paper library) stay as they are, and what the boss wrote is never modified; (5) any file under LoopMail/ other than ToBoss.md/FromBoss.md is judged case by case — boss-placed files get the FromBoss_ prefix and stay untouched, stray agent-made products are put away per (1)/(2), and anything uncertain is treated as boss-placed; the working scaffolding (ledger, maps, Agents/selfcheck.py, test and debug scripts, falsified history) all lives under Agents/. Append the mail to LoopMail/ToBoss.md, git add -A && git commit.",
 );
+let evalOnDisk = "";
+try {
+  evalOnDisk = await files.read("LoopMail/ToBoss.md");
+} catch {
+  evalOnDisk = "";
+}
+if (!evalOnDisk.slice(0, 2000).includes("Preliminary Evaluation Report")) {
+  await chief.ask<string>("The evaluation report never landed (no Preliminary Evaluation Report mail at the top of LoopMail/ToBoss.md): insert the report as a new mail at the top of LoopMail/ToBoss.md and git add -A && git commit; return one sentence.");
+}
 // Question guard (mechanical): questions in the boss's words with no answer in the report count as a missed requirement — answer once, then record honestly
 const askedQ = ((idea + " " + focus).match(/？|\?/g) || []).length;
 if (askedQ > 0 && (!evalResult.questionAnswers || evalResult.questionAnswers.length === 0)) {
   evalResult = await chief.ask<EvalReport>(
-    "The boss's words contain " + askedQ + " question mark(s) but questionAnswers is empty — a question evaporating at intake is a missed requirement. Answer each one (question text -> direct answer, including the form -> where the evidence is; write \"cannot answer: reason\" where you truly cannot), write it back to docs/evaluation_report.md and git add -A && git commit --amend --no-edit, then return the full EvalReport.",
+    "The boss's words contain " + askedQ + " question mark(s) but questionAnswers is empty — a question evaporating at intake is a missed requirement. Answer each one (question text -> direct answer, including the form -> where the evidence is; write \"cannot answer: reason\" where you truly cannot), write it back to the latest mail in LoopMail/ToBoss.md and git add -A && git commit (amend into the report commit only when it exists and is unpushed; never rewrite pushed history), then return the full EvalReport.",
   );
   if (!evalResult.questionAnswers || evalResult.questionAnswers.length === 0) log("Report still lacks answered questions (recorded honestly; the boss's words contain " + askedQ + " question mark(s))");
 }
@@ -758,6 +817,8 @@ if (push0.target !== "") {
 }
 const md = [
   "# Preliminary Evaluation Report",
+  "",
+  "Master copy: the latest mail in LoopMail/ToBoss.md (this card is the run's delivery copy).",
   "",
   "Idea: " + idea,
   "",
@@ -788,15 +849,21 @@ const md = [
   "## Advice",
   evalResult.advice,
   "",
+  "## Deviations",
+  (evalResult.deviations && evalResult.deviations.length > 0) ? evalResult.deviations.map((d) => "- " + d) : ["- none"],
+  "",
+  "## Process lessons",
+  (evalResult.processLessons && evalResult.processLessons.length > 0) ? evalResult.processLessons.map((d) => "- " + d) : ["- none"],
+  "",
   "---",
   "Note: the success figure is a qualitative judgement expressed numerically, not a calibrated probability; reviewer verdicts are quoted unedited and may disagree with the overall verdict.",
 ].join("\n");
-await artifact.markdown("report", md, { title: "Preliminary Evaluation Report", description: "Go/no-go after the hard stop", primary: true });
+await artifact.markdown("report", md, { title: "Preliminary Evaluation Report (delivery copy)", description: "Master copy: the latest mail in LoopMail/ToBoss.md; go/no-go after the hard stop", primary: true });
 
 return {
   conclusion: evalResult.advice,
   verdict: evalResult.verdict,
   rounds_completed: rows.length,
-  paper_requests: survey.paperRequests,
+  paper_requests: survey.paperRequests || [],
   next_action: "Awaiting the boss's decision: rerun this workflow with the focus argument (continue / pivot / stop)",
 };
