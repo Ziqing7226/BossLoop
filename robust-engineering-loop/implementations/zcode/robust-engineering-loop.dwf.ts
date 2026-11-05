@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 鲁棒工程循环（v0.5.2）：把一句开发要求变成经过冷启动对抗验证的实现。总工建要求台账（老板原话逐字）并承诺 N 轮（老板可锁定）；每轮开发+文档单笔提交 → 冷启动门禁（diff 审查、鲁棒性测试、canary、零警告构建、上一轮 remote CI 结转）→ 先复现再返修（误诊须证据反驳）、amend 并入本轮提交（初级 3 次未解升级高级工程师，10 次未过打断上报）；全绿才推送约定 remote（默认 GitCoffer，append-only 永不 force）；账本断点续跑；破坏性操作申报-裁决-执行三段核验、绝不转交用户；模型分档 tiered/uniform。
+description: 鲁棒工程循环（v0.5.3）：把一句开发要求变成经过冷启动对抗验证的实现。总工建要求台账（老板原话逐字）并承诺 N 轮（老板可锁定）；每轮开发+文档单笔提交 → 冷启动门禁（diff 审查、鲁棒性测试、canary、零警告构建、上一轮 remote CI 结转）→ 先复现再返修（误诊须证据反驳）、amend 并入本轮提交（初级 3 次未解升级高级工程师，10 次未过打断上报）；全绿才推送约定 remote（默认 GitCoffer，append-only 永不 force）；账本断点续跑；破坏性操作申报-裁决-执行三段核验、绝不转交用户；模型分档 tiered/uniform。
 args:
   requirement:
     type: string
@@ -285,13 +285,18 @@ async function resolvePushTarget(): Promise<{ target: string; note: string }> {
   return { target: "", note: "remote 参数 \"" + remoteArg + "\" 不在 git remote 列表（" + (names.join(", ") || "无") + "）：跳过推送并如实上报" };
 }
 
+/** 凭据掩码：remote URL 的 user:token@ 段绝不进入日志/账本/问句 */
+const maskUrl = (u: string): string => u.replace(/\/\/[^/@]+@/, "//***@");
 const HEAD0 = async (): Promise<string> => {
-  try {
-    const l = await git.log(1);
-    return l[0]?.hash ?? "";
-  } catch {
-    return "";
+  for (let t = 0; t < 2; t++) {
+    try {
+      const l = await git.log(1);
+      return l[0]?.hash ?? "";
+    } catch {
+      /* 瞬态失败：重试一次（B#25） */
+    }
   }
+  return "";
 };
 
 const CHIEF_BLOCK_NOTE = "\n（若为重大问题，填 blocked 并停止发卡：把打断报告作为加急邮件插入 LoopMail/ToBoss.md 头部——以解释开头（发生了什么、为什么），再列已完成轮次与产物、需要老板决策的点、建议选项与各自代价——然后本地提交。）";
@@ -373,7 +378,7 @@ try {
   /* 无 git 或无法检查：跳过 */
 }
 const push0 = await resolvePushTarget();
-log("推送目标：" + (push0.target !== "" ? push0.target : "未配置——" + push0.note));
+log("推送目标：" + (push0.target !== "" ? maskUrl(push0.target) : "未配置——" + push0.note));
 // 启动仓库体检：工作流假定「工作目录是仓库根」——不成立时大声说明，而不是静默跳过推送
 let repoWarn = "";
 try {
@@ -409,6 +414,10 @@ const commit0 = await chief.ask<Commitment>(
 );
 let roundsTotal = roundsArg > 0 ? roundsArg : Math.round(commit0.roundsTotal);
 if (!(roundsTotal >= 1)) roundsTotal = 3;
+if (roundsArg === 0 && roundsTotal > 50) {
+  log("警告：总工规划轮数 " + roundsTotal + " 超出上限——已钳制为 50（有界迭代是协议原则；确需更多轮，老板可用 rounds 参数锁定）");
+  roundsTotal = 50;
+}
 if (roundsTotal !== (roundsArg > 0 ? roundsArg : commit0.roundsTotal)) {
   log("总轮数 " + commit0.roundsTotal + " 无效，已按 " + roundsTotal + " 处理（如实记录）");
 }
@@ -508,6 +517,10 @@ try {
 } catch {
   branch = "main";
 }
+if (branch === "HEAD") {
+  branch = ""; // detached HEAD：目标分支不确定——全部推送跳过（fail-closed，B#20），老板确认分支后重跑
+  log("警告：仓库处于 detached HEAD 状态，目标分支不确定——本轮所有推送跳过并如实记录（确认分支后重跑）");
+}
 
 for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   const baseline = await HEAD0();
@@ -520,7 +533,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   phase("总工发卡");
   let cards = await chief.ask<RoundCards>(
     "第 " + round + "/" + roundsTotal + " 轮。老板要求见 Agents/requirements.md；本轮规划依据：\n" + String(plan).slice(0, 4000) + "\n" +
-    (lastPushed ? "上一轮已推送 " + lastPushed.slice(0, 7) + "：先核查其在 remote（" + (push0.target || "未配置") + "）上的 CI 状态（gh run list/view；不可核查则如实注明），失败项列入 remoteCiIssues 作为本轮必修。\n" : "") +
+    (lastPushed ? "上一轮已推送 " + lastPushed.slice(0, 7) + "：先核查其在 remote（" + (maskUrl(push0.target) || "未配置") + "）上的 CI 状态（gh run list/view；不可核查则如实注明），失败项列入 remoteCiIssues 作为本轮必修。\n" : "") +
     (round === startRound && startRound > 1 ? "【续跑首轮】上一次运行若以门禁未过打断，HEAD 上可能留有未过门禁的提交——本轮推送会将其一并带上 remote：先核对账本末轮的门禁与推送记录，未过门禁的遗留工作在本轮任务卡中显式处置（修好或回退）。\n" : "") +
     (bossNote ? "【老板反馈（本轮读取，LoopMail/FromBoss.md）】逐条落实，应用情况入账本：\n" + bossNote + "\n" : "") +
     "发本轮任务卡前先查 requirements.md 的待答问题：有未答项时，第一张卡就是作答（含形态说明：是 raw 还是派生格式、有没有写出器）。\n" +
@@ -530,7 +543,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     const ir = await chief.ask<string>(
       "已按 blocked 打断（第 " + round + " 轮开工前）。补全 LoopMail/ToBoss.md 头部的打断加急邮件，git add -A && git commit，返回一句话摘要。",
     );
-    if (push0.target !== "") {
+    if (push0.target !== "" && branch !== "") {
       // 中断报告提交由编排器推送（树中只有已过门禁的工作与本次文档提交）
       try {
         const pi = await G(["push", push0.target, "HEAD:" + branch], 300000);
@@ -842,7 +855,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
 
   phase("推送约定 remote");
   let pushState = "未推送";
-  if (push0.target !== "") {
+  if (push0.target !== "" && branch !== "") {
     // 推送前核对：远端 HEAD 应为本轮 baseline（上轮已推送核验）——不符即疑似代理在会话内推送过，大声记录并对账
     try {
       const pre = await G(["ls-remote", push0.target, "refs/heads/" + branch]);
@@ -868,7 +881,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       const ls = await G(["ls-remote", push0.target, "refs/heads/" + branch]);
       const remoteHead = ((ls.stdout || "").split("\t")[0] || "").trim();
       if (remoteHead === headA && headA !== "") {
-        pushState = "已推送并核验（" + headA.slice(0, 7) + "@" + push0.target + "/" + branch + "）";
+        pushState = "已推送并核验（" + headA.slice(0, 7) + "@" + maskUrl(push0.target) + "/" + branch + "）";
         lastPushed = headA;
       } else {
         pushState = "推送核验失败（如实上报：remote=" + remoteHead.slice(0, 7) + "）";
@@ -883,10 +896,15 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
 
   phase("总工记账");
   const archived = await chief.ask<string>(
-    "把第 " + round + " 轮记入 Agents/ledger.md（头部含仓库标识行" + (repoRoot ? "：" + repoRoot : "") + "与一行一轮的目录：本轮先更新目录行、再追加详情）：任务卡、开发摘要、危险操作裁决（" + dangerLog + "）、测试判决（问题 " + findingsCount + " / 反驳 " + rebuttedCount + " / 升级 " + escalations + "）、门禁 " + gate + "、覆盖声明（" + (verdict.coverage || "").slice(0, 300) + "）、视觉审阅（" + visualNote.slice(0, 200) + "）、baseline " + (baseline || "空树").slice(0, 7) + "、推送 " + pushState + "、遗留与否决（deferred/declined，各带理由，无则写“无”）、下一轮方向。然后 git add -A && git commit（账本小提交），返回一句话。",
+    "把第 " + round + " 轮记入 Agents/ledger.md（头部含仓库标识行" + (repoRoot ? "：" + repoRoot : "") + "与一行一轮的目录：本轮先更新目录行、再追加详情）：任务卡、开发摘要、危险操作裁决（" + dangerLog + "）、测试判决（问题 " + findingsCount + " / 反驳 " + rebuttedCount + " / 升级 " + escalations + "）、门禁 " + gate + "、覆盖声明（" + (verdict.coverage || "").slice(0, 300) + "）、视觉审阅（" + visualNote.slice(0, 200) + "）、要求覆盖（" + (dev.requirementCoverage || []).join("；") + "）、baseline " + (baseline || "空树").slice(0, 7) + "、推送 " + pushState + "、遗留与否决（deferred/declined，各带理由，无则写“无”）、下一轮方向。然后 git add -A && git commit（账本小提交），返回一句话。",
   );
-  const headLedger = await HEAD0();
-  if (push0.target !== "" && headLedger !== "") {
+  let headLedger = await HEAD0();
+  if (headLedger === "" || headLedger === headA) {
+    log("账本提交未落地（HEAD 未前进或 git 读取失败）——账本追加重试一次");
+    await chief.ask<string>("账本提交未落地（HEAD 未前进）：把本轮记录写入 Agents/ledger.md，git add -A && git commit，返回一句话。");
+    headLedger = await HEAD0();
+  }
+  if (push0.target !== "" && branch !== "" && headLedger !== "") {
     // 账本提交同样由编排器直接推送并核验：全程无 agent 转述
     try {
       const pl = await G(["push", push0.target, "HEAD:" + branch], 300000);
@@ -896,7 +914,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     }
   }
   log("第 " + round + " 轮记账 " + (headLedger !== "" && headLedger !== headA ? "已落地（" + headLedger.slice(0, 7) + "）" : "需人工复核"));
-  if (push0.target !== "" && headLedger !== "") {
+  if (push0.target !== "" && branch !== "" && headLedger !== "") {
     try {
       const ls3 = await G(["ls-remote", push0.target, "refs/heads/" + branch]);
       const rh3 = ((ls3.stdout || "").split("\t")[0] || "").trim();
@@ -913,14 +931,14 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   rows.push({
     round,
     task: cards.title,
-    dev: dev.summary,
+    dev: dev.summary + ((dev.requirementCoverage || []).length > 0 ? "｜覆盖 " + (dev.requirementCoverage || []).join("/") : ""),
     test: gate,
     findings: findingsCount + " 问题 / " + rebuttedCount + " 反驳" + (escalations > 0 ? " / " + escalations + " 升级" : ""),
     push: pushState,
     next: archived.slice(0, 200),
   });
   report(rows[rows.length - 1], "rounds");
-  plan = "第 " + (round + 1) + " 轮规划依据：测试总评「" + verdict.summary + "」；开发遗留「" + dev.leftover + "」；账本最新一轮记录。";
+  plan = "第 " + (round + 1) + " 轮规划依据：测试总评「" + verdict.summary + "」；开发遗留「" + dev.leftover + "」；要求覆盖「" + (dev.requirementCoverage || []).join("；") + "」；账本最新一轮记录。";
 }
 
 let closingBossNote = "";
@@ -982,7 +1000,7 @@ if (askedQ > 0 && (!reported.questionAnswers || reported.questionAnswers.length 
 }
 // 最终简报提交由编排器推送并核验（收尾问句不再指示推送；存在未过门禁提交时不推送）
 let finalPush = push0.target === "" ? "跳过推送：" + push0.note : (ungatedHead ? "未推送：存在未过门禁的提交（如实记录）" : "未推送");
-if (push0.target !== "") {
+if (push0.target !== "" && branch !== "") {
   if (!ungatedHead) {
     const headFinal = await HEAD0();
     try {

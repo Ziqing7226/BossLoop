@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Robust Engineering Loop (v0.5.2), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
+description: Robust Engineering Loop (v0.5.3), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
 args:
   requirement:
     type: string
@@ -280,13 +280,18 @@ async function resolvePushTarget(): Promise<{ target: string; note: string }> {
   return { target: "", note: "remote arg \"" + remoteArg + "\" is not in git remote list (" + (names.join(", ") || "none") + "): pushes skipped and reported" };
 }
 
+/** 凭据掩码：remote URL 的 user:token@ 段绝不进入日志/账本/问句 */
+const maskUrl = (u: string): string => u.replace(/\/\/[^/@]+@/, "//***@");
 const HEAD0 = async (): Promise<string> => {
-  try {
-    const l = await git.log(1);
-    return l[0]?.hash ?? "";
-  } catch {
-    return "";
+  for (let t = 0; t < 2; t++) {
+    try {
+      const l = await git.log(1);
+      return l[0]?.hash ?? "";
+    } catch {
+      /* 瞬态失败：重试一次（B#25） */
+    }
   }
+  return "";
 };
 
 const CHIEF_BLOCK_NOTE = "\n(For a major issue, fill blocked and stop issuing cards: insert the interrupt report as an urgent mail at the top of LoopMail/ToBoss.md — leading with the explanation (what happened and why), then the completed rounds and artifacts, the points needing the boss's decision, and suggested options with their trade-offs — then commit locally.)";
@@ -368,7 +373,7 @@ try {
   /* no git or not checkable: skip */
 }
 const push0 = await resolvePushTarget();
-log("Push target: " + (push0.target !== "" ? push0.target : "not configured — " + push0.note));
+log("Push target: " + (push0.target !== "" ? maskUrl(push0.target) : "not configured — " + push0.note));
 // Startup repo check: the loop assumes the working directory is the repository root — say it loudly when it is not, instead of silently skipping pushes
 let repoWarn = "";
 try {
@@ -404,6 +409,10 @@ const commit0 = await chief.ask<Commitment>(
 );
 let roundsTotal = roundsArg > 0 ? roundsArg : Math.round(commit0.roundsTotal);
 if (!(roundsTotal >= 1)) roundsTotal = 3;
+if (roundsArg === 0 && roundsTotal > 50) {
+  log("警告：总工规划轮数 " + roundsTotal + " 超出上限——已钳制为 50（有界迭代是协议原则；确需更多轮，老板可用 rounds 参数锁定）");
+  roundsTotal = 50;
+}
 if (roundsTotal !== (roundsArg > 0 ? roundsArg : commit0.roundsTotal)) {
   log("Rounds total " + commit0.roundsTotal + " invalid; using " + roundsTotal + " (recorded honestly)");
 }
@@ -504,6 +513,10 @@ try {
 } catch {
   branch = "main";
 }
+if (branch === "HEAD") {
+  branch = ""; // detached HEAD：目标分支不确定——全部推送跳过（fail-closed，B#20），老板确认分支后重跑
+  log("警告：仓库处于 detached HEAD 状态，目标分支不确定——本轮所有推送跳过并如实记录（确认分支后重跑）");
+}
 
 for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   const baseline = await HEAD0();
@@ -516,7 +529,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   phase("Chief issues cards");
   let cards = await chief.ask<RoundCards>(
     "Round " + round + "/" + roundsTotal + ". Requirements live in Agents/requirements.md; planning basis:\n" + String(plan).slice(0, 4000) + "\n" +
-    (lastPushed ? "Last round pushed " + lastPushed.slice(0, 7) + ": first check its remote CI status on (" + (push0.target || "not configured") + ") via gh run list/view; if uncheckable, say so honestly; failures go into remoteCiIssues as mandatory fix items.\n" : "") +
+    (lastPushed ? "Last round pushed " + lastPushed.slice(0, 7) + ": first check its remote CI status on (" + (maskUrl(push0.target) || "not configured") + ") via gh run list/view; if uncheckable, say so honestly; failures go into remoteCiIssues as mandatory fix items.\n" : "") +
     (round === startRound && startRound > 1 ? "[Resume round 1] If the last run was interrupted with a red gate, HEAD may carry an un-gated commit — pushing this round would carry it onto the remote: first check the last ledger round's gate and push records, and dispose of un-gated leftovers explicitly in this round's cards (fix or roll back).\n" : "") +
     (bossNote ? "[Boss feedback (read this round, LoopMail/FromBoss.md)] apply each item, log application in the ledger:\n" + bossNote + "\n" : "") +
     "Before issuing cards, check the open questions in requirements.md: with unanswered items, the first card is the answer (including the artifact's form: raw or derived, whether a writer exists).\n" +
@@ -526,7 +539,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     const ir = await chief.ask<string>(
       "Interrupted per blocked (before round " + round + " started). Complete the interrupt urgent mail at the top of LoopMail/ToBoss.md, git add -A && git commit, return a one-sentence summary.",
     );
-    if (push0.target !== "") {
+    if (push0.target !== "" && branch !== "") {
       // The interrupt-report commit is pushed by the orchestrator (the tree holds only gated work plus this docs commit)
       try {
         const pi = await G(["push", push0.target, "HEAD:" + branch], 300000);
@@ -838,7 +851,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
 
   phase("Push to the agreed remote");
   let pushState = "not pushed";
-  if (push0.target !== "") {
+  if (push0.target !== "" && branch !== "") {
     // Pre-push check: the remote HEAD should be this round's baseline (pushed and verified last round) — a mismatch means an agent likely pushed inside its session; record loudly
     try {
       const pre = await G(["ls-remote", push0.target, "refs/heads/" + branch]);
@@ -864,7 +877,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       const ls = await G(["ls-remote", push0.target, "refs/heads/" + branch]);
       const remoteHead = ((ls.stdout || "").split("\t")[0] || "").trim();
       if (remoteHead === headA && headA !== "") {
-        pushState = "pushed & verified (" + headA.slice(0, 7) + "@" + push0.target + "/" + branch + ")";
+        pushState = "pushed & verified (" + headA.slice(0, 7) + "@" + maskUrl(push0.target) + "/" + branch + ")";
         lastPushed = headA;
       } else {
         pushState = "push verification failed (reported honestly: remote=" + remoteHead.slice(0, 7) + ")";
@@ -879,10 +892,15 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
 
   phase("Chief archives the ledger");
   const archived = await chief.ask<string>(
-    "Record round " + round + " in Agents/ledger.md (head carries the repository identity line" + (repoRoot ? ": " + repoRoot : "") + " and the one-line-per-round index: update this round's index line first, then append the detail): cards, dev summary, destructive-operation ruling (" + dangerLog + "), test verdict (findings " + findingsCount + " / rebuttals " + rebuttedCount + " / escalated " + escalations + "), coverage statement (" + (verdict.coverage || "").slice(0, 300) + "), visual review (" + visualNote.slice(0, 200) + "), gate " + gate + ", baseline " + (baseline || "empty tree").slice(0, 7) + ", push " + pushState + ", deferred/declined sections (with reasons, “none” when empty), next direction. Then git add -A && git commit (the small ledger commit); return one sentence.",
+    "Record round " + round + " in Agents/ledger.md (head carries the repository identity line" + (repoRoot ? ": " + repoRoot : "") + " and the one-line-per-round index: update this round's index line first, then append the detail): cards, dev summary, destructive-operation ruling (" + dangerLog + "), test verdict (findings " + findingsCount + " / rebuttals " + rebuttedCount + " / escalated " + escalations + "), coverage statement (" + (verdict.coverage || "").slice(0, 300) + "), visual review (" + visualNote.slice(0, 200) + "), gate " + gate + ", baseline " + (baseline || "empty tree").slice(0, 7) + ", push " + pushState + ", deferred/declined sections (with reasons, “none” when empty), requirement coverage (" + (dev.requirementCoverage || []).join("; ") + "), next direction. Then git add -A && git commit (the small ledger commit); return one sentence.",
   );
-  const headLedger = await HEAD0();
-  if (push0.target !== "" && headLedger !== "") {
+  let headLedger = await HEAD0();
+  if (headLedger === "" || headLedger === headA) {
+    log("账本提交未落地（HEAD 未前进或 git 读取失败）——账本追加重试一次");
+    await chief.ask<string>("账本提交未落地（HEAD 未前进）：把本轮记录写入 Agents/ledger.md，git add -A && git commit，返回一句话。");
+    headLedger = await HEAD0();
+  }
+  if (push0.target !== "" && branch !== "" && headLedger !== "") {
     // The ledger commit is pushed and verified by the orchestrator as well: no agent paraphrase anywhere
     try {
       const pl = await G(["push", push0.target, "HEAD:" + branch], 300000);
@@ -892,7 +910,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     }
   }
   log("Round " + round + " ledger " + (headLedger !== "" && headLedger !== headA ? "landed (" + headLedger.slice(0, 7) + ")" : "needs manual check"));
-  if (push0.target !== "" && headLedger !== "") {
+  if (push0.target !== "" && branch !== "" && headLedger !== "") {
     try {
       const ls3 = await G(["ls-remote", push0.target, "refs/heads/" + branch]);
       const rh3 = ((ls3.stdout || "").split("\t")[0] || "").trim();
@@ -909,14 +927,14 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   rows.push({
     round,
     task: cards.title,
-    dev: dev.summary,
+    dev: dev.summary + ((dev.requirementCoverage || []).length > 0 ? " | coverage " + (dev.requirementCoverage || []).join("/") : ""),
     test: gate,
     findings: findingsCount + " findings / " + rebuttedCount + " rebuttals" + (escalations > 0 ? " / " + escalations + " escalated" : ""),
     push: pushState,
     next: archived.slice(0, 200),
   });
   report(rows[rows.length - 1], "rounds");
-  plan = "Round " + (round + 1) + " planning basis: test verdict \u201c" + verdict.summary + "\u201d; dev leftovers \u201c" + dev.leftover + "\u201d; latest ledger entry.";
+  plan = "Round " + (round + 1) + " planning basis: test verdict \u201c" + verdict.summary + "\u201d; dev leftovers \u201c" + dev.leftover + "\u201d; requirement coverage \u201c" + (dev.requirementCoverage || []).join("; ") + "\u201d; latest ledger entry.";
 }
 
 let closingBossNote = "";
@@ -978,7 +996,7 @@ if (askedQ > 0 && (!reported.questionAnswers || reported.questionAnswers.length 
 }
 // The final-report commit is pushed and verified by the orchestrator (the closing ask no longer instructs a push; never push with an un-gated commit at HEAD)
 let finalPush = push0.target === "" ? "push skipped: " + push0.note : (ungatedHead ? "not pushed: an un-gated commit is at HEAD (recorded honestly)" : "not pushed");
-if (push0.target !== "") {
+if (push0.target !== "" && branch !== "") {
   if (!ungatedHead) {
     const headFinal = await HEAD0();
     try {

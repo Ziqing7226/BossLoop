@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 科研迭代循环（v0.5.2）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表 + 含 canary 的 selfcheck 机械门禁，测试基建归其所有）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
+description: 科研迭代循环（v0.5.3）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表 + 含 canary 的 selfcheck 机械门禁，测试基建归其所有）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
 args:
   idea:
     type: string
@@ -329,13 +329,18 @@ try {
 const G = (gitArgs: string[], timeoutMs = 120000): Promise<WorldRunResult> =>
   world.run("git", repoRoot !== "" ? ["-C", repoRoot, ...gitArgs] : gitArgs, { timeoutMs });
 /** 末笔提交哈希（git 不可用时为空串） */
+/** 凭据掩码：remote URL 的 user:token@ 段绝不进入日志/账本/问句 */
+const maskUrl = (u: string): string => u.replace(/\/\/[^/@]+@/, "//***@");
 const HEADR = async (): Promise<string> => {
-  try {
-    const l = await git.log(1);
-    return l[0]?.hash ?? "";
-  } catch {
-    return "";
+  for (let t = 0; t < 2; t++) {
+    try {
+      const l = await git.log(1);
+      return l[0]?.hash ?? "";
+    } catch {
+      /* 瞬态失败：重试一次（B#25） */
+    }
   }
+  return "";
 };
 /** 解析约定备份推送目标（每轮由编排器推送并核验）：返回 {target(名字或URL，空=跳过推送), note} */
 async function resolvePushTargetR(): Promise<{ target: string; note: string }> {
@@ -372,7 +377,7 @@ try {
   /* 无 git 或无法检查：跳过 */
 }
 const push0 = await resolvePushTargetR();
-log("推送目标：" + (push0.target !== "" ? push0.target : "未配置——" + push0.note));
+log("推送目标：" + (push0.target !== "" ? maskUrl(push0.target) : "未配置——" + push0.note));
 // 启动仓库体检：工作流假定「工作目录是仓库根」——不成立时大声说明，而不是静默跳过推送
 let repoWarn = "";
 try {
@@ -443,6 +448,10 @@ try {
   branchR = (b.stdout || "").trim() || "main";
 } catch {
   branchR = "main";
+}
+if (branchR === "HEAD") {
+  branchR = ""; // detached HEAD：目标分支不确定——全部推送跳过（fail-closed，B#20），老板确认分支后重跑
+  log("警告：仓库处于 detached HEAD 状态，目标分支不确定——本轮所有推送跳过并如实记录（确认分支后重跑）");
 }
 const rawResumeR = Math.round(survey.resumeFrom);
 if (!Number.isFinite(rawResumeR) || rawResumeR < 0) log("警告：resumeFrom 无效（" + String(survey.resumeFrom) + "）——按 0 处理（如实记录）");
@@ -762,7 +771,7 @@ for (let round = startRound; round <= rounds; round++) {
   // 备份推送由编排器执行并核验（与工程循环同款，实测升级）：失败或核验不过都如实记录，绝不改推别处
   let pushStateR = "跳过推送：" + push0.note;
   const headPush = await HEADR();
-  if (push0.target !== "" && headPush !== "") {
+  if (push0.target !== "" && branchR !== "" && headPush !== "") {
     try {
       const p = await G(["push", push0.target, "HEAD:" + branchR], 300000);
       if (p.exitCode !== 0) log("第 " + round + " 轮备份推送退出码 " + p.exitCode + "：" + (p.stderr || p.stdout || "").slice(0, 200) + "——如实记录");
@@ -857,7 +866,7 @@ if (askedQ > 0 && (!evalResult.questionAnswers || evalResult.questionAnswers.len
 }
 // 评估报告提交由编排器推送并核验（与工程循环同款）
 let finalPushR = push0.target === "" ? "跳过推送：" + push0.note : "未推送";
-if (push0.target !== "") {
+if (push0.target !== "" && branchR !== "") {
   const headFinalR = await HEADR();
   try {
     const p = await G(["push", push0.target, "HEAD:" + branchR], 300000);
