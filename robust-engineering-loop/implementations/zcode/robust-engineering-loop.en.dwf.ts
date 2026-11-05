@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Robust Engineering Loop (v0.3.3), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
+description: Robust Engineering Loop (v0.3.5), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
 args:
   requirement:
     type: string
@@ -12,7 +12,7 @@ args:
   remote:
     type: string
     default: "gitcoffer"
-    description: Agreed push target; auto-detect a gitcoffer remote, or any remote name/URL; none = never push
+    description: Agreed push target; an explicit remote name/URL is the authoritative way; the default gitcoffer auto-detects a unique remote whose name or URL mentions gitcoffer (a convenience); none = never push
   profile:
     type: string
     default: ""
@@ -24,7 +24,7 @@ args:
   models:
     type: string
     default: "tiered"
-    description: Model tiering; tiered = Chief/Senior on the strong model and engineer/tester on the cheap one (GLM-5.3 vs GLM-5.3-Flash here), uniform = every role on the session model
+    description: Model tiering; tiered = Chief/Senior on the strong model and engineer/tester on the cheap one (GLM-5.3 vs GLM-5.3-Flash here; cross-provider deployments must edit the in-script model constants to full provider names), uniform = every role on the session model (names no model, starts on any plan)
 */
 
 interface Commitment {
@@ -142,8 +142,12 @@ interface RoundRow {
 interface FinalReport {
   /** Completion verdict */
   verdict: "done" | "interrupted" | "incomplete";
-  /** Line-by-line reconciliation: boss's verbatim requirement -> outcome -> evidence (a requirement without an entry is not done) */
+  /** Line-by-line reconciliation: boss's verbatim requirement -> outcome -> evidence (internal affair: only the ledger and the reconciliation notes in Agents/requirement_map.md, never the boss's brief; a requirement without an entry is not done) */
   requirementOutcomes: { id: string; verbatim: string; outcome: string; evidence: string }[];
+  /** Opening paragraph: progress and verdict — whether the output is what the boss asked for (written from the boss's judgement perspective) */
+  summary: string;
+  /** Deliverables list: one line per artifact — a one-sentence description + which sentence of the boss's words it answers (quote <=15 chars) + where it is */
+  deliverables: { artifact: string; addresses: string; location: string }[];
   /** Deviations from the boss's requirements, each with reason and the alternative chosen; empty if none */
   deviations: string[];
   /** Final state in one sentence: commits/pushes/CI/tests/known limitations */
@@ -166,15 +170,15 @@ interface FinalReport {
 
 const CHIEF_EN = [
   "You are the Chief Engineer. Mission: turn the boss's (user's) development requirement into a high-quality delivery within a committed, bounded number of rounds — every round passes cold-start verification, a fully green gate and a zero-warning build before anything is pushed.",
-  "Boss fidelity is the top discipline: before round 1 create Agents/requirements.md — the boss's words verbatim, each with interpretation and acceptance criteria, none dropped; never act against the boss's requirements; a deviation you cannot avoid must be explained line by line in the Final Report — never silently.",
+  "Boss fidelity is the top discipline: before round 1 create Agents/requirements.md — the boss's words verbatim, each with interpretation and acceptance criteria, none dropped; never act against the boss's requirements; a deviation you cannot avoid must be explained line by line in the final brief — never silently.",
   "Intake does three mechanical passes, none optional: (1) sentence inventory — split every boss message (requirement arg, focus, boss_directives file) sentence by sentence and mark each one registered-as-Rn / not-applicable-with-reason / needs-clarification; (2) artifact spec table — for each deliverable, its axis, domain, resolution, colour encoding and pass criteria (machine-checkable), and every number or format word in the boss's words must land on a row; (3) open questions — every interrogative sentence logged (text, when logged, answer status). These three sections live in Agents/requirements.md alongside the verbatim requirement ledger — four sections in total. The reading of the boss's words must be self-consistent and capture the gist; what you cannot pin down, never guess — carry the boss's words verbatim (quoted, marked unsure) in the ledger and the brief; the engineers may resolve them during development or testing. Verbatim fidelity is not semantic fidelity: copying the words while misreading the meaning is the most dangerous failure.",
   "Opening brief: after committing the round count and before starting work, write docs/brief.md (at most one page, three parts only): what I intend to deliver (each tied to the sentence of the boss's words it answers, quote <=15 chars), how each item counts as passing (machine-checkable), and what I am unsure about (<=3 items, each with my default reading and what happens if it is wrong). Then start immediately — never idle waiting for the boss to look at it; the boss corrects it item by item the next morning.",
   "Ambiguity is a major-issue candidate: when the boss's words cannot be filled into the spec table (e.g. a number reads either as bin width or as axis range), do not pick one literal reading and proceed — quote the words verbatim in the brief's unsure section, or decide from whether the scope changes whether to interrupt.",
-  "Two file classes (delivery discipline), bounded by location: everything not under Agents/ is boss-facing — the artifacts the boss's words name, plus docs/brief.md, docs/boss_directives.md (written by the boss), the final report and interrupt reports; everything under Agents/ is working scaffolding — the ledger, the requirement map, Agents/selfcheck.py, test and debug scripts, falsified history, agent-facing docs. Delivery follows Occam's razor: tidying means git mv-ing scaffolding into Agents/, never deleting a file — deletion is the boss's move; the boss reads everything outside Agents/; if the boss has to open Agents/, the loop has failed.",
+  "Two file classes (delivery discipline), bounded by location: everything not under Agents/ is boss-facing — the artifacts the boss's words name, plus docs/brief.md (superseded versions included, under docs/history/), docs/boss_directives.md (written by the boss), the final brief and interrupt reports; everything under Agents/ is working scaffolding — the ledger, the requirement map, Agents/selfcheck.py, test and debug scripts, code superseded on the way to the final deliverable, falsified history, agent-facing docs. Delivery follows Occam's razor: tidying means git mv-ing scaffolding into Agents/, never deleting a file — deletion is the boss's move; the boss reads everything outside Agents/; if the boss has to open Agents/, the loop has failed.",
   "Interrupt policy: major issues (infeasible requirement, scope-changing ambiguity, extending the round count, gate still red after 10 gate re-checks) -> interrupt the loop immediately; a destructive operation is not itself an interrupt trigger — it goes to the danger-clause ruling (junior declarations -> Senior Engineer; the Senior Engineer's own declarations in the escalation phase -> you), and only when the round still cannot proceed after the ruling do you interrupt and write docs/interrupt_report.md for the boss; minor issues (in-scope implementation details, tooling choices, ordering) -> decide yourself and log the decision. Scope, schedule, quality bar and budget are boss-level tradeoffs — you may not downgrade them to minor.",
-  "Round planning: commit to N rounds with a one-line scope each before round 1 (a boss-locked rounds value is final — no adding or dropping); each round re-plan from the ledger — last round's verdict, findings and rebuttals, remote-CI carryover and leftovers must all be disposed of; every work card traces to a requirement entry (R1/R2...); when last round's fix was contradicted by validation (later validation), this round's cards open with an explicit rollback-vs-fix-forward decision (rollback = restore the old behavior with a fresh normal commit, never rewriting history), evidence first — a contradicted fix is never stacked on.",
+  "Round planning: commit to N rounds with a one-line scope each before round 1 (a boss-locked rounds value is final — no adding or dropping); each round re-plan from the ledger — last round's verdict, findings and rebuttals, remote-CI carryover and leftovers must all be disposed of; every work card traces to a requirement entry (R1/R2...); when last round's fix was contradicted by validation (later validation), this round's cards open with an explicit rollback-vs-fix-forward decision (rollback = restore the old behavior with a fresh normal commit, never rewriting history), evidence first — a contradicted fix is never stacked on; when a new boss directive invalidates already-scheduled work, the next round's cards open with an explicit invalidate-and-redo decision, logged honestly.",
   "Before issuing each round's cards, check the open questions in requirements.md: with unanswered items, the first card is the answer (including the artifact's form: raw or derived, whether a writer exists).",
-  "Occam's razor: your autonomous decisions naturally lean toward adding things (modules, checks, config) — every complexity-increasing decision must state the value it buys, or it is not taken; such a decision never lives only in the ledger — it goes into the Final Report's autonomous-decision list.",
+  "Occam's razor: your autonomous decisions naturally lean toward adding things (modules, checks, config) — every complexity-increasing decision must state the value it buys, or it is not taken; such a decision never lives only in the ledger — it goes into the final brief's autonomous-decision list.",
   "Misdiagnosis arbitration: when the engineers dispute a finding, arbitrate on evidence only; if still undecided -> major issue, interrupt and report to the boss.",
   "Take over by reading the ledger (Agents/ledger.md): resume, never redo; the ledger also records each round's baseline hash and pushed SHAs. Resuming after an interrupt or a cancelled stretch opens with a closure review of the discarded range: every in-flight item is either verified present or dropped with a ledger note — lost work is reconciled before new rounds, never silently skipped.",
   "Git write scope: run only the git add/commit/amend an ask names; pushes are executed and verified by the orchestrator — never push yourself, and never run reset/rebase/tag or any other repository-writing git operation.",
@@ -230,35 +234,47 @@ const TEST_EN = [
 const requirement = String(args.requirement ?? "");
 const roundsArg = typeof args.rounds === "number" ? args.rounds : 0;
 const remoteArg = typeof args.remote === "string" && args.remote !== "" ? args.remote : "gitcoffer";
+if (requirement === "") log("Warning: the requirement argument is empty — an amendment resume may have dropped arguments; check this run's arguments; the final brief's requirement line will be missing");
+if (typeof args.remote === "undefined") log("Note: the remote argument is missing (an amendment resume likely dropped it) — falling back to the default gitcoffer; check the push-target line in the startup log");
 const profile = typeof args.profile === "string" ? args.profile : "";
 const focus = typeof args.focus === "string" ? args.focus : "";
 const PROFILE_LINE = profile ? "\nProject constraints (mandatory, override defaults): " + profile : "";
 
-/** Model tiering: tiered = strong/cheap split (GLM-5.3 / GLM-5.3-Flash here); uniform = session model for all */
+/** Model tiering: tiered = strong/cheap split (GLM-5.3 / GLM-5.3-Flash here; cross-provider deployments edit these constants to full provider names); uniform = session model for all. Model names enter only as plain strings when tiered — a uniform run declares no model at all and starts on any plan (field-tested: bare model() declarations fail to launch on non-reference plans) */
 const tiered = String(args.models ?? "tiered").toLowerCase() !== "uniform";
-const STRONG = model("GLM-5.3");
-const CHEAP = model("GLM-5.3-Flash");
-const persona = (system: string, m: ModelRef): { system: string; model?: ModelRef } =>
+const STRONG = "GLM-5.3" as const;
+const CHEAP = "GLM-5.3-Flash" as const;
+type ModelName = typeof STRONG | typeof CHEAP;
+const persona = (system: string, m: ModelName): { system: string; model?: ModelName } =>
   tiered ? { system, model: m } : { system };
 
 /** Resolve the agreed push target: returns {target (name or URL, "" = skip pushes), note} */
 async function resolvePushTarget(): Promise<{ target: string; note: string }> {
   if (remoteArg.toLowerCase() === "none") return { target: "", note: "boss set remote=none: no pushes this run" };
-  let remotes: string[] = [];
+  let names: string[] = [];
+  let hits: string[] = [];
   try {
-    const r = await world.run("git", ["remote"], { timeoutMs: 60000 });
-    remotes = (r.stdout || "").split("\n").map((s) => s.trim()).filter((s) => s !== "");
+    const r = await G(["remote", "-v"], 60000);
+    const pairs: { name: string; url: string }[] = [];
+    for (const line of (r.stdout || "").split("\n")) {
+      const m = line.trim().match(/^(\S+)\s+(\S+)/);
+      if (m) pairs.push({ name: m[1], url: m[2] });
+    }
+    names = Array.from(new Set(pairs.map((p) => p.name)));
+    // gitcoffer backup detection (a heuristic): name or URL mentioning gitcoffer — a GitCoffer-built repo need not be named that; detection is a convenience, an explicit remote argument (name or URL) is the authoritative way
+    hits = Array.from(new Set(pairs.filter((p) => /gitcoffer/i.test(p.name) || /gitcoffer/i.test(p.url)).map((p) => p.name)));
   } catch {
-    remotes = [];
+    names = [];
+    hits = [];
   }
   if (/^(\w+@|https?:\/\/|file:\/\/|[A-Za-z]:|\/|\\\\)/.test(remoteArg)) return { target: remoteArg, note: "" };
-  if (remotes.includes(remoteArg)) return { target: remoteArg, note: "" };
+  if (names.includes(remoteArg)) return { target: remoteArg, note: "" };
   if (remoteArg.toLowerCase() === "gitcoffer") {
-    const hit = remotes.find((r) => /gitcoffer/i.test(r));
-    if (hit) return { target: hit, note: "" };
-    return { target: "", note: "no gitcoffer remote found (GitCoffer not configured): pushes skipped and reported — never redirected elsewhere" };
+    if (hits.length === 1) return { target: hits[0], note: "" };
+    if (hits.length === 0) return { target: "", note: "no gitcoffer backup remote detected (matched by name or URL): pushes skipped and reported — never redirected elsewhere; if a backup remote is configured, name it explicitly via the remote argument" };
+    return { target: "", note: "gitcoffer matches are not unique (" + hits.join(", ") + "): cannot identify one, pushes skipped and reported — name it explicitly via the remote argument" };
   }
-  return { target: "", note: "remote arg \"" + remoteArg + "\" is not in git remote list (" + (remotes.join(", ") || "none") + "): pushes skipped and reported" };
+  return { target: "", note: "remote arg \"" + remoteArg + "\" is not in git remote list (" + (names.join(", ") || "none") + "): pushes skipped and reported" };
 }
 
 const HEAD0 = async (): Promise<string> => {
@@ -303,15 +319,7 @@ if (ledger === "") {
     ledger = "";
   }
 }
-if (legacyLayout) log("Legacy-layout ledger found (docs/workflow/ledger.md): migrate before working (git mv only, never delete) — ledger/requirements/map/selfcheck.py into Agents/, directives, brief and the final report into docs/");
-try {
-  const st = await world.run("git", ["status", "--porcelain"], { timeoutMs: 60000 });
-  if ((st.stdout || "").trim() !== "") log("Warning: working tree not clean — start from a clean tree; recorded honestly in the ledger");
-} catch {
-  /* no git or not checkable: skip */
-}
-const push0 = await resolvePushTarget();
-if (push0.note !== "") log("Push target: " + push0.note);
+if (legacyLayout) log("Legacy-layout ledger found (docs/workflow/ledger.md): migrate before working (git mv only, never delete) — ledger/requirements/map/selfcheck.py into Agents/, directives, brief and the final brief into docs/");
 let repoRoot = "";
 try {
   const tr = await world.run("git", ["rev-parse", "--show-toplevel"], { timeoutMs: 60000 });
@@ -319,6 +327,17 @@ try {
 } catch {
   repoRoot = "";
 }
+/** The orchestrator's single git entry: explicit -C <repo root> so a workspace root ≠ repo root stops failing silently (field-tested) */
+const G = (gitArgs: string[], timeoutMs = 120000): Promise<WorldRunResult> =>
+  world.run("git", repoRoot !== "" ? ["-C", repoRoot, ...gitArgs] : gitArgs, { timeoutMs });
+try {
+  const st = await G(["status", "--porcelain"], 60000);
+  if ((st.stdout || "").trim() !== "") log("Warning: working tree not clean — start from a clean tree; recorded honestly in the ledger");
+} catch {
+  /* no git or not checkable: skip */
+}
+const push0 = await resolvePushTarget();
+log("Push target: " + (push0.target !== "" ? push0.target : "not configured — " + push0.note));
 // Startup repo check: the loop assumes the working directory is the repository root — say it loudly when it is not, instead of silently skipping pushes
 let repoWarn = "";
 try {
@@ -353,7 +372,7 @@ const commit0 = await chief.ask<Commitment>(
   (bossDirectives0 ? "[Boss directives file docs/boss_directives.md] (instructions the boss issued — apply each one):\n" + bossDirectives0 + "\n" : "") +
   (repoRoot ? "Repo root: " + repoRoot + " (flag it honestly if the ledger records a different root).\n" : "") +
   (repoWarn !== "" ? "[Environment warning] " + repoWarn + " — proceed anyway, but pushes/commit verification may be unavailable; record it in the ledger.\n" : "") +
-  (legacyLayout ? "[Migration] Legacy layout detected: git mv docs/workflow/{ledger,requirements,requirement_map}.md and the root selfcheck.py into Agents/, and {boss_directives,brief,final_report}.md into docs/, git add -A && git commit, then resume.\n" : "") +
+  (legacyLayout ? "[Migration] Legacy layout detected: git mv docs/workflow/{ledger,requirements,requirement_map}.md and the root selfcheck.py into Agents/, and {boss_directives,brief,final_brief}.md into docs/, git add -A && git commit, then resume.\n" : "") +
   (ledger ? "Existing ledger (head index + tail detail; the resume basis):\n" + (ledger.length > 6000 ? ledger.slice(0, 1600) + "\n... (middle omitted) ...\n" + ledger.slice(-3200) : ledger) + "\nIf it shows N rounds already completed for this requirement, resumeFrom = N (continue at round N+1, never redo); otherwise 0.\n" : "No ledger: resumeFrom = 0.\n") +
   "Before round 1, four things: 1) create Agents/requirements.md — headed by one authority line (Agents/requirements.md = requirement record; Agents/requirement_map.md = verification record; Agents/ledger.md = history record); four mandatory sections: sentence inventory (each message split sentence by sentence, marked registered-Rn / not-applicable / needs-clarification), the boss's words verbatim numbered (R1/R2...) with interpretation and machine-checkable acceptance criteria, the artifact spec table (axis / domain / resolution / colour encoding / pass criteria), and open questions (every interrogative sentence logged); if a scope-changing ambiguity exists, raise it in blocked.question first (the only pre-start question); 2) commit to roundsTotal with a one-line scope per round in roundsOutline" +
   (roundsArg > 0 ? " (the boss locked rounds=" + roundsArg + " — adopt it, no adding or dropping)" : " (planned by you; once fixed, no extension except via interrupt)") +
@@ -400,7 +419,7 @@ async function adjudicateDanger(reqs: DangerRequest[], requester: string, reques
 function dangerExecAsk(approved: DangerDecision[]): string {
   return "Run the approved destructive operations, exactly as approved (use safeForm when non-empty); do not widen the scope, do not add unapproved commands:\n" +
     approved.map((d, i) => (i + 1) + ". " + (d.safeForm || d.command) + " (approved because: " + d.reason + ")").join("\n") +
-    "\nThen git add -A && git commit --amend --no-edit into the round commit (plain commit if the round has none yet) and return one sentence.";
+    "\nYour report must quote each approved command's original text verbatim (the consistency check matches verbatim; paraphrases and omissions count as unconfirmed); then git add -A && git commit --amend --no-edit into the round commit (plain commit if the round has none yet) and return one sentence.";
 }
 // Intake completeness check (mechanical): did the three sections and the brief actually reach the files? Repair once, then record honestly — this is the mechanical counterpart of "5 of 7 requirements never registered"
 const intakeMarkers = ["sentence inventory", "spec table", "open question"];
@@ -444,7 +463,7 @@ let interrupted = false;
 let ungatedHead = false; // an interrupt with a red gate leaves an un-gated commit at HEAD — the final report must not push
 let branch = "main";
 try {
-  const b = await world.run("git", ["rev-parse", "--abbrev-ref", "HEAD"], { timeoutMs: 60000 });
+  const b = await G(["rev-parse", "--abbrev-ref", "HEAD"], 60000);
   branch = (b.stdout || "").trim() || "main";
 } catch {
   branch = "main";
@@ -471,7 +490,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     (lastPushed ? "Last round pushed " + lastPushed.slice(0, 7) + ": first check its remote CI status on (" + (push0.target || "not configured") + ") via gh run list/view; if uncheckable, say so honestly; failures go into remoteCiIssues as mandatory fix items.\n" : "") +
     (bossNote ? "[Boss directives file (read this round)] apply each item, log application in the ledger:\n" + bossNote + "\n" : "") +
     "Before issuing cards, check the open questions in requirements.md: with unanswered items, the first card is the answer (including the artifact's form: raw or derived, whether a writer exists).\n" +
-    "Issue this round's work cards: one sentence each, traceable to requirement entries; dispose of last round's findings, rebuttals and leftovers one by one. Set done=true only if every requirement is closed and the gate is green." + CHIEF_BLOCK_NOTE,
+    "Issue this round's work cards: one sentence each, traceable to requirement entries; dispose of last round's findings, rebuttals and leftovers one by one. Round numbers follow the Agents/ledger.md index when they disagree with this prompt's numbering — mark by the ledger's state and say so (the orchestrator's counter is internal). Set done=true only if every requirement is closed and the gate is green." + CHIEF_BLOCK_NOTE,
   );
   if (cards.blocked) {
     const ir = await chief.ask<string>(
@@ -480,7 +499,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     if (push0.target !== "") {
       // The interrupt-report commit is pushed by the orchestrator (the tree holds only gated work plus this docs commit)
       try {
-        const pi = await world.run("git", ["push", push0.target, "HEAD:" + branch], { timeoutMs: 300000 });
+        const pi = await G(["push", push0.target, "HEAD:" + branch], 300000);
         if (pi.exitCode !== 0) log("Interrupt-report push exit code " + pi.exitCode + " — recorded honestly");
       } catch {
         log("Interrupt-report push failed to launch (recorded honestly)");
@@ -534,10 +553,11 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       phase("Run the approved destructive operations");
       const execReport = await algo.ask<string>(dangerExecAsk(ok));
       for (const e of dangerTrail) {
-        if (e.executed !== "pending confirmation") continue;
+        if (e.executed !== "pending confirmation" && !e.executed.startsWith("unconfirmed: ")) continue;
         const form = e.ruled.split("|")[1] || e.declared;
-        e.executed = execReport.includes(form) ? form : "unconfirmed: executor report lacks the approved form";
-        if (!execReport.includes(form)) log("Dangerous-operation execution unconfirmed: " + e.declared + " — recorded honestly and counted by the gate");
+        const hit = execReport.includes(form) || execReport.includes(e.declared);
+        e.executed = hit ? (execReport.includes(form) ? form : e.declared) : "unconfirmed: executor report lacks the approved form";
+        if (!hit) log("Dangerous-operation execution unconfirmed: " + e.declared + " — pending re-check (the rework round gets one verbatim-quote chance), counted by the gate");
       }
       headA = await HEAD0();
     } else {
@@ -551,7 +571,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   let diffLines = -1;
   if (baseline) {
     try {
-      const df = await world.run("git", ["diff", "--numstat", baseline + "..HEAD"], { timeoutMs: 120000 });
+      const df = await G(["diff", "--numstat", baseline + "..HEAD"]);
       diffLines = (df.stdout || "").split("\n").reduce((a, l) => { const p2 = l.trim().split("\t"); return a + (Number(p2[0]) || 0) + (Number(p2[1]) || 0); }, 0);
     } catch {
       diffLines = -1;
@@ -623,15 +643,28 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     } else {
       output = "Agents/selfcheck.py lacks the canary marker (a must-fail control case)";
     }
-    // Mechanical check: every approved dangerous operation must be declared, ruled on, and executed exactly in the approved form
-    const dangerConsistent = dangerTrail.every((e) => e.executed !== "pending confirmation" && !e.executed.startsWith("unconfirmed") && approvedDanger.includes(e.executed));
+    // Mechanical check: every approved dangerous operation must be declared, ruled on, and executed — the approved form or the declared original, either verbatim match counts (an executor's fair paraphrase is not a failure)
+    let dangerConsistent = dangerTrail.every((e) => e.executed !== "pending confirmation" && !e.executed.startsWith("unconfirmed") && (approvedDanger.includes(e.executed) || e.executed === e.declared));
+    if (!dangerConsistent && dangerTrail.some((e) => e.executed.startsWith("unconfirmed"))) {
+      // Sticky-state antidote (field defect: one unconfirmed verdict used to be terminal, idling the gate for 10 rounds): one verbatim-quote chance for the executor closes the loop
+      const reQuote = await algo.ask<string>(
+        "Dangerous-operation consistency re-check: the earlier execution reports did not quote the following approved commands verbatim. First verify they did run (git log/reflog), then quote each command's original text verbatim in your report (copy exactly, no paraphrasing); say so honestly if one did not run:\n" +
+        dangerTrail.filter((e) => e.executed.startsWith("unconfirmed")).map((e) => "- " + (e.ruled.split("|")[1] || e.declared)).join("\n") + "\nReturn one sentence.",
+      );
+      for (const e of dangerTrail) {
+        if (!e.executed.startsWith("unconfirmed")) continue;
+        const form = e.ruled.split("|")[1] || e.declared;
+        if (reQuote.includes(form) || reQuote.includes(e.declared)) e.executed = form;
+      }
+      dangerConsistent = dangerTrail.every((e) => e.executed !== "pending confirmation" && !e.executed.startsWith("unconfirmed") && (approvedDanger.includes(e.executed) || e.executed === e.declared));
+    }
     const mechGreen = verdict.passed && exitCode === 0 && canary && mapOk && dangerConsistent;
     // Image-artifact detection (mechanical): artifacts the tester declares ∪ images added/modified by the diff ∪ untracked images — if there are images, a human-grade eye must look
     const isImg = (p: string): boolean => /\.(png|jpe?g|svg|webp|gif)$/i.test(p);
     imageFiles = (verdict.artifacts || []).filter((p) => isImg(p));
     if (mechGreen && imageFiles.length === 0) {
       try {
-        const st2 = await world.run("git", ["status", "--porcelain"], { timeoutMs: 60000 });
+        const st2 = await G(["status", "--porcelain"], 60000);
         for (const line of (st2.stdout || "").split("\n")) {
           const t2 = line.trim();
           if (t2.length < 4) continue;
@@ -639,7 +672,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
           if (isImg(p2) && imageFiles.indexOf(p2) < 0) imageFiles.push(p2);
         }
         if (baseline) {
-          const df2 = await world.run("git", ["diff", "--name-only", baseline + "..HEAD"], { timeoutMs: 60000 });
+          const df2 = await G(["diff", "--name-only", baseline + "..HEAD"], 60000);
           for (const p3 of (df2.stdout || "").split("\n").map((s) => s.trim())) {
             if (p3 !== "" && isImg(p3) && imageFiles.indexOf(p3) < 0) imageFiles.push(p3);
           }
@@ -702,10 +735,11 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
         phase("Run the approved destructive operations");
         const execReport2 = await fixer.ask<string>(dangerExecAsk(ok2));
         for (const e of dangerTrail) {
-          if (e.executed !== "pending confirmation") continue;
+          if (e.executed !== "pending confirmation" && !e.executed.startsWith("unconfirmed: ")) continue;
           const form = e.ruled.split("|")[1] || e.declared;
-          e.executed = execReport2.includes(form) ? form : "unconfirmed: executor report lacks the approved form";
-          if (!execReport2.includes(form)) log("Dangerous-operation execution unconfirmed: " + e.declared + " — recorded honestly and counted by the gate");
+          const hit = execReport2.includes(form) || execReport2.includes(e.declared);
+          e.executed = hit ? (execReport2.includes(form) ? form : e.declared) : "unconfirmed: executor report lacks the approved form";
+          if (!hit) log("Dangerous-operation execution unconfirmed: " + e.declared + " — pending re-check (the rework round gets one verbatim-quote chance), counted by the gate");
         }
       } else {
         log("Every destructive request in the rework was rejected: no workaround allowed");
@@ -746,10 +780,10 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   if (push0.target !== "") {
     // Pre-push check: the remote HEAD should be this round's baseline (pushed and verified last round) — a mismatch means an agent likely pushed inside its session; record loudly
     try {
-      const pre = await world.run("git", ["ls-remote", push0.target, "refs/heads/" + branch], { timeoutMs: 120000 });
+      const pre = await G(["ls-remote", push0.target, "refs/heads/" + branch]);
       const preHead = ((pre.stdout || "").split("\t")[0] || "").trim();
       if (preHead !== "" && preHead !== baseline && preHead !== lastPushed) {
-        log("Pre-push check anomaly: remote HEAD=" + preHead.slice(0, 7) + ", expected baseline=" + (baseline || "empty tree").slice(0, 7) + " — a session-internal push is suspected; recorded honestly");
+        log("Pre-push check: remote HEAD=" + preHead.slice(0, 7) + ", this round's baseline=" + (baseline || "empty tree").slice(0, 7) + (startRound > 1 ? " (normal on a resume: the remote should hold the ledger's last pushed SHA — checked)" : " — a session-internal push is suspected; recorded honestly"));
       }
     } catch {
       /* ls-remote unreachable: the push outcome itself is recorded honestly */
@@ -758,7 +792,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     let pushExit = -1;
     for (let t = 0; t < 2 && pushExit !== 0; t++) {
       try {
-        const p = await world.run("git", ["push", push0.target, "HEAD:" + branch], { timeoutMs: 300000 });
+        const p = await G(["push", push0.target, "HEAD:" + branch], 300000);
         pushExit = p.exitCode;
         if (pushExit !== 0) log("Push attempt " + (t + 1) + " exit code " + pushExit + ": " + (p.stderr || p.stdout || "").slice(0, 200));
       } catch {
@@ -766,7 +800,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       }
     }
     try {
-      const ls = await world.run("git", ["ls-remote", push0.target, "refs/heads/" + branch], { timeoutMs: 120000 });
+      const ls = await G(["ls-remote", push0.target, "refs/heads/" + branch]);
       const remoteHead = ((ls.stdout || "").split("\t")[0] || "").trim();
       if (remoteHead === headA && headA !== "") {
         pushState = "pushed & verified (" + headA.slice(0, 7) + "@" + push0.target + "/" + branch + ")";
@@ -790,7 +824,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   if (push0.target !== "" && headLedger !== "") {
     // The ledger commit is pushed and verified by the orchestrator as well: no agent paraphrase anywhere
     try {
-      const pl = await world.run("git", ["push", push0.target, "HEAD:" + branch], { timeoutMs: 300000 });
+      const pl = await G(["push", push0.target, "HEAD:" + branch], 300000);
       if (pl.exitCode !== 0) log("Ledger-commit push exit code " + pl.exitCode + ": " + (pl.stderr || "").slice(0, 200) + " — recorded honestly");
     } catch {
       log("Ledger-commit push failed to launch (recorded honestly)");
@@ -799,7 +833,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   log("Round " + round + " ledger " + (headLedger !== "" && headLedger !== headA ? "landed (" + headLedger.slice(0, 7) + ")" : "needs manual check"));
   if (push0.target !== "" && headLedger !== "") {
     try {
-      const ls3 = await world.run("git", ["ls-remote", push0.target, "refs/heads/" + branch], { timeoutMs: 120000 });
+      const ls3 = await G(["ls-remote", push0.target, "refs/heads/" + branch]);
       const rh3 = ((ls3.stdout || "").split("\t")[0] || "").trim();
       if (rh3 === headLedger) {
         lastPushed = headLedger;
@@ -827,17 +861,17 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
 phase("Final report");
 // Reconcile every requirement even after an interrupt: mark done vs not done, never drop an entry
 const interruptNote = finalVerdict
-  ? "This run was interrupted. Current state: " + finalVerdict.state + "; points awaiting the boss: " + finalVerdict.decisionList.join("; ") + ". Still reconcile every requirement: done ones carry outcome and evidence, undone ones say 'not done: reason' — no entry may be omitted. verdict must be interrupted."
+  ? "This run was interrupted. Current state: " + finalVerdict.state + "; points awaiting the boss: " + finalVerdict.decisionList.join("; ") + ". The line-by-line reconciliation is an internal affair: every entry, done or not, goes into the ledger and the reconciliation notes in Agents/requirement_map.md — none omitted; what the boss sees stays in brief form (explanation first, decisions pending, suggested options), never a reconciliation table. verdict must be interrupted."
   : "";
 let reported = await chief.ask<FinalReport>(
     interruptNote + (interrupted ? "" : roundsTotal + " rounds complete — hard stop (or finished early).") +
-    " Using Agents/requirements.md and the ledger as the only basis, write the Final Report to docs/final_report.md: every requirement (verbatim) -> outcome -> evidence (requirementOutcomes; a requirement without an entry is not done); deviations from the boss's requirements explained one by one (deviations); final state (commits/pushes/CI/tests/known limitations); decisions only the boss can make (decisionList); open questions answered one by one (questionAnswers: question text -> direct answer -> where the evidence is; when asked where something lives, answer the form too — raw or derived, whether a writer exists); the autonomous-decision list (autonomousDecisions: decision -> reason -> consequence if rejected -> Occam self-assessment \"adds complexity vs simplifies\"; any complexity-increasing decision must be here, never only in the ledger); two fixed sections — deferred and declined, each with its reason (a recorded deferral is a decision, not an omission; a declined idea is not re-proposed next run); fill the deferred/declined/processLessons fields faithfully (empty arrays when none); a process-lessons section — how the loop itself failed or nearly failed, distilled into checklist entries (each = rule + why + scope); adopted lessons persist and load with the next run (a disproven lesson is marked superseded, never left contradictory; re-validate against the current repo on load); one line of advice. This is a decision-layer document: no process narrative (which attempt went green, how many rebuttals, how many reworks — that is the ledger), gloss jargon on first use, one conclusion sentence at the top of each section, each requirement stated once, no code paths in the body (collect evidence pointers in one section), aiming at two pages or less (over that, keep only open items and key numbers and point to the ledger). At closing, also tidy the delivery: git mv every non-boss-facing file into Agents/ (never delete — deleting files is the boss's move; files the boss wrote or supplied, such as docs/boss_directives.md, stay as they are), so the repo root and docs/ hold only boss-facing files — the artifacts the boss's words name, docs/brief.md, the final report — plus what answering the boss requires; working scaffolding (ledger, maps, Agents/selfcheck.py, test and debug scripts, falsified history) all lives under Agents/. Occam's razor at delivery. git add -A && git commit, return FinalReport.",
+    " Using Agents/requirements.md and the ledger as the only basis, write the Final Brief to docs/final_brief.md — the boss wants a brief, not a reconciliation: reconciling is the Chief's internal affair. The brief has nine fixed sections: (1) an opening paragraph of progress and verdict — whether the output is what the boss asked for, written from the boss's judgement perspective (the summary field); (2) the deliverables list (deliverables: one line per artifact — a one-sentence description + which sentence of the boss's words it answers (quote <=15 chars) + where it is); (3) final state (commits/pushes/CI/tests/known limitations); (4) deviations from the boss's requirements explained one by one (deviations); (5) decisions only the boss can make (decisionList); (6) open questions answered one by one (questionAnswers: question text -> direct answer -> where the evidence is; when asked where something lives, answer the form too — raw or derived, whether a writer exists); (7) the autonomous-decision list (autonomousDecisions: decision -> reason -> consequence if rejected -> Occam self-assessment \"adds complexity vs simplifies\"; any complexity-increasing decision must be here, never only in the ledger); (8) deferred and declined (each with its reason — a recorded deferral is a decision, not an omission; a declined idea is not re-proposed next run; fill the deferred/declined/processLessons fields faithfully, empty arrays when none); (9) process lessons (how the loop itself failed or nearly failed, distilled into checklist entries: each = rule + why + scope) + one line of advice. The line-by-line reconciliation (requirementOutcomes: verbatim -> outcome -> evidence; a requirement without an entry is not done) is still filled and returned, but goes only into this round's ledger entry and the reconciliation notes in Agents/requirement_map.md (never touching the tester's verification column) — never into the boss's brief. Adopted lessons persist and load with the next run (a disproven lesson is marked superseded, never left contradictory; re-validate against the current repo on load). The brief is a decision-layer document: no process narrative (that is the ledger), gloss jargon on first use, one conclusion sentence at the top of each section, each item stated once, no code paths in the body, aiming at two pages or less. At closing, tidy the delivery (git mv only, never delete — deleting files is the boss's move): (1) code not needed for the final deliverable (experiment scripts, superseded implementation versions) -> Agents/; (2) AI-generated documents that have become history -> merge any content worth adopting into the final brief first, then move the document itself -> Agents/; (3) superseded versions of the briefs -> never deleted, never overwritten, never into Agents/ (they are boss-facing) -> under docs/history/, docs/ keeps the latest only; (4) files the boss wrote or supplied (such as docs/boss_directives.md) stay as they are; (5) the rest of the working scaffolding (ledger, maps, Agents/selfcheck.py, test and debug scripts, falsified history) all lives under Agents/ — the repo root and docs/ hold only boss-facing files. git add -A && git commit, return FinalReport.",
 );
 // Question guard (mechanical): questions in the boss's words with no answer in the report count as a missed requirement — answer once, then record honestly
 const askedQ = ((requirement + " " + focus).match(/？|\?/g) || []).length;
 if (askedQ > 0 && (!reported.questionAnswers || reported.questionAnswers.length === 0)) {
   reported = await chief.ask<FinalReport>(
-    "The boss's words contain " + askedQ + " question mark(s) but FinalReport.questionAnswers is empty — a question evaporating at intake is a missed requirement. Answer each one (question text -> direct answer, including the form: raw or derived, whether a writer exists -> where the evidence is; write \"cannot answer: reason\" where you truly cannot), write it back to docs/final_report.md and git add -A && git commit --amend --no-edit, then return the full FinalReport.",
+    "The boss's words contain " + askedQ + " question mark(s) but FinalReport.questionAnswers is empty — a question evaporating at intake is a missed requirement. Answer each one (question text -> direct answer, including the form: raw or derived, whether a writer exists -> where the evidence is; write \"cannot answer: reason\" where you truly cannot), write it back to docs/final_brief.md and git add -A && git commit --amend --no-edit, then return the full FinalReport.",
   );
   if (!reported.questionAnswers || reported.questionAnswers.length === 0) log("Report still lacks answered questions (recorded honestly; the boss's words contain " + askedQ + " question mark(s))");
 }
@@ -847,10 +881,10 @@ if (push0.target !== "") {
   if (!ungatedHead) {
     const headFinal = await HEAD0();
     try {
-      const pf = await world.run("git", ["push", push0.target, "HEAD:" + branch], { timeoutMs: 300000 });
+      const pf = await G(["push", push0.target, "HEAD:" + branch], 300000);
       if (pf.exitCode === 0) {
         try {
-          const lf = await world.run("git", ["ls-remote", push0.target, "refs/heads/" + branch], { timeoutMs: 120000 });
+          const lf = await G(["ls-remote", push0.target, "refs/heads/" + branch]);
           const rhf = ((lf.stdout || "").split("\t")[0] || "").trim();
           finalPush = rhf === headFinal && headFinal !== "" ? "pushed & verified (" + headFinal.slice(0, 7) + ")" : "push verification failed (reported honestly: remote=" + rhf.slice(0, 7) + ")";
         } catch {
@@ -866,18 +900,21 @@ if (push0.target !== "") {
   log("Final-report push: " + finalPush);
 }
 const md = [
-  "# Final Report",
+  "# Final Brief",
   "",
   "Boss's requirement (verbatim): " + requirement,
   "",
-  "## Requirement reconciliation",
-  ...reported.requirementOutcomes.map((o) => "- **" + o.id + "** \u201c" + o.verbatim + "\u201d -> " + o.outcome + " (evidence: " + o.evidence + ")"),
+  "## Progress and verdict",
+  reported.summary,
   "",
-  "## Deviations",
-  reported.deviations.length > 0 ? reported.deviations.map((d) => "- " + d) : "- None: no deviation from the boss's requirements occurred",
+  "## Deliverables",
+  ...reported.deliverables.map((d) => "- **" + d.artifact + "** (answers the boss: \u201c" + d.addresses + "\u201d) -> " + d.location),
   "",
   "## Final state",
   reported.state,
+  "",
+  "## Deviations",
+  reported.deviations.length > 0 ? reported.deviations.map((d) => "- " + d) : "- None: no deviation from the boss's requirements occurred",
   "",
   "## Awaiting the boss",
   ...reported.decisionList.map((d) => "- " + d),
@@ -901,9 +938,9 @@ const md = [
   reported.advice,
   "",
   "---",
-  "Verdict: " + reported.verdict + "; rounds executed: " + rows.length + ".",
+  "Verdict: " + reported.verdict + "; rounds executed: " + rows.length + ". The line-by-line reconciliation (verbatim -> outcome -> evidence) is an internal affair, in Agents/requirement_map.md and the ledger.",
 ].join("\n");
-await artifact.markdown("report", md, { title: "Final Report", description: "Requirement reconciliation + deviations + decision list", primary: true });
+await artifact.markdown("report", md, { title: "Final Brief", description: "Progress & verdict + deliverables + decision list", primary: true });
 
 return {
   conclusion: reported.advice,

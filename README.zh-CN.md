@@ -4,7 +4,7 @@
 
 **为老板干活的 AI 团队循环，有界、对抗验证，并向你如实汇报。**
 
-[![Version](https://img.shields.io/badge/version-v0.3.3-blue)](CITATION.cff)
+[![Version](https://img.shields.io/badge/version-v0.3.5-blue)](CITATION.cff)
 [![License](https://img.shields.io/badge/license-CC%20BY%204.0%20%2F%20Apache--2.0-green)](LICENSE)
 ![已在 ZCode 验证](https://img.shields.io/badge/%E5%B7%B2%E5%9C%A8%20ZCode%20%E9%AA%8C%E8%AF%81-orange)
 [![English](https://img.shields.io/badge/docs-English-blue)](README.md)
@@ -51,7 +51,7 @@ cp research-iteration-loop/implementations/zcode/research-iteration-loop.dwf.ts 
 cp robust-engineering-loop/implementations/zcode/robust-engineering-loop.dwf.ts ~/.zcode/workflows/
 ```
 
-在要开发的仓库内运行。每个工作流在**该仓库**维护两类文件：老板面向的文件在 `docs/` 下——你看的简报（`docs/brief.md`）与最终汇报、你写的运行中指令（`docs/boss_directives.md`）；工程脚手架在 `Agents/` 下（账本、验证映射表、`Agents/selfcheck.py`、测试与调试脚本），你不需要打开它。每轮本地提交，只推送到你指定的 remote（默认为 [GitCoffer](https://github.com/Ziqing7226/GitCoffer) 本地加密备份）。
+在要开发的仓库内运行。每个工作流在**该仓库**维护两类文件：老板面向的文件在 `docs/` 下——你看的简报（`docs/brief.md`）与最终简报、你写的运行中指令（`docs/boss_directives.md`）；工程脚手架在 `Agents/` 下（账本、验证映射表、`Agents/selfcheck.py`、测试与调试脚本），你不需要打开它。每轮本地提交，只推送到你指定的 remote（默认为 [GitCoffer](https://github.com/Ziqing7226/GitCoffer) 本地加密备份）。
 
 **运行中指挥**：把你的指令写进**同一仓库**的 `docs/boss_directives.md`——下一轮即被采纳执行，应用情况记入账本。
 

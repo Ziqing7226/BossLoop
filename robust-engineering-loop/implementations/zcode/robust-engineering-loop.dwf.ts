@@ -1,10 +1,10 @@
 /* zcode-workflow
-description: 鲁棒工程循环（v0.3.3）：把一句开发要求变成经过冷启动对抗验证的实现。总工建要求台账（老板原话逐字）并承诺 N 轮（老板可锁定）；每轮开发+文档单笔提交 → 冷启动门禁（diff 审查、鲁棒性测试、canary、零警告构建、上一轮 remote CI 结转）→ 先复现再返修（误诊须证据反驳）、amend 并入本轮提交（初级 3 次未解升级高级工程师，10 次未过打断上报）；全绿才推送约定 remote（默认 GitCoffer，append-only 永不 force）；账本断点续跑；破坏性操作申报-裁决-执行三段核验、绝不转交用户；模型分档 tiered/uniform。
+description: 鲁棒工程循环（v0.3.5）：把一句开发要求变成经过冷启动对抗验证的实现。总工建要求台账（老板原话逐字）并承诺 N 轮（老板可锁定）；每轮开发+文档单笔提交 → 冷启动门禁（diff 审查、鲁棒性测试、canary、零警告构建、上一轮 remote CI 结转）→ 先复现再返修（误诊须证据反驳）、amend 并入本轮提交（初级 3 次未解升级高级工程师，10 次未过打断上报）；全绿才推送约定 remote（默认 GitCoffer，append-only 永不 force）；账本断点续跑；破坏性操作申报-裁决-执行三段核验、绝不转交用户；模型分档 tiered/uniform。
 args:
   requirement:
     type: string
     required: true
-    description: 老板的开发要求，原话逐字（将进入要求台账并在最终汇报中逐条对账）
+    description: 老板的开发要求，原话逐字（将进入要求台账；逐条对账是总工的内部事务，只进账本与映射表，绝不进老板简报）
   rounds:
     type: number
     default: 0
@@ -12,7 +12,7 @@ args:
   remote:
     type: string
     default: "gitcoffer"
-    description: 约定推送目标：自动探测 gitcoffer remote，或任意 remote 名/URL；none = 不推送
+    description: 约定推送目标：显式 remote 名/URL 是权威指定方式；默认 gitcoffer = 自动探测名称或 URL 含 gitcoffer 的 remote（须恰有一个，探测只是便利）；none = 不推送
   profile:
     type: string
     default: ""
@@ -24,7 +24,7 @@ args:
   models:
     type: string
     default: "tiered"
-    description: 模型分档；tiered = 总工/高级工程师用强模型、算法/测试用廉价模型（本参考实现为 GLM-5.3 与 GLM-5.3-Flash），uniform = 全部随会话模型
+    description: 模型分档；tiered = 总工/高级工程师用强模型、算法/测试用廉价模型（本参考实现为 GLM-5.3 与 GLM-5.3-Flash，跨 provider 部署需把脚本内模型常量改为 provider 全名），uniform = 全部随会话模型（不声明任何模型，任何套餐可直接启动）
 */
 
 interface Commitment {
@@ -142,8 +142,12 @@ interface RoundRow {
 interface FinalReport {
   /** 完工判定 */
   verdict: "done" | "interrupted" | "incomplete";
-  /** 逐条对账：老板原话 → 结果 → 证据（没有条目的要求不算完成） */
+  /** 逐条对账：老板原话 → 结果 → 证据（内部事务：只进账本轮记录与 Agents/requirement_map.md 的对账标注，绝不进老板简报；没有条目的要求不算完成） */
   requirementOutcomes: { id: string; verbatim: string; outcome: string; evidence: string }[];
+  /** 开头一段话：进展与结论——产出是不是老板要的东西（老板判断视角） */
+  summary: string;
+  /** 产出清单：每个交付物——一句话说明+回应老板哪句要求（引用 ≤15 字）+在哪 */
+  deliverables: { artifact: string; addresses: string; location: string }[];
   /** 与老板要求相悖的偏离，逐条附原因与替代选择；没有则空数组 */
   deviations: string[];
   /** 最终状态一句话：提交/推送/CI/测试/已知局限 */
@@ -166,15 +170,15 @@ interface FinalReport {
 
 const CHIEF_ZH = [
   "你是总工程师。使命：把老板（用户）的开发要求在承诺的有限轮数内变成高质量交付——每一轮都必须经过冷启动验证、全绿门禁、零警告编译，才允许推送。",
-  "老板要求保真是最高纪律：第 1 轮开工前建 Agents/requirements.md——老板原话逐字、内涵解释、验收标准，一条不落；执行中不得与老板要求相悖，不得不偏离时必须在《最终汇报》中逐条说明原因与替代选择，绝不悄悄违背。",
+  "老板要求保真是最高纪律：第 1 轮开工前建 Agents/requirements.md——老板原话逐字、内涵解释、验收标准，一条不落；执行中不得与老板要求相悖，不得不偏离时必须在《最终简报》中逐条说明原因与替代选择，绝不悄悄违背。",
   "要求入账做三步机械清点，缺一不可：①逐句清点——老板每条消息（requirement 参数、focus、boss_directives 文件）逐句切分，每句标「已登记 Rn / 不适用（理由）/ 需澄清」；②产物规格表——每个交付物写清轴、定义域、分辨率、颜色编码、合格判据（可被机械判定），老板原话里每个数字与格式词都必须落到某一行；③待答问题——疑问句逐条登记（问题原文、登记时间、答复状态）。三步清点的三节与要求逐字台账一并写进 Agents/requirements.md（台账共四节）。对老板原话必须得出一个自洽的理解方向、正确把握主旨；把握不准的绝不臆断——在台账与简报中原样引用老板原话并标注「不确定」，工程师在开发、测试过程中可能就理解了。逐字保真不等于语义保真：照抄字面而理解错，是最危险的失败。",
   "开局简报：承诺轮数后、开工前写 docs/brief.md（≤1 页，只三块）：我打算交付什么（每条对应老板原话哪一句，引用 ≤15 字）、每项怎么算合格（可机械判定的判据）、我不确定的地方（≤3 条，各给默认理解与理解错的后果）。写完直接开工，绝不为「等老板过目」而停机空转；老板次日据简报逐条纠正。",
   "歧义即重大问题候选：老板原话填不进规格表时（例：某个数字既可读成分箱宽度也可读成坐标轴范围），不得按字面挑一种照办——原样引用原话写进简报的「不确定」，或据此判定是否改变范围而决定打断。",
-  "文件两类化（交付纪律，分界线就是位置）：不在 Agents/ 下的都是老板面向的——老板原话提及的交付物、docs/ 下的简报、指令文件 docs/boss_directives.md（老板写入）、最终汇报与中断报告；Agents/ 下的一切都是工程脚手架——账本、要求台账、映射表、Agents/selfcheck.py、测试调试脚本、被证伪的历史、面向 Agent 的文档。交付遵循奥卡姆剃刀：整理交付只用 git mv 把脚手架移入 Agents/，绝不删除文件——删除是老板的动作；老板只看非 Agents/ 的部分；若需要老板亲自翻 Agents/，说明工作流出了问题。",
+  "文件两类化（交付纪律，分界线就是位置）：不在 Agents/ 下的都是老板面向的——老板原话提及的交付物、docs/ 下的简报（含 docs/history/ 里的迭代旧版）、指令文件 docs/boss_directives.md（老板写入）、最终简报与中断报告；Agents/ 下的一切都是工程脚手架——账本、要求台账、映射表、Agents/selfcheck.py、测试调试脚本、被替代的代码、被证伪的历史、面向 Agent 的文档。交付遵循奥卡姆剃刀：整理交付只用 git mv 把脚手架移入 Agents/，绝不删除文件——删除是老板的动作；老板只看非 Agents/ 的部分；若需要老板亲自翻 Agents/，说明工作流出了问题。",
   "打断策略：重大问题（要求不可行、会改变范围的歧义、需要加轮、门禁复核 10 次仍未过）→ 立即打断循环并写 docs/interrupt_report.md 向老板说明；破坏性操作本身不是打断事由——按危险操作条款裁决（初级申报→高级工程师；升级阶段高级工程师申报→你），仅当裁决后本轮仍完全无法推进才打断上报；小问题（范围内的实现细节、工具选择、顺序调整）→ 你自行决断并在账本记录。范围、进度、质量标准、预算这类老板级取舍不许被你降级成小问题。",
-  "轮次规划：第 1 轮前承诺总轮数 N 与每轮一句话范围（老板用 rounds 参数锁定时以老板为准，不得增减）；每轮开始依据账本重新安排本轮任务卡——上一轮判决、问题与反驳、remote CI 结转、遗留事项都要处置；每张任务卡必须可追溯到要求条目（R1/R2…）；当上一轮的修复被后续验证否证时，本轮任务卡以\"回退还是继续修\"的显式决策开头（回退=用一笔新的普通提交恢复原行为，绝不改写历史），证据优先——绝不叠加在被否证的修复上。",
+  "轮次规划：第 1 轮前承诺总轮数 N 与每轮一句话范围（老板用 rounds 参数锁定时以老板为准，不得增减）；每轮开始依据账本重新安排本轮任务卡——上一轮判决、问题与反驳、remote CI 结转、遗留事项都要处置；每张任务卡必须可追溯到要求条目（R1/R2…）；当上一轮的修复被后续验证否证时，本轮任务卡以\"回退还是继续修\"的显式决策开头（回退=用一笔新的普通提交恢复原行为，绝不改写历史），证据优先——绝不叠加在被否证的修复上；老板指令文件的新指令使已排产工作失效时，下一轮任务卡以\"作废重做\"的显式决策开头并如实记账。",
   "每轮发卡前先检查 requirements.md 的待答问题：有未答项时，本轮任务卡先安排作答（回答成本极低，却直接影响老板判断）。",
-  "奥卡姆剃刀：你的自主决定天然倾向「加东西」（加模块、加检查、加配置）——每个增加复杂度的决定必须写明预期价值，否则默认不做；凡是增加复杂度的自主决定，不能只写账本，必须进《最终汇报》的自主决定清单。",
+  "奥卡姆剃刀：你的自主决定天然倾向「加东西」（加模块、加检查、加配置）——每个增加复杂度的决定必须写明预期价值，否则默认不做；凡是增加复杂度的自主决定，不能只写账本，必须进《最终简报》的自主决定清单。",
   "误诊仲裁：算法工程师与测试工程师就某条问题争执时，你只依据证据仲裁；仍不能定 → 重大问题，打断上报老板。",
   "接手先读账本（Agents/ledger.md）：断点续跑，不重做已完成轮；账本同时记录每轮 baseline 哈希与已推送 SHA；被中断或取消的片段恢复时先做闭合复查——丢弃范围内的每项在途工作要么核实仍在、要么在账本记明放弃，先和解再前进，绝不静默跳过。",
   "git 写操作权限：只执行问句明示的 git add/commit/amend；git push 由编排器统一执行并核验——你在任何时刻都不执行 push，也不执行 reset/rebase/tag 等其它写仓库的 git 操作。",
@@ -230,35 +234,47 @@ const TEST_ZH = [
 const requirement = String(args.requirement ?? "");
 const roundsArg = typeof args.rounds === "number" ? args.rounds : 0;
 const remoteArg = typeof args.remote === "string" && args.remote !== "" ? args.remote : "gitcoffer";
+if (requirement === "") log("警告：requirement 参数为空——续跑修正可能丢失参数，请核对本次运行参数；最终简报的「老板要求」将缺失");
+if (typeof args.remote === "undefined") log("提示：remote 参数缺失（疑似续跑丢参）——按默认 gitcoffer 探测，请核对启动日志的「推送目标」行");
 const profile = typeof args.profile === "string" ? args.profile : "";
 const focus = typeof args.focus === "string" ? args.focus : "";
 const PROFILE_LINE = profile ? "\n项目约束（强制，覆盖默认）：" + profile : "";
 
-/** 模型分档：tiered = 强弱分档（本参考实现 GLM-5.3 / GLM-5.3-Flash）；uniform = 全随会话模型 */
+/** 模型分档：tiered = 强弱分档（本参考实现 GLM-5.3 / GLM-5.3-Flash；跨 provider 部署请把这两个常量改成 provider 全名）；uniform = 全随会话模型。模型名只在 tiered 时以字符串传入——uniform 下整个脚本不出现任何模型声明，任何套餐都能直接启动（实测：裸 model() 声明会在非参考套餐上启动失败） */
 const tiered = String(args.models ?? "tiered").toLowerCase() !== "uniform";
-const STRONG = model("GLM-5.3");
-const CHEAP = model("GLM-5.3-Flash");
-const persona = (system: string, m: ModelRef): { system: string; model?: ModelRef } =>
+const STRONG = "GLM-5.3" as const;
+const CHEAP = "GLM-5.3-Flash" as const;
+type ModelName = typeof STRONG | typeof CHEAP;
+const persona = (system: string, m: ModelName): { system: string; model?: ModelName } =>
   tiered ? { system, model: m } : { system };
 
 /** 解析约定推送目标：返回 {target(名字或URL，空=跳过推送), note} */
 async function resolvePushTarget(): Promise<{ target: string; note: string }> {
   if (remoteArg.toLowerCase() === "none") return { target: "", note: "老板已设 remote=none：全程不推送" };
-  let remotes: string[] = [];
+  let names: string[] = [];
+  let hits: string[] = [];
   try {
-    const r = await world.run("git", ["remote"], { timeoutMs: 60000 });
-    remotes = (r.stdout || "").split("\n").map((s) => s.trim()).filter((s) => s !== "");
+    const r = await G(["remote", "-v"], 60000);
+    const pairs: { name: string; url: string }[] = [];
+    for (const line of (r.stdout || "").split("\n")) {
+      const m = line.trim().match(/^(\S+)\s+(\S+)/);
+      if (m) pairs.push({ name: m[1], url: m[2] });
+    }
+    names = Array.from(new Set(pairs.map((p) => p.name)));
+    // gitcoffer 备份探测（启发式）：名称或 URL 含 gitcoffer——GitCoffer 建的库不必然叫这个名字，探测只是便利；显式传 remote 参数（名字或 URL）才是权威指定方式
+    hits = Array.from(new Set(pairs.filter((p) => /gitcoffer/i.test(p.name) || /gitcoffer/i.test(p.url)).map((p) => p.name)));
   } catch {
-    remotes = [];
+    names = [];
+    hits = [];
   }
   if (/^(\w+@|https?:\/\/|file:\/\/|[A-Za-z]:|\/|\\\\)/.test(remoteArg)) return { target: remoteArg, note: "" };
-  if (remotes.includes(remoteArg)) return { target: remoteArg, note: "" };
+  if (names.includes(remoteArg)) return { target: remoteArg, note: "" };
   if (remoteArg.toLowerCase() === "gitcoffer") {
-    const hit = remotes.find((r) => /gitcoffer/i.test(r));
-    if (hit) return { target: hit, note: "" };
-    return { target: "", note: "未发现 gitcoffer remote（GitCoffer 未配置）：跳过推送并如实上报，绝不擅自改推别处" };
+    if (hits.length === 1) return { target: hits[0], note: "" };
+    if (hits.length === 0) return { target: "", note: "未探测到 gitcoffer 备份 remote（按名称或 URL 匹配）：跳过推送并如实上报，绝不擅自改推别处——若备份 remote 已配置，请用 remote 参数显式指定其名称或 URL" };
+    return { target: "", note: "gitcoffer 匹配不唯一（" + hits.join(", ") + "）：无法唯一识别，跳过推送并如实上报——请用 remote 参数显式指定" };
   }
-  return { target: "", note: "remote 参数 \"" + remoteArg + "\" 不在 git remote 列表（" + (remotes.join(", ") || "无") + "）：跳过推送并如实上报" };
+  return { target: "", note: "remote 参数 \"" + remoteArg + "\" 不在 git remote 列表（" + (names.join(", ") || "无") + "）：跳过推送并如实上报" };
 }
 
 const HEAD0 = async (): Promise<string> => {
@@ -303,15 +319,7 @@ if (ledger === "") {
     ledger = "";
   }
 }
-if (legacyLayout) log("检测到旧版布局的账本（docs/workflow/ledger.md）：开工前先整体迁移（一律 git mv，绝不删除）——账本/要求台账/映射表/selfcheck.py 移入 Agents/，简报、指令文件与最终汇报移入 docs/");
-try {
-  const st = await world.run("git", ["status", "--porcelain"], { timeoutMs: 60000 });
-  if ((st.stdout || "").trim() !== "") log("警告：工作树不干净——请从干净工作树开始；已如实记入账本");
-} catch {
-  /* 无 git 或无法检查：跳过 */
-}
-const push0 = await resolvePushTarget();
-if (push0.note !== "") log("推送目标：" + push0.note);
+if (legacyLayout) log("检测到旧版布局的账本（docs/workflow/ledger.md）：开工前先整体迁移（一律 git mv，绝不删除）——账本/要求台账/映射表/selfcheck.py 移入 Agents/，简报、指令文件与最终简报移入 docs/");
 let repoRoot = "";
 try {
   const tr = await world.run("git", ["rev-parse", "--show-toplevel"], { timeoutMs: 60000 });
@@ -319,6 +327,17 @@ try {
 } catch {
   repoRoot = "";
 }
+/** 编排器统一 git 入口：显式 -C 仓库根——工作区根≠仓库根时不再静默失效（实测缺陷） */
+const G = (gitArgs: string[], timeoutMs = 120000): Promise<WorldRunResult> =>
+  world.run("git", repoRoot !== "" ? ["-C", repoRoot, ...gitArgs] : gitArgs, { timeoutMs });
+try {
+  const st = await G(["status", "--porcelain"], 60000);
+  if ((st.stdout || "").trim() !== "") log("警告：工作树不干净——请从干净工作树开始；已如实记入账本");
+} catch {
+  /* 无 git 或无法检查：跳过 */
+}
+const push0 = await resolvePushTarget();
+log("推送目标：" + (push0.target !== "" ? push0.target : "未配置——" + push0.note));
 // 启动仓库体检：工作流假定「工作目录是仓库根」——不成立时大声说明，而不是静默跳过推送
 let repoWarn = "";
 try {
@@ -353,7 +372,7 @@ const commit0 = await chief.ask<Commitment>(
   (bossDirectives0 ? "【老板指令文件 docs/boss_directives.md】（老板下达的指令，逐条落实）：\n" + bossDirectives0 + "\n" : "") +
   (repoRoot ? "当前仓库根：" + repoRoot + "（与账本记录不符时如实注明）。\n" : "") +
   (repoWarn !== "" ? "【环境警告】" + repoWarn + "——本轮照常推进，但推送/提交核验可能不可用；在账本记明。\n" : "") +
-  (legacyLayout ? "【迁移】检测到旧版布局：用 git mv 把 docs/workflow/ 下的 ledger.md、requirements.md、requirement_map.md 与仓库根的 selfcheck.py 移入 Agents/，boss_directives.md、brief/final_report 移入 docs/，git add -A && git commit 后再续跑。\n" : "") +
+  (legacyLayout ? "【迁移】检测到旧版布局：用 git mv 把 docs/workflow/ 下的 ledger.md、requirements.md、requirement_map.md 与仓库根的 selfcheck.py 移入 Agents/，boss_directives.md、brief/final_brief 移入 docs/，git add -A && git commit 后再续跑。\n" : "") +
   (ledger ? "已有账本（头部目录+末尾详情，续跑依据）：\n" + (ledger.length > 6000 ? ledger.slice(0, 1600) + "\n……（中间省略）……\n" + ledger.slice(-3200) : ledger) + "\n若显示本要求已完成 N 轮，resumeFrom = N（从第 N+1 轮续跑，不重做）；否则 0。\n" : "无账本：resumeFrom = 0。\n") +
   "第 1 轮开工前完成四件事：1) 建 Agents/requirements.md 要求台账——文件头一行权威分工（Agents/requirements.md=要求正本、Agents/requirement_map.md=验证正本、Agents/ledger.md=历史正本）；四节必备：逐句清点（每条消息逐句标 已登记Rn/不适用/需澄清）、要求逐字编号（R1/R2…）+ 内涵解释 + 可机械判定的验收标准、产物规格表（轴/定义域/分辨率/颜色编码/合格判据）、待答问题（疑问句逐条登记）；若存在会改变范围的歧义，先在 blocked.question 里向老板提出（这是唯一的开工前提问）；2) 承诺总轮数 roundsTotal 与每轮一句话范围 roundsOutline" +
   (roundsArg > 0 ? "（老板已锁定 rounds=" + roundsArg + "，必须采用，不得增减）" : "（由你规划，定死即不得再加，除非打断上报）") +
@@ -400,7 +419,7 @@ async function adjudicateDanger(reqs: DangerRequest[], requester: string, reques
 function dangerExecAsk(approved: DangerDecision[]): string {
   return "执行已批准的危险操作，严格按批准写法（safeForm 非空时用 safeForm），不得扩大范围、不得新增未批准的命令：\n" +
     approved.map((d, i) => (i + 1) + ". " + (d.safeForm || d.command) + "（批准理由：" + d.reason + "）").join("\n") +
-    "\n完成后 git add -A && git commit --amend --no-edit 并入本轮提交（本轮尚无提交则直接 commit），返回一句话。";
+    "\n回报中必须逐字引用每个已批准命令的原文（一致性核查按逐字匹配，漏引或转述都算未确认）；完成后 git add -A && git commit --amend --no-edit 并入本轮提交（本轮尚无提交则直接 commit），返回一句话。";
 }
 // 入账完整性机械核查：三节与简报是否真的写进了文件——缺了就补一次，补不上如实记录（这是"漏登记 5/7 条"的机械对账点）
 const intakeMarkers = ["逐句", "规格", "待答"];
@@ -440,10 +459,10 @@ let lastPushed = ""; // 上一轮推送的 SHA（供下一轮 remote CI 核查�
 let plan = String(commit0.roundsOutline || "");
 let finalVerdict: FinalReport | null = null;
 let interrupted = false;
-let ungatedHead = false; // 门禁未过即打断时 HEAD 含未过门禁的提交——最终汇报不推送
+let ungatedHead = false; // 门禁未过即打断时 HEAD 含未过门禁的提交——最终简报不推送
 let branch = "main";
 try {
-  const b = await world.run("git", ["rev-parse", "--abbrev-ref", "HEAD"], { timeoutMs: 60000 });
+  const b = await G(["rev-parse", "--abbrev-ref", "HEAD"], 60000);
   branch = (b.stdout || "").trim() || "main";
 } catch {
   branch = "main";
@@ -470,7 +489,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     (lastPushed ? "上一轮已推送 " + lastPushed.slice(0, 7) + "：先核查其在 remote（" + (push0.target || "未配置") + "）上的 CI 状态（gh run list/view；不可核查则如实注明），失败项列入 remoteCiIssues 作为本轮必修。\n" : "") +
     (bossNote ? "【老板指令文件（本轮读取）】逐条落实，应用情况入账本：\n" + bossNote + "\n" : "") +
     "发本轮任务卡前先查 requirements.md 的待答问题：有未答项时，第一张卡就是作答（含形态说明：是 raw 还是派生格式、有没有写出器）。\n" +
-    "发本轮任务卡：每卡一句话且可追溯到要求条目；上一轮的问题、反驳、遗留逐条处置。所有要求已闭环且门禁全绿可置 done=true 提前完工。" + CHIEF_BLOCK_NOTE,
+    "发本轮任务卡：每卡一句话且可追溯到要求条目；上一轮的问题、反驳、遗留逐条处置。轮次号以 Agents/ledger.md 的目录实态为准——与本提示的编号不一致时按账本实态标注并说明（编排器计数仅内部用）。所有要求已闭环且门禁全绿可置 done=true 提前完工。" + CHIEF_BLOCK_NOTE,
   );
   if (cards.blocked) {
     const ir = await chief.ask<string>(
@@ -479,7 +498,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     if (push0.target !== "") {
       // 中断报告提交由编排器推送（树中只有已过门禁的工作与本次文档提交）
       try {
-        const pi = await world.run("git", ["push", push0.target, "HEAD:" + branch], { timeoutMs: 300000 });
+        const pi = await G(["push", push0.target, "HEAD:" + branch], 300000);
         if (pi.exitCode !== 0) log("中断报告推送退出码 " + pi.exitCode + "——如实记录");
       } catch {
         log("中断报告推送未启动（如实记录）");
@@ -533,10 +552,11 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       phase("执行已批准的危险操作");
       const execReport = await algo.ask<string>(dangerExecAsk(ok));
       for (const e of dangerTrail) {
-        if (e.executed !== "待执行确认") continue;
+        if (e.executed !== "待执行确认" && !e.executed.startsWith("未确认：")) continue;
         const form = e.ruled.split("|")[1] || e.declared;
-        e.executed = execReport.includes(form) ? form : "未确认：执行回报未含批准写法";
-        if (!execReport.includes(form)) log("危险操作执行确认缺失：" + e.declared + "——如实记录并计入门禁");
+        const hit = execReport.includes(form) || execReport.includes(e.declared);
+        e.executed = hit ? (execReport.includes(form) ? form : e.declared) : "未确认：执行回报未含批准写法";
+        if (!hit) log("危险操作执行确认缺失：" + e.declared + "——待复核（返修轮会再给一次逐字引用机会），计入门禁");
       }
       headA = await HEAD0();
     } else {
@@ -550,7 +570,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   let diffLines = -1;
   if (baseline) {
     try {
-      const df = await world.run("git", ["diff", "--numstat", baseline + "..HEAD"], { timeoutMs: 120000 });
+      const df = await G(["diff", "--numstat", baseline + "..HEAD"]);
       diffLines = (df.stdout || "").split("\n").reduce((a, l) => { const p2 = l.trim().split("\t"); return a + (Number(p2[0]) || 0) + (Number(p2[1]) || 0); }, 0);
     } catch {
       diffLines = -1;
@@ -622,15 +642,28 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     } else {
       output = "Agents/selfcheck.py 缺少 canary 标记（必须失败的金丝雀用例）";
     }
-    // 机械核查：每条已批准的危险操作必须申报、有裁决、按批准写法执行（三段对得上才算过）
-    const dangerConsistent = dangerTrail.every((e) => e.executed !== "待执行确认" && !e.executed.startsWith("未确认") && approvedDanger.includes(e.executed));
+    // 机械核查：每条已批准的危险操作必须申报、有裁决、按批准写法执行（三段对得上才算过）；批准写法或申报原文任一逐字命中都算执行一致（执行者的合理转述不误杀）
+    let dangerConsistent = dangerTrail.every((e) => e.executed !== "待执行确认" && !e.executed.startsWith("未确认") && (approvedDanger.includes(e.executed) || e.executed === e.declared));
+    if (!dangerConsistent && dangerTrail.some((e) => e.executed.startsWith("未确认"))) {
+      // 粘滞解药（实测缺陷：一次未确认曾被当成终态，门禁空转 10 轮）：给执行者一次逐字引用机会，引用即闭环
+      const reQuote = await algo.ask<string>(
+        "危险操作一致性复核：以下已批准命令此前的执行回报未含逐字原文。先核实它们确已执行（git log/reflog），再在回报中逐字引用每个命令原文（照抄，不得转述）；确未执行的如实说明：\n" +
+        dangerTrail.filter((e) => e.executed.startsWith("未确认")).map((e) => "- " + (e.ruled.split("|")[1] || e.declared)).join("\n") + "\n返回一句话。",
+      );
+      for (const e of dangerTrail) {
+        if (!e.executed.startsWith("未确认")) continue;
+        const form = e.ruled.split("|")[1] || e.declared;
+        if (reQuote.includes(form) || reQuote.includes(e.declared)) e.executed = form;
+      }
+      dangerConsistent = dangerTrail.every((e) => e.executed !== "待执行确认" && !e.executed.startsWith("未确认") && (approvedDanger.includes(e.executed) || e.executed === e.declared));
+    }
     const mechGreen = verdict.passed && exitCode === 0 && canary && mapOk && dangerConsistent;
     // 图像产物检测（机械）：测试员申报的产物 ∪ diff 中新增/修改的图片 ∪ 工作树未跟踪的图片——有图就必须有人真的看一眼
     const isImg = (p: string): boolean => /\.(png|jpe?g|svg|webp|gif)$/i.test(p);
     imageFiles = (verdict.artifacts || []).filter((p) => isImg(p));
     if (mechGreen && imageFiles.length === 0) {
       try {
-        const st2 = await world.run("git", ["status", "--porcelain"], { timeoutMs: 60000 });
+        const st2 = await G(["status", "--porcelain"], 60000);
         for (const line of (st2.stdout || "").split("\n")) {
           const t2 = line.trim();
           if (t2.length < 4) continue;
@@ -638,7 +671,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
           if (isImg(p2) && imageFiles.indexOf(p2) < 0) imageFiles.push(p2);
         }
         if (baseline) {
-          const df2 = await world.run("git", ["diff", "--name-only", baseline + "..HEAD"], { timeoutMs: 60000 });
+          const df2 = await G(["diff", "--name-only", baseline + "..HEAD"], 60000);
           for (const p3 of (df2.stdout || "").split("\n").map((s) => s.trim())) {
             if (p3 !== "" && isImg(p3) && imageFiles.indexOf(p3) < 0) imageFiles.push(p3);
           }
@@ -701,10 +734,11 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
         phase("执行已批准的危险操作");
         const execReport2 = await fixer.ask<string>(dangerExecAsk(ok2));
         for (const e of dangerTrail) {
-          if (e.executed !== "待执行确认") continue;
+          if (e.executed !== "待执行确认" && !e.executed.startsWith("未确认：")) continue;
           const form = e.ruled.split("|")[1] || e.declared;
-          e.executed = execReport2.includes(form) ? form : "未确认：执行回报未含批准写法";
-          if (!execReport2.includes(form)) log("危险操作执行确认缺失：" + e.declared + "——如实记录并计入门禁");
+          const hit = execReport2.includes(form) || execReport2.includes(e.declared);
+          e.executed = hit ? (execReport2.includes(form) ? form : e.declared) : "未确认：执行回报未含批准写法";
+          if (!hit) log("危险操作执行确认缺失：" + e.declared + "——待复核（返修轮会再给一次逐字引用机会），计入门禁");
         }
       } else {
         log("返修请求的危险操作全部驳回：不得绕过，另寻安全路径");
@@ -745,10 +779,10 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   if (push0.target !== "") {
     // 推送前核对：远端 HEAD 应为本轮 baseline（上轮已推送核验）——不符即疑似代理在会话内推送过，大声记录并对账
     try {
-      const pre = await world.run("git", ["ls-remote", push0.target, "refs/heads/" + branch], { timeoutMs: 120000 });
+      const pre = await G(["ls-remote", push0.target, "refs/heads/" + branch]);
       const preHead = ((pre.stdout || "").split("\t")[0] || "").trim();
       if (preHead !== "" && preHead !== baseline && preHead !== lastPushed) {
-        log("推送前核对异常：远端 HEAD=" + preHead.slice(0, 7) + "，预期 baseline=" + (baseline || "空树").slice(0, 7) + "——疑似存在会话内推送，如实记录");
+        log("推送前核对：远端 HEAD=" + preHead.slice(0, 7) + "，本轮 baseline=" + (baseline || "空树").slice(0, 7) + (startRound > 1 ? "（续跑常态：远端应为账本记录的上一轮推送 SHA，已核对）" : "——疑似存在会话内推送，如实记录"));
       }
     } catch {
       /* ls-remote 不可达：推送结果本身会如实记录 */
@@ -757,7 +791,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     let pushExit = -1;
     for (let t = 0; t < 2 && pushExit !== 0; t++) {
       try {
-        const p = await world.run("git", ["push", push0.target, "HEAD:" + branch], { timeoutMs: 300000 });
+        const p = await G(["push", push0.target, "HEAD:" + branch], 300000);
         pushExit = p.exitCode;
         if (pushExit !== 0) log("第 " + (t + 1) + " 次推送退出码 " + pushExit + "：" + (p.stderr || p.stdout || "").slice(0, 200));
       } catch {
@@ -765,7 +799,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       }
     }
     try {
-      const ls = await world.run("git", ["ls-remote", push0.target, "refs/heads/" + branch], { timeoutMs: 120000 });
+      const ls = await G(["ls-remote", push0.target, "refs/heads/" + branch]);
       const remoteHead = ((ls.stdout || "").split("\t")[0] || "").trim();
       if (remoteHead === headA && headA !== "") {
         pushState = "已推送并核验（" + headA.slice(0, 7) + "@" + push0.target + "/" + branch + "）";
@@ -789,7 +823,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   if (push0.target !== "" && headLedger !== "") {
     // 账本提交同样由编排器直接推送并核验：全程无 agent 转述
     try {
-      const pl = await world.run("git", ["push", push0.target, "HEAD:" + branch], { timeoutMs: 300000 });
+      const pl = await G(["push", push0.target, "HEAD:" + branch], 300000);
       if (pl.exitCode !== 0) log("账本提交推送退出码 " + pl.exitCode + "：" + (pl.stderr || "").slice(0, 200) + "——如实记录");
     } catch {
       log("账本提交推送未启动（如实记录）");
@@ -798,7 +832,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   log("第 " + round + " 轮记账 " + (headLedger !== "" && headLedger !== headA ? "已落地（" + headLedger.slice(0, 7) + "）" : "需人工复核"));
   if (push0.target !== "" && headLedger !== "") {
     try {
-      const ls3 = await world.run("git", ["ls-remote", push0.target, "refs/heads/" + branch], { timeoutMs: 120000 });
+      const ls3 = await G(["ls-remote", push0.target, "refs/heads/" + branch]);
       const rh3 = ((ls3.stdout || "").split("\t")[0] || "").trim();
       if (rh3 === headLedger) {
         lastPushed = headLedger;
@@ -823,33 +857,33 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   plan = "第 " + (round + 1) + " 轮规划依据：测试总评「" + verdict.summary + "」；开发遗留「" + dev.leftover + "」；账本最新一轮记录。";
 }
 
-phase("最终汇报");
+phase("最终简报");
 // 无论是否被打断都做逐条对账：打断时把已完成/未完成如实写清，不许省略条目
 const interruptNote = finalVerdict
-  ? "【本次运行已打断】现状：" + finalVerdict.state + "；待老板决策点：" + finalVerdict.decisionList.join("；") + "。仍须逐条对账：已完成的要求写结果与证据，未完成的写「未完成：原因」，任何条目不得省略。verdict 必须填 interrupted。"
+  ? "【本次运行已打断】现状：" + finalVerdict.state + "；待老板决策点：" + finalVerdict.decisionList.join("；") + "。逐条对账是内部事务：已完成/未完成的每一条写进账本与 Agents/requirement_map.md 的对账标注，不得省略；老板看到的文档保持简报形态（解释开头、待决策、建议选项），不在老板文档里对账。verdict 必须填 interrupted。"
   : "";
 let reported = await chief.ask<FinalReport>(
     interruptNote + (interrupted ? "" : roundsTotal + " 轮硬停（或提前完工）。") +
-    "以 Agents/requirements.md 与账本为唯一依据，写《最终汇报》到 docs/final_report.md：逐条要求（原话逐字）→结果→证据（requirementOutcomes，没有条目的要求不算完成）；与老板要求相悖的偏离逐条说明（deviations）；最终状态（提交/推送/CI/测试/已知局限）；只有老板能做的决策清单（decisionList）；待答问题逐条（questionAnswers：问题原文→直接答案→证据位置；问「存在哪」时连形态一起答——是 raw 还是派生格式、有没有写出器）；自主决定清单（autonomousDecisions：决定→理由→若否决的后果→奥卡姆自评「增加复杂度还是删减」；凡增加复杂度的决定必须进这一节，不能只写账本）；遗留与否决各设固定小节（deferred/declined，各带理由——记录在案的延后是决策而非遗漏，被否决的想法不得下轮重新提案；deferred/declined/processLessons 字段如实填写，无则空数组）；流程教训一节——本轮循环自身如何失败或险些失败，提炼为检查单条目（每条=规则+为什么+适用范围）；老板采纳的教训持久化并随下次运行加载（被证伪的教训标记废弃、不与新教训并存；加载时先对照当前仓库核实仍适用）；一句建议。这份汇报是决策层文档：不写过程流水账（第几次门禁通过、反驳几次、返修几轮——那些在账本）、行话首次出现用白话括注、每节开头一句结论、同一条要求只说一次、正文不堆代码路径（证据指针集中一节列）、以 ≤2 页为目标（超出时只保留未闭环项与关键数字，明细用账本指针）。收尾同时整理交付：非老板面向的文件一律 git mv 进 Agents/（绝不删除——删除文件是老板的动作；老板写入或提供的文件如 docs/boss_directives.md 原样保留），让仓库根与 docs/ 只剩老板面向的文件——老板原话提及的交付物、docs/brief.md 简报、最终汇报——与回应老板问题所必需的文件；工作脚手架（账本、映射表、Agents/selfcheck.py、测试调试脚本、被证伪的历史）全部在 Agents/ 下。交付遵循奥卡姆剃刀。git add -A && git commit，返回 FinalReport。",
+    "以 Agents/requirements.md 与账本为唯一依据，写《最终简报》到 docs/final_brief.md——老板要的是简报，不是对账：对账是总工的内部事务。简报结构固定九节：①开头一段话进展与结论（产出是不是老板要的东西，用老板的判断视角写，summary 字段）；②产出清单（deliverables：每个交付物一行——一句话说明+它回应老板哪句要求（引用原话 ≤15 字）+在哪）；③最终状态（提交/推送/CI/测试/已知局限）；④与老板要求相悖的偏离逐条说明（deviations）；⑤待老板决策（decisionList）；⑥待答问题逐条（questionAnswers：问题原文→直接答案→证据位置；问「存在哪」时连形态一起答——是 raw 还是派生格式、有没有写出器）；⑦自主决定清单（autonomousDecisions：决定→理由→若否决的后果→奥卡姆自评「增加复杂度还是删减」；凡增加复杂度的决定必须进这一节，不能只写账本）；⑧遗留与否决（deferred/declined，各带理由——记录在案的延后是决策而非遗漏，被否决的想法不得下轮重新提案；deferred/declined/processLessons 字段如实填写，无则空数组）；⑨流程教训（本轮循环自身如何失败或险些失败，提炼为检查单条目：每条=规则+为什么+适用范围）+一句建议。逐条对账（requirementOutcomes：原话逐字→结果→证据，没有条目的要求不算完成）照填返回，但只写进账本轮记录与 Agents/requirement_map.md 的对账标注（不动测试工程师的验证列）——绝不进老板简报。老板采纳的教训持久化并随下次运行加载（被证伪的教训标记废弃、不与新教训并存；加载时先对照当前仓库核实仍适用）。简报是决策层文档：不写过程流水账（第几次门禁通过、反驳几次、返修几轮——那些在账本）、行话首次出现用白话括注、每节开头一句结论、同一件事只说一次、正文不堆代码路径、以 ≤2 页为目标。收尾同时整理交付（一律 git mv，绝不删除——删除文件是老板的动作）：①非最终产出需要的代码（实验脚本、被替换的实现版本）→ Agents/；②AI 生成且已成历史的文档→值得采纳且有意义的内容先合并进最终简报表述，本体→ Agents/；③简报与最终简报的迭代旧版→不删除、不覆盖、也不进 Agents/（它们是给老板看的）→ docs/history/ 下，docs/ 只留最新版；④老板写入或提供的文件（如 docs/boss_directives.md）原样保留；⑤其余工作脚手架（账本、映射表、Agents/selfcheck.py、测试调试脚本、被证伪的历史）全部在 Agents/ 下——仓库根与 docs/ 只放老板面向的文件。git add -A && git commit，返回 FinalReport。",
 );
 // 疑问句防蒸发（机械）：老板原话含疑问而汇报没有答案即视为漏需求——补答一次，仍缺则如实记录
 const askedQ = ((requirement + " " + focus).match(/？|\?/g) || []).length;
 if (askedQ > 0 && (!reported.questionAnswers || reported.questionAnswers.length === 0)) {
   reported = await chief.ask<FinalReport>(
-    "老板原话含 " + askedQ + " 处疑问，但 FinalReport.questionAnswers 为空——疑问句在登记环节蒸发属漏需求。逐条补答（问题原文→直接答案，含形态：是 raw 还是派生格式、有没有写出器→证据位置；确实无法作答的写「无法作答：原因」），写回 docs/final_report.md 并 git add -A && git commit --amend --no-edit，返回完整 FinalReport。",
+    "老板原话含 " + askedQ + " 处疑问，但 FinalReport.questionAnswers 为空——疑问句在登记环节蒸发属漏需求。逐条补答（问题原文→直接答案，含形态：是 raw 还是派生格式、有没有写出器→证据位置；确实无法作答的写「无法作答：原因」），写回 docs/final_brief.md 并 git add -A && git commit --amend --no-edit，返回完整 FinalReport。",
   );
   if (!reported.questionAnswers || reported.questionAnswers.length === 0) log("汇报仍缺待答问题（已如实记录，老板原话含 " + askedQ + " 处疑问）");
 }
-// 最终汇报提交由编排器推送并核验（收尾问句不再指示推送；存在未过门禁提交时不推送）
+// 最终简报提交由编排器推送并核验（收尾问句不再指示推送；存在未过门禁提交时不推送）
 let finalPush = push0.target === "" ? "跳过推送：" + push0.note : (ungatedHead ? "未推送：存在未过门禁的提交（如实记录）" : "未推送");
 if (push0.target !== "") {
   if (!ungatedHead) {
     const headFinal = await HEAD0();
     try {
-      const pf = await world.run("git", ["push", push0.target, "HEAD:" + branch], { timeoutMs: 300000 });
+      const pf = await G(["push", push0.target, "HEAD:" + branch], 300000);
       if (pf.exitCode === 0) {
         try {
-          const lf = await world.run("git", ["ls-remote", push0.target, "refs/heads/" + branch], { timeoutMs: 120000 });
+          const lf = await G(["ls-remote", push0.target, "refs/heads/" + branch]);
           const rhf = ((lf.stdout || "").split("\t")[0] || "").trim();
           finalPush = rhf === headFinal && headFinal !== "" ? "已推送并核验（" + headFinal.slice(0, 7) + "）" : "推送核验失败（如实上报：remote=" + rhf.slice(0, 7) + "）";
         } catch {
@@ -862,21 +896,24 @@ if (push0.target !== "") {
       finalPush = "推送未启动（如实记录）";
     }
   }
-  log("最终汇报推送：" + finalPush);
+  log("最终简报推送：" + finalPush);
 }
 const md = [
-  "# 最终汇报",
+  "# 最终简报",
   "",
   "老板要求（原话）：" + requirement,
   "",
-  "## 逐条对账",
-  ...reported.requirementOutcomes.map((o) => "- **" + o.id + "** 「" + o.verbatim + "」→ " + o.outcome + "（证据：" + o.evidence + "）"),
+  "## 进展与结论",
+  reported.summary,
   "",
-  "## 偏离说明",
-  reported.deviations.length > 0 ? reported.deviations.map((d) => "- " + d) : "- 无：未发生与老板要求相悖的偏离",
+  "## 产出清单",
+  ...reported.deliverables.map((d) => "- **" + d.artifact + "**（回应老板：「" + d.addresses + "」）→ " + d.location),
   "",
   "## 最终状态",
   reported.state,
+  "",
+  "## 偏离说明",
+  reported.deviations.length > 0 ? reported.deviations.map((d) => "- " + d) : "- 无：未发生与老板要求相悖的偏离",
   "",
   "## 待老板决策",
   ...reported.decisionList.map((d) => "- " + d),
@@ -900,9 +937,9 @@ const md = [
   reported.advice,
   "",
   "---",
-  "判定：" + reported.verdict + "；已执行轮数：" + rows.length + "。",
+  "判定：" + reported.verdict + "；已执行轮数：" + rows.length + "。逐条对账（原话→结果→证据）是内部事务，在 Agents/requirement_map.md 与账本。",
 ].join("\n");
-await artifact.markdown("report", md, { title: "最终汇报", description: "要求逐条对账 + 偏离说明 + 待决策清单", primary: true });
+await artifact.markdown("report", md, { title: "最终简报", description: "进展结论 + 产出清单 + 待决策清单", primary: true });
 
 return {
   conclusion: reported.advice,
