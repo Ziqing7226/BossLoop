@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Research Iteration Loop (v0.5.0), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3) from the latest reviews; the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map + a mechanical selfcheck gate with a canary, owning the test fixtures); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
+description: Research Iteration Loop (v0.5.1), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3) from the latest reviews; the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map + a mechanical selfcheck gate with a canary, owning the test fixtures); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
 args:
   idea:
     type: string
@@ -45,7 +45,7 @@ interface WorkCards {
   title: string;
   /** Proposals selected this round (1-3, mechanically checked) */
   proposals: string[];
-  /** Work cards, one instruction each */
+  /** Work cards, one instruction each + the opening mail's verbatim sentence for every cited requirement (Rn) */
   cards: string[];
 }
 
@@ -168,6 +168,7 @@ const CHIEF_EN = [
   "Opening brief (the first mail): after scoping and before round 1 starts, write it as the first mail into LoopMail/ToBoss.md (at most one page, four mandatory sections): (1) sentence inventory — every sentence of the boss's words (idea, focus, LoopMail/FromBoss.md) split and marked fulfilled-as-Rn / not-applicable-with-reason / needs-clarification; (2) requirements and acceptance criteria — the boss's words verbatim numbered (R1/R2…) with interpretation and machine-checkable pass criteria, every item registered; (3) artifact spec table — for each deliverable this round (figure, table, report, manuscript section) its axis, domain, units and pass criteria (machine-checkable), with every number and format word in the boss's words landing on a row; (4) open questions — every interrogative sentence logged (text, when logged, answer status); at most 3 unsure points, each with a default reading and the cost of misreading. Then start working immediately — never idle waiting for the boss to look at it.",
   "The reading of the boss's words must be self-consistent and capture the gist; what you cannot pin down, never guess — carry the boss's words verbatim (quoted, marked unsure) in the brief; the engineers may resolve them during development or testing. Verbatim fidelity is not semantic fidelity: copying the words while misreading the meaning is the most dangerous failure; when the boss's words cannot be filled into the spec table (e.g. a number reads either as bin width or as axis range), do not pick one literal reading.",
   "Before planning each round, check the open questions: with unanswered items, the first card is the answer (a cheap answer that directly shapes the boss's judgement).",
+  "Work cards that touch the boss's words must embed the verbatim sentence from the opening mail's requirements section (with its Rn) — never paraphrase from memory: a compressed phrase may serve only as the title; content words (nouns/verbs/quantifiers/negations/numbers) survive one by one, and when unsure copy the sentence in full. The boss's key content words are protocol words: cards, dev reports, test and assertion comments, commit messages and the manuscript all reuse the same words, never synonyms.",
   "Occam's razor: autonomous decisions lean toward adding things (modules, proposals, metrics) — every complexity-increasing decision must state the value it buys, or it is not taken; such a decision never lives only in the ledger — it goes into the Preliminary Evaluation Report's autonomous-decision list.",
   "Three file classes (delivery discipline), bounded by location: docs/ holds formal content only — the deliverable bodies the boss's words name, the manuscript, reference originals; LoopMail/ is the boss–chief communication layer with exactly two legitimate files — ToBoss.md (the delivery-mail master file; the opening brief and the evaluation report are appended as mails, newest at the top; old mails are never modified; formal docs/ files are referenced by relative links as attachments) plus FromBoss.md (the boss's mid-run feedback, written by the boss, appended in order, never modified by the Chief); any other file appearing under LoopMail/ is judged first — files the boss placed get the FromBoss_ prefix and stay untouched (their content is never modified), stray agent-made products are put away per the delivery-tidying rules, and anything uncertain is treated as boss-placed; other boss-facing historical documents are merged into the ToBoss mail wording, then their bodies move to Agents/; everything under Agents/ is working scaffolding — the ledger, maps, Agents/selfcheck.py, test and debug scripts, code superseded on the way to the final deliverable, falsified history, agent-facing docs. Tidying means git mv-ing scaffolding into Agents/, never deleting a file — deletion is the boss's move; the boss reads everything outside Agents/; if the boss has to open Agents/, the loop has failed.",
   "The proposal portfolio is re-selected every round: at the start of each round pick 1-3 proposals from the latest reviews (add, drop or replace; fill up to 3 when choices exist, 1-2 otherwise, never 0) and the competitor set; every proposal selected this round must be fully validated - a minimal comparison passed off as validation is forbidden because it biases conclusions.",
@@ -185,6 +186,7 @@ const CHIEF_EN = [
 const ALGO_EN = [
   "You are the Algorithm Engineer: build proposals / reproduce competitors. End-to-end real runs only; every number carries its exact definition (data, window, units, per-accumulator meaning); before comparing against prior work, record a caliber table (each competitor's raw convention, dataset, metric definition) and report headline numbers in convention-independent units. Test and debug scripts and process artifacts go under Agents/; only boss-facing files go in the repo root and docs/ — explore freely while researching, Occam's razor at delivery.",
   "Competitor reproductions must be faithful: checked against the published numbers, deviations documented — you must not grade the competitors while building your own method.",
+  "Implementation and acceptance anchor to the boss's verbatim words in the opening mail's requirements section: when a card disagrees with them (suspected retelling distortion), follow the original words and report the disagreement in the dev report — silently following a wrong card is itself a failure.",
   "Test freeze: while the Test Engineer verifies, you do not modify the implementation under test (a moving target makes the verdict void). You only prepare the reproducibility package (env/commands/seeds/data window) and respond to gate failures; fix per the verdict once the report lands.",
   "Context discipline: redirect long command output to a file and take summaries via tail/grep — never page through it; read only relevant excerpts of reference material; take only decision-relevant excerpts of oversized tool output.",
   "Git write scope: run only the git add/commit an ask names; never push yourself, and never run reset/rebase/tag or other repository-writing git operations.",
@@ -202,6 +204,7 @@ const TEST_EN = [
   "You are the Test Engineer: code review, correctness roundtrip (incl. adversarial inputs), cross-scene generalization, perturbation stability.",
   "Independence is absolute: read the implementation under test, never modify it — a verifier who fixes makes the verification self-serving. You only write the self-check and the map.",
   "Read the LoopMail/ToBoss.md opening mail first (sentence inventory / requirements and acceptance criteria / artifact spec table / open questions): verify against the spec table's pass criteria, not structure alone (a file exists, a plot is non-empty, colours follow the rule).",
+  "Acceptance anchors to the boss's verbatim words in the opening mail's requirements section, never to any card's paraphrase; report retelling distortions (card/document content words disagreeing with the original words) as findings classified as retelling distortion.",
   "Test expectations may only derive from the spec table or a registered requirement, never from the current implementation; every assertion's comment names its source. Writing a misreading into a must-pass test is the worst moat of all.",
   "Number-hallucination warning: a good-looking number is not a good outcome — scrutinize whether what the number means is really as simple as it appears; the theory behind it may itself be wrong, and the flattering number then reinforces that theoretical illusion. Understanding a number presupposes solid knowledge of the theory beneath it: for every headline number ask — what theory or mechanism does it rest on, and what would it still show if that theory were wrong?",
   "You own the claim→evidence map (Agents/claim_map.md): every manuscript number ↔ an archived artifact + a re-runnable check; write the check before the claim. The file must carry a claim-map marker and be tabular.",
@@ -499,7 +502,7 @@ for (let round = startRound; round <= rounds; round++) {
     (round === 1 ? "Survey conclusion: " + survey.summary : "Last round's reviews and your planning: " + plan) + "\n" +
     "The proposal portfolio is re-selected by you every round (add/drop/replace, ≤3 and ≥1); every proposal selected this round must be fully validated; list the 1-3 selected proposal names in the proposals field.\n" +
     (bossNote ? "[Boss directives file (read this round)] apply each item, log application in the ledger:\n" + bossNote + "\n" : "") +
-    "Turn this round's work into cards (reproduce competitor X / try proposal Y...), each card traceable to a requirement id (R1/R2…). Round numbers follow the Agents/ledger.md index when they disagree with this prompt's numbering — mark by the ledger's state and say so (the orchestrator's counter is internal). Boss focus: " + (focus || "none"),
+    "Turn this round's work into cards (reproduce competitor X / try proposal Y...), each card traceable to a requirement id and embedding the opening mail's verbatim sentence (R1/R2…; compressed phrases only as titles; content words preserved one by one). Round numbers follow the Agents/ledger.md index when they disagree with this prompt's numbering — mark by the ledger's state and say so (the orchestrator's counter is internal). Boss focus: " + (focus || "none"),
   );
   if ((cards.proposals || []).length < 1 || (cards.proposals || []).length > 3) {
     cards = await chief.ask<WorkCards>(
@@ -509,7 +512,31 @@ for (let round = startRound; round <= rounds; round++) {
   if ((cards.proposals || []).length < 1 || (cards.proposals || []).length > 3) {
     log("Round " + round + " portfolio still invalid (" + (cards.proposals || []).length + " entries); recorded honestly and continuing");
   }
-  log("Round " + round + " task: " + cards.title + "; portfolio: " + cards.proposals.join(", "));
+  // Card-to-ledger verbatim check (retelling-distortion defense): a card citing an Rn must share a verbatim run of at least 12 chars with the opening mail (whitespace-normalized) — a retelling that flips content words cannot match
+  let reqTextC = "";
+  try {
+    reqTextC = (await files.read("LoopMail/ToBoss.md")).replace(/\s+/g, "");
+  } catch {
+    reqTextC = "";
+  }
+  if (reqTextC !== "") {
+    const verbatimOk = (card: string): boolean => {
+      const c = card.replace(/\s+/g, "");
+      for (let i = 0; i + 12 <= c.length; i++) {
+        if (reqTextC.includes(c.slice(i, i + 12))) return true;
+      }
+      return false;
+    };
+    let paraphrased = (cards.cards || []).filter((c) => /\bR\d+\b/.test(c) && !verbatimOk(c));
+    if (paraphrased.length > 0) {
+      cards = await chief.ask<WorkCards>(
+        "Card-to-ledger check failed (retelling-distortion defense): these cards cite an Rn but no verbatim run of at least 12 chars from the LoopMail/ToBoss.md opening mail can be found inside them — the card's paraphrase may have changed content words (object/operation/quantifier/negation/numbers):\n" + paraphrased.map((c) => "- " + c.slice(0, 80)).join("\n") + "\nRewrite these cards with the opening mail's verbatim sentence embedded (with its Rn; a compressed phrase only as the title) and return every other field unchanged (do not add blocked/done); if the opening mail itself is missing the original words, complete the mail first. Return WorkCards.",
+      );
+      paraphrased = (cards.cards || []).filter((c) => /\bR\d+\b/.test(c) && !verbatimOk(c));
+      log(paraphrased.length === 0 ? "Card-to-ledger check: passed after rewrite" : "Card-to-ledger check still failing for " + paraphrased.length + " card(s) — recorded honestly, continuing; downstream anchors to the opening mail's words");
+    }
+  }
+  log("Round " + round + " task: " + cards.title + "; portfolio: " + (cards.proposals || []).join(", "));
 
   phase("Engineer: build & self-test");
   let dev = await algo.ask<DevReport>(

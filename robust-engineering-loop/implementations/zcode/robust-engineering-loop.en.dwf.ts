@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Robust Engineering Loop (v0.5.0), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
+description: Robust Engineering Loop (v0.5.1), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
 args:
   requirement:
     type: string
@@ -41,7 +41,7 @@ interface Commitment {
 interface RoundCards {
   /** This round's theme in one sentence */
   title: string;
-  /** Work cards, one instruction each, each traceable to a requirement entry (R1/R2...) */
+  /** Work cards, one instruction each + the ledger's verbatim sentence for every cited requirement (R1/R2...) */
   cards: string[];
   /** Remote-CI issues found on last round's push (via gh run etc.; say so honestly if uncheckable) — mandatory fix items this round */
   remoteCiIssues: string[];
@@ -176,8 +176,9 @@ const CHIEF_EN = [
   "Ambiguity is a major-issue candidate: when the boss's words cannot be filled into the spec table (e.g. a number reads either as bin width or as axis range), do not pick one literal reading and proceed — quote the words verbatim in the brief's unsure section, or decide from whether the scope changes whether to interrupt.",
   "Three file classes (delivery discipline), bounded by location: docs/ holds formal content only — the deliverable bodies the boss's words name (REPORT.ipynb, the manuscript, method documents, reference originals); LoopMail/ is the boss–chief communication layer with exactly two legitimate files — ToBoss.md (the Chief's delivery-mail master file; the opening brief and the final brief are appended as mails, newest at the top; old mails are never modified; formal docs/ files are referenced by relative links as attachments) plus FromBoss.md (the boss's mid-run feedback, written by the boss, appended in order, never modified by the Chief); any other file appearing under LoopMail/ is judged first — files the boss placed get the FromBoss_ prefix and stay untouched (their content is never modified), stray agent-made products are put away per the delivery-tidying rules, and anything uncertain is treated as boss-placed; other boss-facing historical documents are merged into the ToBoss mail wording, then their bodies move to Agents/; everything under Agents/ is working scaffolding — the ledger, the requirement map, Agents/selfcheck.py, test and debug scripts, code superseded on the way to the final deliverable, falsified history, agent-facing docs. Delivery follows Occam's razor: tidying means git mv-ing scaffolding into Agents/, never deleting a file — deletion is the boss's move; the boss reads everything outside Agents/; if the boss has to open Agents/, the loop has failed.",
   "Interrupt policy: major issues (infeasible requirement, scope-changing ambiguity, extending the round count, gate still red after 10 gate re-checks) -> interrupt the loop immediately; a destructive operation is not itself an interrupt trigger — it goes to the danger-clause ruling (junior declarations -> Senior Engineer; the Senior Engineer's own declarations in the escalation phase -> you), and only when the round still cannot proceed after the ruling do you interrupt and insert the interrupt report as an urgent mail at the top of LoopMail/ToBoss.md for the boss; minor issues (in-scope implementation details, tooling choices, ordering) -> decide yourself and log the decision. Scope, schedule, quality bar and budget are boss-level tradeoffs — you may not downgrade them to minor.",
-  "Round planning: commit to N rounds with a one-line scope each before round 1 (a boss-locked rounds value is final — no adding or dropping); each round re-plan from the ledger — last round's verdict, findings and rebuttals, remote-CI carryover and leftovers must all be disposed of; every work card traces to a requirement entry (R1/R2...); when last round's fix was contradicted by validation (later validation), this round's cards open with an explicit rollback-vs-fix-forward decision (rollback = restore the old behavior with a fresh normal commit, never rewriting history), evidence first — a contradicted fix is never stacked on; when a new boss directive invalidates already-scheduled work, the next round's cards open with an explicit invalidate-and-redo decision, logged honestly.",
+  "Round planning: commit to N rounds with a one-line scope each before round 1 (a boss-locked rounds value is final — no adding or dropping); each round re-plan from the ledger — last round's verdict, findings and rebuttals, remote-CI carryover and leftovers must all be disposed of; every work card traces to a requirement entry and embeds the ledger's verbatim sentence (R1/R2...); when last round's fix was contradicted by validation (later validation), this round's cards open with an explicit rollback-vs-fix-forward decision (rollback = restore the old behavior with a fresh normal commit, never rewriting history), evidence first — a contradicted fix is never stacked on; when a new boss directive invalidates already-scheduled work, the next round's cards open with an explicit invalidate-and-redo decision, logged honestly.",
   "Before issuing each round's cards, check the open questions in requirements.md: with unanswered items, the first card is the answer (including the artifact's form: raw or derived, whether a writer exists).",
+  "Work cards that touch a boss requirement must embed the ledger's verbatim sentence from Agents/requirements.md (with its Rn) — never paraphrase from memory: a compressed phrase may serve only as the title, and the verbatim original travels with the card; every content word must survive the retelling — nouns (the object), verbs (the operation), quantifiers, negations, numbers; if any one changes the card is distorted, and when unsure copy the sentence in full. The boss's key content words are protocol words: cards, dev reports, test names and assertion comments, commit messages and documents all reuse the same words, never synonyms.",
   "Occam's razor: your autonomous decisions naturally lean toward adding things (modules, checks, config) — every complexity-increasing decision must state the value it buys, or it is not taken; such a decision never lives only in the ledger — it goes into the final brief's autonomous-decision list.",
   "Misdiagnosis arbitration: when the engineers dispute a finding, arbitrate on evidence only; if still undecided -> major issue, interrupt and report to the boss.",
   "Take over by reading the ledger (Agents/ledger.md): resume, never redo; the ledger also records each round's baseline hash and pushed SHAs. Resuming after an interrupt or a cancelled stretch opens with a closure review of the discarded range: every in-flight item is either verified present or dropped with a ledger note — lost work is reconciled before new rounds, never silently skipped.",
@@ -189,6 +190,7 @@ const CHIEF_EN = [
 const ALGO_EN = [
   "You are the Algorithm Engineer: implement this round's work cards; make exactly ONE local commit per round (the round commit), message in one sentence. Docs are a deliverable: professional, clean and concise — one home per fact, no redundancy or duplication; every code change ships with its doc change in the same commit. Test and debug scripts and process artifacts go under Agents/; only boss-facing files go in the repo root and docs/.",
   "The working tree is frozen while the Test Engineer verifies: do not modify the implementation under test.",
+  "Implementation and acceptance anchor to the ledger's verbatim words in Agents/requirements.md: when a card disagrees with the ledger (suspected retelling distortion), follow the ledger and report the disagreement in the dev report — silently following a wrong card is itself a failure.",
   "Rework discipline: reproduce every finding before touching code — confirmed findings get fixes; findings you cannot reproduce or that contradict the facts get evidence rebuttals (command output, spec citation). Never blindly \"fix\" a non-issue — churn is not progress. A stale entry (line numbers from an older version, already fixed, not reproducible on this round's code) is discarded and marked \"stale\" in the rebuttal — never code against it.",
   "Fixes always land as git add -A && git commit --amend --no-edit into the round commit: never rewrite pushed history, never amend below the baseline.",
   "Your dev report (with per-card requirement coverage) goes to the Chief for planning only; the Test Engineer never sees it — the cold start is by design, not an oversight.",
@@ -218,6 +220,7 @@ const TEST_EN = [
   "Context discipline: redirect long command output to a file and take summaries via tail/grep; the full-read duty overrides excerpt reading for diff-touched files; take only decision-relevant excerpts of oversized tool output.",
   "Git write scope: run only the git add/commit/amend an ask names (test fixtures amend into the round commit); pushes are executed by the orchestrator — never push yourself, and never run other repository-writing git operations.",
   "Read the four sections of Agents/requirements.md (sentence inventory, requirements and acceptance criteria, artifact spec table, open questions) and the opening mail in LoopMail/ToBoss.md first: the gate must cover the pass criteria in the spec table, not just structure (a file exists, a plot is non-empty, colours follow the rule).",
+  "Acceptance anchors to the ledger's verbatim words in Agents/requirements.md, never to any card's paraphrase; report retelling distortions (card/document content words disagreeing with the ledger) as findings classified as retelling distortion.",
   "Content assertions: every deliverable's selfcheck must carry assertions derived from the spec table — domain/range assertions (a plot's axis must equal the specified value), fill assertions (data should cover at least ~60% of the axis), discriminability assertions (input and output must differ observably). A suite that only checks existence and not correctness means the gate is not met — a blank figure passing 40 structural checks is the worst case.",
   "Test expectations may only derive from the spec table or a registered requirement, never from the current implementation; every assertion's comment names its source (Rn or spec row). Writing a misreading into a must-pass test is the worst moat of all.",
   "Number-hallucination warning: a good-looking number is not a good outcome — scrutinize whether what the number means is really as simple as it appears; the theory behind it may itself be wrong, and the flattering number then reinforces that theoretical illusion. Understanding a number presupposes solid knowledge of the theory beneath it: for every headline number ask — what theory or mechanism does it rest on, and what would it still show if that theory were wrong?",
@@ -511,13 +514,13 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     bossNote = "";
   }
   phase("Chief issues cards");
-  const cards = await chief.ask<RoundCards>(
+  let cards = await chief.ask<RoundCards>(
     "Round " + round + "/" + roundsTotal + ". Requirements live in Agents/requirements.md; planning basis:\n" + String(plan).slice(0, 4000) + "\n" +
     (lastPushed ? "Last round pushed " + lastPushed.slice(0, 7) + ": first check its remote CI status on (" + (push0.target || "not configured") + ") via gh run list/view; if uncheckable, say so honestly; failures go into remoteCiIssues as mandatory fix items.\n" : "") +
     (round === startRound && startRound > 1 ? "[Resume round 1] If the last run was interrupted with a red gate, HEAD may carry an un-gated commit — pushing this round would carry it onto the remote: first check the last ledger round's gate and push records, and dispose of un-gated leftovers explicitly in this round's cards (fix or roll back).\n" : "") +
     (bossNote ? "[Boss feedback (read this round, LoopMail/FromBoss.md)] apply each item, log application in the ledger:\n" + bossNote + "\n" : "") +
     "Before issuing cards, check the open questions in requirements.md: with unanswered items, the first card is the answer (including the artifact's form: raw or derived, whether a writer exists).\n" +
-    "Issue this round's work cards: one sentence each, traceable to requirement entries; dispose of last round's findings, rebuttals and leftovers one by one. Round numbers follow the Agents/ledger.md index when they disagree with this prompt's numbering — mark by the ledger's state and say so (the orchestrator's counter is internal). Set done=true only if every requirement is closed and the gate is green." + CHIEF_BLOCK_NOTE,
+    "Issue this round's work cards: one sentence each, traceable to requirement entries and embedding the ledger's verbatim sentence for every cited Rn (compressed phrases only as titles; content words preserved one by one); dispose of last round's findings, rebuttals and leftovers one by one. Round numbers follow the Agents/ledger.md index when they disagree with this prompt's numbering — mark by the ledger's state and say so (the orchestrator's counter is internal). Set done=true only if every requirement is closed and the gate is green." + CHIEF_BLOCK_NOTE,
   );
   if (cards.blocked) {
     const ir = await chief.ask<string>(
@@ -547,6 +550,30 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     finalVerdict = { verdict: "interrupted", requirementOutcomes: [], deviations: [], summary: "", deliverables: [], state: ir0, decisionList: ["Chief could not issue round-" + round + " cards"], advice: "Planning anomaly; boss attention needed" };
     interrupted = true;
     break;
+  }
+  // Card-to-ledger verbatim check (retelling-distortion defense): a card citing an Rn must share a verbatim run of at least 12 chars with the ledger original (whitespace-normalized) — a retelling that flips content words cannot match
+  let reqTextC = "";
+  try {
+    reqTextC = (await files.read("Agents/requirements.md")).replace(/\s+/g, "");
+  } catch {
+    reqTextC = "";
+  }
+  if (reqTextC !== "") {
+    const verbatimOk = (card: string): boolean => {
+      const c = card.replace(/\s+/g, "");
+      for (let i = 0; i + 12 <= c.length; i++) {
+        if (reqTextC.includes(c.slice(i, i + 12))) return true;
+      }
+      return false;
+    };
+    let paraphrased = (cards.cards || []).filter((c) => /\bR\d+\b/.test(c) && !verbatimOk(c));
+    if (paraphrased.length > 0) {
+      cards = await chief.ask<RoundCards>(
+        "Card-to-ledger check failed (retelling-distortion defense): these cards cite an Rn but no verbatim run of at least 12 chars from Agents/requirements.md can be found inside them — the card's paraphrase may have changed content words (object/operation/quantifier/negation/numbers):\n" + paraphrased.map((c) => "- " + c.slice(0, 80)).join("\n") + "\nRewrite these cards with the ledger's verbatim sentence embedded (with its Rn; a compressed phrase only as the title) and return every other field unchanged (do not add blocked/done); if the ledger itself is missing the original words, complete the ledger first. Return RoundCards.",
+      );
+      paraphrased = (cards.cards || []).filter((c) => /\bR\d+\b/.test(c) && !verbatimOk(c));
+      log(paraphrased.length === 0 ? "Card-to-ledger check: passed after rewrite" : "Card-to-ledger check still failing for " + paraphrased.length + " card(s) — recorded honestly, continuing; downstream anchors to the ledger's words");
+    }
   }
   log("Round " + round + " task: " + cards.title + ((cards.remoteCiIssues || []).length > 0 ? "; remote-CI carryover: " + cards.remoteCiIssues.length + " mandatory item(s)" : ""));
 
