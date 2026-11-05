@@ -1,10 +1,10 @@
 /* zcode-workflow
-description: Robust Engineering Loop (v0.3.5), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
+description: Robust Engineering Loop (v0.3.6), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
 args:
   requirement:
     type: string
     required: true
-    description: The boss's development requirement, verbatim (enters the requirement ledger and is reconciled line by line in the final report)
+    description: The boss's development requirement, verbatim (enters the requirement ledger; line-by-line reconciliation is the Chief's internal affair — ledger and verification map only, never the boss's brief)
   rounds:
     type: number
     default: 0
@@ -460,7 +460,7 @@ let lastPushed = ""; // last round's pushed SHA (for the next round's remote-CI 
 let plan = String(commit0.roundsOutline || "");
 let finalVerdict: FinalReport | null = null;
 let interrupted = false;
-let ungatedHead = false; // an interrupt with a red gate leaves an un-gated commit at HEAD — the final report must not push
+let ungatedHead = false; // an interrupt with a red gate leaves an un-gated commit at HEAD — the final brief must not push
 let branch = "main";
 try {
   const b = await G(["rev-parse", "--abbrev-ref", "HEAD"], 60000);
@@ -506,7 +506,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       }
     }
     await artifact.markdown("interrupt", "# Interrupt Report (round " + round + ")\n\n" + ir + "\n\n---\nAfter the boss decides, rerun this workflow with the decision note (the ledger holds the checkpoint).\n", { title: "Interrupt Report", description: "Major issue: awaiting the boss's decision" });
-    finalVerdict = { verdict: "interrupted", requirementOutcomes: [], deviations: [], state: ir, decisionList: [cards.blocked.question], advice: "Interrupted on a major issue; awaiting the boss" };
+    finalVerdict = { verdict: "interrupted", requirementOutcomes: [], deviations: [], summary: "", deliverables: [], state: ir, decisionList: [cards.blocked.question], advice: "Interrupted on a major issue; awaiting the boss" };
     interrupted = true;
     break;
   }
@@ -517,7 +517,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   if (cards.cards.length === 0) {
     log("Round " + round + " issued zero cards without declaring done — treated as an interrupt (recorded honestly)");
     const ir0 = await chief.ask<string>("Zero work cards and not done is a planning anomaly: write the reason to Agents/ledger.md and git add -A && git commit; return one sentence.");
-    finalVerdict = { verdict: "interrupted", requirementOutcomes: [], deviations: [], state: ir0, decisionList: ["Chief could not issue round-" + round + " cards"], advice: "Planning anomaly; boss attention needed" };
+    finalVerdict = { verdict: "interrupted", requirementOutcomes: [], deviations: [], summary: "", deliverables: [], state: ir0, decisionList: ["Chief could not issue round-" + round + " cards"], advice: "Planning anomaly; boss attention needed" };
     interrupted = true;
     break;
   }
@@ -768,7 +768,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       "Round " + round + " gate is still not green after 10 gate re-checks (" + gate + "). Major issue: write docs/interrupt_report.md (current state, failure evidence, fixes attempted, points needing the boss's decision), git add -A && git commit (do not push the un-gated commit unless the boss agreed otherwise), return a one-sentence summary.",
     );
     await artifact.markdown("interrupt", "# Interrupt Report (round " + round + " gate)\n\n" + ir + "\n\n---\nGate: " + gate + "\nAwaiting the boss's decision.\n", { title: "Interrupt Report", description: "Gate still red after 10 re-checks" });
-    finalVerdict = { verdict: "interrupted", requirementOutcomes: [], deviations: [], state: ir, decisionList: ["Round " + round + " gate not passed: " + gate], advice: "Gate persistently red; boss attention needed" };
+    finalVerdict = { verdict: "interrupted", requirementOutcomes: [], deviations: [], summary: "", deliverables: [], state: ir, decisionList: ["Round " + round + " gate not passed: " + gate], advice: "Gate persistently red; boss attention needed" };
     interrupted = true;
     ungatedHead = true;
     break;
@@ -905,19 +905,19 @@ const md = [
   "Boss's requirement (verbatim): " + requirement,
   "",
   "## Progress and verdict",
-  reported.summary,
+  (reported.summary || ""),
   "",
   "## Deliverables",
-  ...reported.deliverables.map((d) => "- **" + d.artifact + "** (answers the boss: \u201c" + d.addresses + "\u201d) -> " + d.location),
+  ...(reported.deliverables || []).map((d) => "- **" + d.artifact + "** (answers the boss: \u201c" + d.addresses + "\u201d) -> " + d.location),
   "",
   "## Final state",
   reported.state,
   "",
   "## Deviations",
-  reported.deviations.length > 0 ? reported.deviations.map((d) => "- " + d) : "- None: no deviation from the boss's requirements occurred",
+  (reported.deviations || []).length > 0 ? (reported.deviations || []).map((d) => "- " + d) : "- None: no deviation from the boss's requirements occurred",
   "",
   "## Awaiting the boss",
-  ...reported.decisionList.map((d) => "- " + d),
+  ...(reported.decisionList || []).map((d) => "- " + d),
   "",
   "## Your questions, answered",
   (reported.questionAnswers && reported.questionAnswers.length > 0) ? reported.questionAnswers.map((x) => "- \u201c" + x.q + "\u201d -> " + x.a + " (evidence: " + x.evidence + ")") : ["- none (no questions in this run's requirement)"],

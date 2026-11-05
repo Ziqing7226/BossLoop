@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 鲁棒工程循环（v0.3.5）：把一句开发要求变成经过冷启动对抗验证的实现。总工建要求台账（老板原话逐字）并承诺 N 轮（老板可锁定）；每轮开发+文档单笔提交 → 冷启动门禁（diff 审查、鲁棒性测试、canary、零警告构建、上一轮 remote CI 结转）→ 先复现再返修（误诊须证据反驳）、amend 并入本轮提交（初级 3 次未解升级高级工程师，10 次未过打断上报）；全绿才推送约定 remote（默认 GitCoffer，append-only 永不 force）；账本断点续跑；破坏性操作申报-裁决-执行三段核验、绝不转交用户；模型分档 tiered/uniform。
+description: 鲁棒工程循环（v0.3.6）：把一句开发要求变成经过冷启动对抗验证的实现。总工建要求台账（老板原话逐字）并承诺 N 轮（老板可锁定）；每轮开发+文档单笔提交 → 冷启动门禁（diff 审查、鲁棒性测试、canary、零警告构建、上一轮 remote CI 结转）→ 先复现再返修（误诊须证据反驳）、amend 并入本轮提交（初级 3 次未解升级高级工程师，10 次未过打断上报）；全绿才推送约定 remote（默认 GitCoffer，append-only 永不 force）；账本断点续跑；破坏性操作申报-裁决-执行三段核验、绝不转交用户；模型分档 tiered/uniform。
 args:
   requirement:
     type: string
@@ -505,7 +505,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       }
     }
     await artifact.markdown("interrupt", "# 中断报告（第 " + round + " 轮）\n\n" + ir + "\n\n---\n待老板决策后，携带补充说明重跑本工作流（账本已记录断点）。\n", { title: "中断报告", description: "重大问题：等待老板决策" });
-    finalVerdict = { verdict: "interrupted", requirementOutcomes: [], deviations: [], state: ir, decisionList: [cards.blocked.question], advice: "重大问题已打断，等待老板决策" };
+    finalVerdict = { verdict: "interrupted", requirementOutcomes: [], deviations: [], summary: "", deliverables: [], state: ir, decisionList: [cards.blocked.question], advice: "重大问题已打断，等待老板决策" };
     interrupted = true;
     break;
   }
@@ -516,7 +516,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   if (cards.cards.length === 0) {
     log("第 " + round + " 轮任务卡为空且未声明完工——按打断处理（如实记录）");
     const ir0 = await chief.ask<string>("任务卡为空又未完工，属规划异常：写明原因到 Agents/ledger.md 并 git add -A && git commit，返回一句话。");
-    finalVerdict = { verdict: "interrupted", requirementOutcomes: [], deviations: [], state: ir0, decisionList: ["总工未能在第 " + round + " 轮发出任务卡"], advice: "规划异常，请老板介入" };
+    finalVerdict = { verdict: "interrupted", requirementOutcomes: [], deviations: [], summary: "", deliverables: [], state: ir0, decisionList: ["总工未能在第 " + round + " 轮发出任务卡"], advice: "规划异常，请老板介入" };
     interrupted = true;
     break;
   }
@@ -767,7 +767,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       "第 " + round + " 轮门禁复核 10 次仍未通过（" + gate + "）。属重大问题：写 docs/interrupt_report.md（当前状态、失败证据、已尝试的修复、需要老板决策的点），git add -A && git commit（不推送未过门禁的提交，除非老板此前另有约定），返回一句话摘要。",
     );
     await artifact.markdown("interrupt", "# 中断报告（第 " + round + " 轮门禁）\n\n" + ir + "\n\n---\n门禁：" + gate + "\n待老板决策。\n", { title: "中断报告", description: "门禁复核 10 次仍未过" });
-    finalVerdict = { verdict: "interrupted", requirementOutcomes: [], deviations: [], state: ir, decisionList: ["第 " + round + " 轮门禁未过：" + gate], advice: "门禁持续未过，请老板介入" };
+    finalVerdict = { verdict: "interrupted", requirementOutcomes: [], deviations: [], summary: "", deliverables: [], state: ir, decisionList: ["第 " + round + " 轮门禁未过：" + gate], advice: "门禁持续未过，请老板介入" };
     interrupted = true;
     ungatedHead = true;
     break;
@@ -904,19 +904,19 @@ const md = [
   "老板要求（原话）：" + requirement,
   "",
   "## 进展与结论",
-  reported.summary,
+  (reported.summary || ""),
   "",
   "## 产出清单",
-  ...reported.deliverables.map((d) => "- **" + d.artifact + "**（回应老板：「" + d.addresses + "」）→ " + d.location),
+  ...(reported.deliverables || []).map((d) => "- **" + d.artifact + "**（回应老板：「" + d.addresses + "」）→ " + d.location),
   "",
   "## 最终状态",
   reported.state,
   "",
   "## 偏离说明",
-  reported.deviations.length > 0 ? reported.deviations.map((d) => "- " + d) : "- 无：未发生与老板要求相悖的偏离",
+  (reported.deviations || []).length > 0 ? (reported.deviations || []).map((d) => "- " + d) : "- 无：未发生与老板要求相悖的偏离",
   "",
   "## 待老板决策",
-  ...reported.decisionList.map((d) => "- " + d),
+  ...(reported.decisionList || []).map((d) => "- " + d),
   "",
   "## 你的问题，答案在这里",
   (reported.questionAnswers && reported.questionAnswers.length > 0) ? reported.questionAnswers.map((x) => "- 「" + x.q + "」→ " + x.a + "（证据：" + x.evidence + "）") : ["- 无（本次要求中没有疑问句）"],
