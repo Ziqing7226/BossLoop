@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 鲁棒工程循环（v0.5.3）：把一句开发要求变成经过冷启动对抗验证的实现。总工建要求台账（老板原话逐字）并承诺 N 轮（老板可锁定）；每轮开发+文档单笔提交 → 冷启动门禁（diff 审查、鲁棒性测试、canary、零警告构建、上一轮 remote CI 结转）→ 先复现再返修（误诊须证据反驳）、amend 并入本轮提交（初级 3 次未解升级高级工程师，10 次未过打断上报）；全绿才推送约定 remote（默认 GitCoffer，append-only 永不 force）；账本断点续跑；破坏性操作申报-裁决-执行三段核验、绝不转交用户；模型分档 tiered/uniform。
+description: 鲁棒工程循环（v0.5.4）：把一句开发要求变成经过冷启动对抗验证的实现。总工建要求台账（老板原话逐字）并承诺 N 轮（老板可锁定）；每轮开发+文档单笔提交 → 冷启动门禁（diff 审查、鲁棒性测试、canary、零警告构建、上一轮 remote CI 结转）→ 先复现再返修（误诊须证据反驳）、amend 并入本轮提交（初级 3 次未解升级高级工程师，10 次未过打断上报）；全绿才推送约定 remote（默认 GitCoffer，append-only 永不 force）；账本断点续跑；破坏性操作申报-裁决-执行三段核验、绝不转交用户；模型分档 tiered/uniform。
 args:
   requirement:
     type: string
@@ -660,6 +660,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   let interpIsPy3 = false;
   let lastFix: FixOutcome | null = null;
   let imageFiles: string[] = []; // 本轮图像产物（账本与视觉声明跨 attempt 使用，故置于轮级）
+  let imgDetectOk = true; // 图像检测是否成功（B#18：失败必须如实披露，随 attempt 复位）
   let visualNote = "本轮未进入视觉审阅";
 
   for (let attempt = 1; attempt <= 10; attempt++) {
@@ -741,13 +742,16 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     // 图像产物检测（机械）：测试员申报的产物 ∪ diff 中新增/修改的图片 ∪ 工作树未跟踪的图片——有图就必须有人真的看一眼
     const isImg = (p: string): boolean => /\.(png|jpe?g|svg|webp|gif)$/i.test(p);
     imageFiles = (verdict.artifacts || []).filter((p) => isImg(p));
+    imgDetectOk = true;
     if (mechGreen && imageFiles.length === 0) {
       try {
         const st2 = await G(["status", "--porcelain"], 60000);
         for (const line of (st2.stdout || "").split("\n")) {
           const t2 = line.trim();
           if (t2.length < 4) continue;
-          const p2 = t2.slice(3).trim();
+          const p2raw = t2.slice(3).trim();
+          const p2parts = p2raw.split(" -> "); // rename 条目 "R  old -> new"：取新路径（B#18）
+          const p2 = (p2parts[p2parts.length - 1] || p2raw).trim();
           if (isImg(p2) && imageFiles.indexOf(p2) < 0) imageFiles.push(p2);
         }
         if (baseline) {
@@ -756,12 +760,17 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
             if (p3 !== "" && isImg(p3) && imageFiles.indexOf(p3) < 0) imageFiles.push(p3);
           }
         }
+        const ig2 = await G(["ls-files", "--others", "--ignored", "--exclude-standard"], 60000);
+        for (const p4 of (ig2.stdout || "").split("\n").map((s) => s.trim())) {
+          // 被 .gitignore 的交付图只可能在老板面向的位置（仓库根或 docs/）——依赖目录与 Agents/ 不算交付（B#18）
+          if (p4 !== "" && isImg(p4) && imageFiles.indexOf(p4) < 0 && (p4.indexOf("/") < 0 || p4.indexOf("docs/") === 0)) imageFiles.push(p4);
+        }
       } catch {
-        /* 检测失败：按无图处理，并在视觉声明里如实写明 */
+        imgDetectOk = false; // B#18：检测失败必须如实披露，不得静默按无图处理
       }
     }
     let visualOk = imageFiles.length === 0;
-    visualNote = imageFiles.length === 0 ? "本轮无图像产物：不适用" : "尚未审阅";
+    visualNote = imageFiles.length === 0 ? (imgDetectOk ? "本轮无图像产物：不适用" : "图像产物检测失败（git 不可用）——按无图处理，如实记录") : "尚未审阅";
     if (mechGreen && imageFiles.length > 0) {
       phase("视觉审阅图像产物");
       const vv = await agent("视觉审阅-R" + round + "-A" + attempt, persona(VISUAL_ZH + PROFILE_LINE, STRONG)).ask<VisualVerdict>(

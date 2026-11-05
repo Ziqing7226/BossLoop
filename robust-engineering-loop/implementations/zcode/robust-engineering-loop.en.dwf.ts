@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Robust Engineering Loop (v0.5.3), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
+description: Robust Engineering Loop (v0.5.4), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
 args:
   requirement:
     type: string
@@ -656,6 +656,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   let interpIsPy3 = false;
   let lastFix: FixOutcome | null = null;
   let imageFiles: string[] = []; // this round's image artifacts (the ledger and the visual note read it across attempts)
+  let imgDetectOk = true; // whether image detection succeeded (B#18: failure must be disclosed; reset per attempt)
   let visualNote = "no visual review this round";
 
   for (let attempt = 1; attempt <= 10; attempt++) {
@@ -737,13 +738,16 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     // Image-artifact detection (mechanical): artifacts the tester declares ∪ images added/modified by the diff ∪ untracked images — if there are images, a human-grade eye must look
     const isImg = (p: string): boolean => /\.(png|jpe?g|svg|webp|gif)$/i.test(p);
     imageFiles = (verdict.artifacts || []).filter((p) => isImg(p));
+    imgDetectOk = true;
     if (mechGreen && imageFiles.length === 0) {
       try {
         const st2 = await G(["status", "--porcelain"], 60000);
         for (const line of (st2.stdout || "").split("\n")) {
           const t2 = line.trim();
           if (t2.length < 4) continue;
-          const p2 = t2.slice(3).trim();
+          const p2raw = t2.slice(3).trim();
+          const p2parts = p2raw.split(" -> "); // rename 条目 "R  old -> new"：取新路径（B#18）
+          const p2 = (p2parts[p2parts.length - 1] || p2raw).trim();
           if (isImg(p2) && imageFiles.indexOf(p2) < 0) imageFiles.push(p2);
         }
         if (baseline) {
@@ -752,12 +756,17 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
             if (p3 !== "" && isImg(p3) && imageFiles.indexOf(p3) < 0) imageFiles.push(p3);
           }
         }
+        const ig2 = await G(["ls-files", "--others", "--ignored", "--exclude-standard"], 60000);
+        for (const p4 of (ig2.stdout || "").split("\n").map((s) => s.trim())) {
+          // 被 .gitignore 的交付图只可能在老板面向的位置（仓库根或 docs/）——依赖目录与 Agents/ 不算交付（B#18）
+          if (p4 !== "" && isImg(p4) && imageFiles.indexOf(p4) < 0 && (p4.indexOf("/") < 0 || p4.indexOf("docs/") === 0)) imageFiles.push(p4);
+        }
       } catch {
-        /* detection failed: treat as no images and say so in the visual note */
+        imgDetectOk = false; // B#18: a failed detection must be disclosed, never silently treated as no images
       }
     }
     let visualOk = imageFiles.length === 0;
-    visualNote = imageFiles.length === 0 ? "no image artifacts this round: not applicable" : "not reviewed yet";
+    visualNote = imageFiles.length === 0 ? (imgDetectOk ? "no image artifacts this round: not applicable" : "image-artifact detection failed (git unavailable) — treated as no images, recorded honestly") : "not reviewed yet";
     if (mechGreen && imageFiles.length > 0) {
       phase("Visual review of image artifacts");
       const vv = await agent("Visual review-R" + round + "-A" + attempt, persona(VISUAL_EN + PROFILE_LINE, STRONG)).ask<VisualVerdict>(
