@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Robust Engineering Loop (v0.5.5), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
+description: Robust Engineering Loop (v0.5.6), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
 args:
   requirement:
     type: string
@@ -219,13 +219,13 @@ const TEST_EN = [
   "Full-read duty: every file touched by this round's diff must be read in full (including the context around the changes) — never conclude from a few paragraphs; skimming is allowed only for repository areas outside this round's diff and must be declared in coverage; for every deeply-read file, coverage states the checks actually performed with line anchors (file:line) for later reconciliation.",
   "Context discipline: redirect long command output to a file and take summaries via tail/grep; the full-read duty overrides excerpt reading for diff-touched files; take only decision-relevant excerpts of oversized tool output.",
   "Git write scope: run only the git add/commit/amend an ask names (test fixtures amend into the round commit); pushes are executed by the orchestrator — never push yourself, and never run other repository-writing git operations.",
-  "Read the four sections of Agents/requirements.md (sentence inventory, requirements and acceptance criteria, artifact spec table, open questions) and the opening mail in LoopMail/ToBoss.md first: the gate must cover the pass criteria in the spec table, not just structure (a file exists, a plot is non-empty, colours follow the rule).",
+  "Read the four sections of Agents/requirements.md (sentence inventory, requirements and acceptance criteria, artifact spec table, open questions) first: the gate must cover the pass criteria in the spec table, not just structure (a file exists, a plot is non-empty, colours follow the rule).",
   "Acceptance anchors to the ledger's verbatim words in Agents/requirements.md, never to any card's paraphrase; report retelling distortions (card/document content words disagreeing with the ledger) as findings classified as retelling distortion.",
   "Content assertions: every deliverable's selfcheck must carry assertions derived from the spec table — domain/range assertions (a plot's axis must equal the specified value), fill assertions (data should cover at least ~60% of the axis), discriminability assertions (input and output must differ observably). A suite that only checks existence and not correctness means the gate is not met — a blank figure passing 40 structural checks is the worst case.",
   "Test expectations may only derive from the spec table or a registered requirement, never from the current implementation; every assertion's comment names its source (Rn or spec row). Writing a misreading into a must-pass test is the worst moat of all.",
   "Number-hallucination warning: a good-looking number is not a good outcome — scrutinize whether what the number means is really as simple as it appears; the theory behind it may itself be wrong, and the flattering number then reinforces that theoretical illusion. Understanding a number presupposes solid knowledge of the theory beneath it: for every headline number ask — what theory or mechanism does it rest on, and what would it still show if that theory were wrong?",
   "Write and maintain robustness tests: boundary and adversarial inputs, perturbation scenarios where applicable; create/maintain Agents/selfcheck.py under Agents/ (test and debug scripts always live under Agents/ — only boss-facing files go in the repo root and docs/; explore freely while building, Occam's razor at delivery), aggregating, per the project profile: a strict build (warnings are errors: -Werror / /WX / -D warnings / deny(warnings), per language), the full test suite + robustness cases, and the local CI equivalent (if the repo has CI, it must run green locally). The suite falsifies, not just exercises: every mechanism the diff adds ships with a negative check (a tampered input that must fail, an injection that must be refused) — \"verified\" means a refutation attempt failed, never that a happy path passed.",
-  "Agents/selfcheck.py must contain a deliberately-broken canary case marked `canary`; when run, the selfcheck must actually execute the canary, observe its failure, and print one machine-readable line at the end of its output: CANARY: expected-FAIL observed-FAIL (the orchestrator parses this line — missing or observed-PASS means the suite is invalid) — a suite that cannot go red proves nothing.",
+  "Agents/selfcheck.py must contain at least one deliberately-broken canary case marked `canary`; when run, the selfcheck must actually execute the canary, observe its failure, and print one machine-readable line at the end of its standard output: CANARY: expected-FAIL observed-FAIL (the orchestrator parses this line — missing or observed-PASS means the suite is invalid) — a suite that cannot go red proves nothing.",
   "Check the previous round's push on the remote: on GitHub remotes with gh available use gh run list / gh run view; if uncheckable, say so honestly — an unchecked CI is never reported as passed; failures become mandatory fix items this round.",
   "Destructive-operation criterion (aligned with the declaration duty): beyond the approved list — data files or whole directories vanishing, history below the baseline rewritten, a force push, existing artifacts overwritten — is a blocker; demand the declaration and the ruling record. Source-file deletions in an ordinary refactor are not destructive, but must stay traceable. Third-party upstreams are read-only: pushes still go only to the agreed remote, never upstream; before the round closes, upstream refs are verified unchanged, quoted from git output.",
   "Independence is absolute: never edit the implementation under test. You only write Agents/selfcheck.py, the robustness cases, and the verification column of Agents/requirement_map.md (requirement <-> implementation location <-> re-runnable command, tabular with a requirement-map marker).",
@@ -280,7 +280,7 @@ async function resolvePushTarget(): Promise<{ target: string; note: string }> {
   return { target: "", note: "remote arg \"" + remoteArg + "\" is not in git remote list (" + (names.join(", ") || "none") + "): pushes skipped and reported" };
 }
 
-/** 凭据掩码：remote URL 的 user:token@ 段绝不进入日志/账本/问句 */
+/** Credential masking: the user:token@ part of a remote URL never reaches logs, the ledger, or asks */
 const maskUrl = (u: string): string => u.replace(/\/\/[^/@]+@/, "//***@");
 const HEAD0 = async (): Promise<string> => {
   for (let t = 0; t < 2; t++) {
@@ -288,7 +288,7 @@ const HEAD0 = async (): Promise<string> => {
       const l = await git.log(1);
       return l[0]?.hash ?? "";
     } catch {
-      /* 瞬态失败：重试一次（B#25） */
+      /* transient failure: retry once (B#25) */
     }
   }
   return "";
@@ -409,12 +409,14 @@ const commit0 = await chief.ask<Commitment>(
 );
 let roundsTotal = roundsArg > 0 ? roundsArg : Math.round(commit0.roundsTotal);
 if (!(roundsTotal >= 1)) roundsTotal = 3;
+let clampNote = "";
 if (roundsArg === 0 && roundsTotal > 50) {
-  log("警告：总工规划轮数 " + roundsTotal + " 超出上限——已钳制为 50（有界迭代是协议原则；确需更多轮，老板可用 rounds 参数锁定）");
+  log("Warning: the chief planned " + roundsTotal + " rounds, above the orchestrator cap — clamped to 50 (bounded iteration is a protocol principle; for more rounds the boss locks them via the rounds argument)");
+  clampNote = "the chief originally planned " + roundsTotal + " rounds; the orchestrator cap clamped the run to 50";
   roundsTotal = 50;
 }
-if (roundsTotal !== (roundsArg > 0 ? roundsArg : commit0.roundsTotal)) {
-  log("Rounds total " + commit0.roundsTotal + " invalid; using " + roundsTotal + " (recorded honestly)");
+if (roundsTotal !== (roundsArg > 0 ? roundsArg : commit0.roundsTotal) && clampNote === "") {
+  log("The chief's committed round count was out of range (corrected by the guard); proceeding with " + roundsTotal + " (recorded honestly)");
 }
 if (legacyLayout) {
   let migratedLedger = "";
@@ -467,7 +469,7 @@ function dangerExecAsk(approved: DangerDecision[]): string {
     "\nYour report must quote each approved command's original text verbatim (the consistency check matches verbatim; paraphrases and omissions count as unconfirmed); then git add -A && git commit --amend --no-edit into the round commit (plain commit if the round has none yet) and return one sentence.";
 }
 // Intake completeness check (mechanical): did the four sections and the opening brief actually reach the files? Repair once, then record honestly — this is the mechanical counterpart of "5 of 7 requirements never registered"
-const intakeMarkers = ["sentence inventory", "acceptance criteria", "spec table", "open question"];
+const intakeMarkers = ["sentence inventory", "requirements and acceptance criteria", "artifact spec table", "open questions"];
 let intakeMissing: string[] = [];
 const checkIntake = async (): Promise<void> => {
   let rt = "";
@@ -514,8 +516,8 @@ try {
   branch = "main";
 }
 if (branch === "HEAD") {
-  branch = ""; // detached HEAD：目标分支不确定——全部推送跳过（fail-closed，B#20），老板确认分支后重跑
-  log("警告：仓库处于 detached HEAD 状态，目标分支不确定——本轮所有推送跳过并如实记录（确认分支后重跑）");
+  branch = ""; // detached HEAD: the target branch is indeterminate — every push is skipped (fail-closed, B#20); rerun after the branch is confirmed
+  log("Warning: the repository is in a detached-HEAD state and the target branch is indeterminate — every push this round is skipped and recorded honestly (rerun after the branch is confirmed)");
 }
 
 for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
@@ -564,25 +566,42 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     interrupted = true;
     break;
   }
-  // Card-to-ledger verbatim check (retelling-distortion defense): a card citing an Rn must share a verbatim run of at least 12 chars with the ledger original (whitespace-normalized) — a retelling that flips content words cannot match
-  let reqTextC = "";
+  // Card-to-ledger verbatim check (retelling-distortion defense, line-level): a card citing an Rn must fully contain that Rn's registered line from the ledger (with its Rn prefix, whitespace-normalized) — a flipped word inside the sentence, a borrowed sentence from another Rn, and bypasses via shared strings like paths are all caught; language-neutral, no character-count magic
+  let reqRawC = "";
   try {
-    reqTextC = (await files.read("Agents/requirements.md")).replace(/\s+/g, "");
+    reqRawC = await files.read("Agents/requirements.md");
   } catch {
-    reqTextC = "";
+    reqRawC = "";
   }
-  if (reqTextC !== "") {
+  if (reqRawC === "") {
+    log("Retelling-distortion defense not run: Agents/requirements.md is unreadable — recorded honestly (all other defenses unchanged)");
+  } else {
+    const linesByRn = new Map<string, string[]>();
+    for (const rawLine of reqRawC.split("\n")) {
+      const rns = Array.from(new Set(rawLine.match(/\bR\d+\b/g) || []));
+      if (rns.length === 0) continue;
+      const lineN = rawLine.replace(/\s+/g, "");
+      for (const rn of rns) {
+        const parts = linesByRn.get(rn) || [];
+        if (parts.indexOf(lineN) < 0) parts.push(lineN);
+        linesByRn.set(rn, parts);
+      }
+    }
     const verbatimOk = (card: string): boolean => {
       const c = card.replace(/\s+/g, "");
-      for (let i = 0; i + 12 <= c.length; i++) {
-        if (reqTextC.includes(c.slice(i, i + 12))) return true;
+      const cited = Array.from(new Set(card.match(/\bR\d+\b/g) || []));
+      for (const rn of cited) {
+        const lines = linesByRn.get(rn) || [];
+        if (!lines.some((l) => c.indexOf(l) >= 0)) return false;
       }
-      return false;
+      return cited.length > 0;
     };
+    const noRn = (cards.cards || []).filter((c) => !/\bR\d+\b/.test(c));
     let paraphrased = (cards.cards || []).filter((c) => /\bR\d+\b/.test(c) && !verbatimOk(c));
+    if (noRn.length > 0) log("Round " + round + " has " + noRn.length + " card(s) without an Rn reference — a violation of the carding discipline (every card traces to a requirement entry); recorded honestly");
     if (paraphrased.length > 0) {
       cards = await chief.ask<RoundCards>(
-        "Card-to-ledger check failed (retelling-distortion defense): these cards cite an Rn but no verbatim run of at least 12 chars from Agents/requirements.md can be found inside them — the card's paraphrase may have changed content words (object/operation/quantifier/negation/numbers):\n" + paraphrased.map((c) => "- " + c.slice(0, 80)).join("\n") + "\nRewrite these cards with the ledger's verbatim sentence embedded (with its Rn; a compressed phrase only as the title) and return every other field unchanged (do not add blocked/done); if the ledger itself is missing the original words, complete the ledger first. Return RoundCards.",
+        "Card-to-ledger check failed (retelling-distortion defense, line-level): these cards cite an Rn but do not fully contain that Rn's registered line from the ledger — the card's paraphrase may have changed content words (object/operation/quantifier/negation/numbers):\n" + paraphrased.map((c) => "- " + c.slice(0, 80)).join("\n") + "\nRewrite these cards: copy the registered line for the cited Rn from Agents/requirements.md verbatim into the card (with its Rn prefix; a compressed phrase only as the title) and return every other field unchanged (do not add blocked/done); if the ledger itself is missing the original words, complete the ledger first. Return RoundCards.",
       );
       paraphrased = (cards.cards || []).filter((c) => /\bR\d+\b/.test(c) && !verbatimOk(c));
       log(paraphrased.length === 0 ? "Card-to-ledger check: passed after rewrite" : "Card-to-ledger check still failing for " + paraphrased.length + " card(s) — recorded honestly, continuing; downstream anchors to the ledger's words");
@@ -614,8 +633,12 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     dangerLog = review.decisions.map((d) => d.command + " -> " + d.decision + (d.safeForm ? " (as: " + d.safeForm + ")" : "") + ": " + d.reason).join("; ");
     log("Round " + round + " destructive-operation ruling: " + dangerLog.slice(0, 300));
     const ok = review.decisions.filter((d) => d.decision !== "reject");
-    approvedDanger = ok.map((d) => d.safeForm || d.command);
-    for (const d of ok) dangerTrail.push({ declared: d.command, decision: d.decision, form: d.safeForm || d.command, executed: "pending confirmation" });
+    const approvedOk = ok.filter((d) => d.decision !== "approve-with-change" || (d.safeForm || "").trim() !== "");
+    for (const d of ok) {
+      if (d.decision === "approve-with-change" && (d.safeForm || "").trim() === "") log("Ruling gap: approve-with-change with an empty safe form — treated as a rejection, the original command is never cleared (" + d.command.slice(0, 60) + ")");
+    }
+    approvedDanger = approvedOk.map((d) => (d.decision === "approve-with-change" ? (d.safeForm || "").trim() : d.command));
+    for (const d of approvedOk) dangerTrail.push({ declared: d.command, decision: d.decision, form: d.safeForm || d.command, executed: "pending confirmation" });
     if (ok.length > 0) {
       phase("Run the approved destructive operations");
       const execReport = await algo.ask<string>(dangerExecAsk(ok));
@@ -663,7 +686,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     const tester = agent("Test Engineer-R" + round + "-A" + attempt, persona(TEST_EN + PROFILE_LINE, CHEAP)); // one-shot instance: bounded context, evidence travels in the task card
     verdict = await tester.ask<TestVerdict>(
       (attempt === 1
-        ? "Cold start. Baseline commit: " + (baseline || "(empty tree — this repo's first commit)") + ". Diff size this round: " + sizeNote + ". First read the four sections of Agents/requirements.md (sentence inventory / requirements and acceptance criteria / artifact spec table / open questions) and the latest mail in LoopMail/ToBoss.md (the opening brief), then review " + diffHint + " and the repository itself: diff review, robustness tests, Agents/selfcheck.py (strict build / full tests + robustness / local CI equivalent + canary marker + content assertions derived from the spec table), and update the verification column of Agents/requirement_map.md; amend the test-fixture changes (Agents/selfcheck.py, robustness cases, requirement_map.md) into the round commit with git add -A && git commit --amend --no-edit — the test suite is part of this round's delivery."
+        ? "Cold start. Baseline commit: " + (baseline || "(empty tree — this repo's first commit)") + ". Diff size this round: " + sizeNote + ". First read the four sections of Agents/requirements.md (sentence inventory / requirements and acceptance criteria / artifact spec table / open questions) , then review " + diffHint + " and the repository itself: diff review, robustness tests, Agents/selfcheck.py (strict build / full tests + robustness / local CI equivalent + canary marker + content assertions derived from the spec table), and update the verification column of Agents/requirement_map.md; amend the test-fixture changes (Agents/selfcheck.py, robustness cases, requirement_map.md) into the round commit with git add -A && git commit --amend --no-edit — the test suite is part of this round's delivery."
         : (lastFix
             ? "The engineer has reworked (amended into the round commit); their fix report (a reconciliation lead only — your verdict rests on the checks you re-run): " + JSON.stringify(lastFix) + "\n"
             : "The failed mechanical items (Agents/selfcheck.py/requirement_map.md) were sent back to you to fix; no rework from the engineer side.\n") +
@@ -746,8 +769,9 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
           const t2 = line.trim();
           if (t2.length < 4) continue;
           const p2raw = t2.slice(3).trim();
-          const p2parts = p2raw.split(" -> "); // rename 条目 "R  old -> new"：取新路径（B#18）
-          const p2 = (p2parts[p2parts.length - 1] || p2raw).trim();
+          const p2unq = p2raw.startsWith("\"") && p2raw.endsWith("\"") && p2raw.length > 1 ? p2raw.slice(1, -1) : p2raw; // porcelain quotes paths with spaces — strip before matching (B#18)
+          const p2parts = p2unq.split(" -> "); // rename entries "R  old -> new": take the new path (B#18)
+          const p2 = (p2parts[p2parts.length - 1] || p2unq).trim();
           if (isImg(p2) && imageFiles.indexOf(p2) < 0) imageFiles.push(p2);
         }
         if (baseline) {
@@ -756,9 +780,9 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
             if (p3 !== "" && isImg(p3) && imageFiles.indexOf(p3) < 0) imageFiles.push(p3);
           }
         }
-        const ig2 = await G(["ls-files", "--others", "--ignored", "--exclude-standard"], 60000);
+        const ig2 = await G(["ls-files", "--others", "--ignored", "--exclude-standard", "--", "*.png", "*.jpg", "*.jpeg", "*.svg", "*.webp", "*.gif"], 60000); // pathspec limits the scan to image files: a full ignored enumeration is costly on large repos (P1)
         for (const p4 of (ig2.stdout || "").split("\n").map((s) => s.trim())) {
-          // 被 .gitignore 的交付图只可能在老板面向的位置（仓库根或 docs/）——依赖目录与 Agents/ 不算交付（B#18）
+          // a gitignored deliverable figure can only live in a boss-facing location (repo root or docs/) — dependency dirs and Agents/ do not count as delivery (B#18)
           if (p4 !== "" && isImg(p4) && imageFiles.indexOf(p4) < 0 && (p4.indexOf("/") < 0 || p4.indexOf("docs/") === 0)) imageFiles.push(p4);
         }
       } catch {
@@ -766,7 +790,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       }
     }
     let visualOk = imageFiles.length === 0;
-    visualNote = imageFiles.length === 0 ? (imgDetectOk ? "no image artifacts this round: not applicable" : "image-artifact detection failed (git unavailable) — treated as no images, recorded honestly") : "not reviewed yet";
+    visualNote = imageFiles.length === 0 ? (imgDetectOk ? "no image artifacts this round: not applicable" : "image-artifact detection failed — treated as no images, recorded honestly") : "not reviewed yet";
     if (mechGreen && imageFiles.length > 0) {
       phase("Visual review of image artifacts");
       const vv = await agent("Visual review-R" + round + "-A" + attempt, persona(VISUAL_EN + PROFILE_LINE, STRONG)).ask<VisualVerdict>(
@@ -877,7 +901,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       try {
         const p = await G(["push", push0.target, "HEAD:" + branch], 300000);
         pushExit = p.exitCode;
-        if (pushExit !== 0) log("Push attempt " + (t + 1) + " exit code " + pushExit + ": " + (p.stderr || p.stdout || "").slice(0, 200));
+        if (pushExit !== 0) log("Push attempt " + (t + 1) + " exit code " + pushExit + ": " + maskUrl((p.stderr || p.stdout || "").slice(0, 200)));
       } catch {
         log("Push attempt " + (t + 1) + " failed to launch (recorded honestly)");
       }
@@ -895,7 +919,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       pushState = "push verification failed (ls-remote unreachable; reported honestly)";
     }
   } else {
-    pushState = "push skipped: " + push0.note;
+    pushState = branch === "" ? "push skipped: detached HEAD, the target branch is indeterminate (recorded honestly)" : "push skipped: " + push0.note;
   }
   log("Round " + round + " push: " + pushState);
 
@@ -905,15 +929,15 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   );
   let headLedger = await HEAD0();
   if (headLedger === "" || headLedger === headA) {
-    log("账本提交未落地（HEAD 未前进或 git 读取失败）——账本追加重试一次");
-    await chief.ask<string>("账本提交未落地（HEAD 未前进）：把本轮记录写入 Agents/ledger.md，git add -A && git commit，返回一句话。");
+    log("The ledger commit did not land (HEAD did not advance, or the git read failed) — retrying the ledger append once");
+    await chief.ask<string>("The ledger commit did not land (HEAD did not advance): write this round's record into Agents/ledger.md, git add -A && git commit, and return one sentence.");
     headLedger = await HEAD0();
   }
   if (push0.target !== "" && branch !== "" && headLedger !== "") {
     // The ledger commit is pushed and verified by the orchestrator as well: no agent paraphrase anywhere
     try {
       const pl = await G(["push", push0.target, "HEAD:" + branch], 300000);
-      if (pl.exitCode !== 0) log("Ledger-commit push exit code " + pl.exitCode + ": " + (pl.stderr || "").slice(0, 200) + " — recorded honestly");
+      if (pl.exitCode !== 0) log("Ledger-commit push exit code " + pl.exitCode + ": " + maskUrl((pl.stderr || "").slice(0, 200)) + " — recorded honestly");
     } catch {
       log("Ledger-commit push failed to launch (recorded honestly)");
     }
@@ -992,7 +1016,7 @@ if (!interrupted) {
 }
 let reported = await chief.ask<FinalReport>(
     (closingBossNote !== "" ? "[Boss feedback (re-read from LoopMail/FromBoss.md at closing)] The boss wrote the following mid-run with no round left to carry it — handle each item or list it under the mail's decision section, never silently:\n" + closingBossNote + "\n" : "") +
-    mapGap + interruptNote + (interrupted ? "" : roundsTotal + " rounds complete — hard stop (or finished early).") +
+    (clampNote !== "" ? "[Round clamp] " + clampNote + " — list this in the final brief's decisions-for-the-boss section (for more rounds the boss locks them via the rounds argument and reruns).\n" : "") + mapGap + interruptNote + (interrupted ? "" : roundsTotal + " rounds complete — hard stop (or finished early).") +
     " Using Agents/requirements.md and the ledger as the only basis, append the Final Brief as a new mail at the top of LoopMail/ToBoss.md (the 2026-11-05 boss mail system: ToBoss.md is the Chief's delivery-mail master file — new mails go at the top, appended in reverse order, old mails are never modified; docs/ holds formal content such as REPORT.ipynb and the manuscript; formal files are referenced in mails by relative links as attachments). The boss wants a brief, not a reconciliation (2026-11-05 boss rule): the reconciliation (requirement by requirement -> outcome -> evidence; fill requirementOutcomes faithfully — a requirement without an entry is not done) is your internal affair, going only into Agents/requirement_map.md and the ledger (never touching the tester's verification column), never into the boss's mail as a reconciliation table. Mail writing discipline (the boss's words of 2026-11-05, hard rules): the art of de-redundancy — report the minimum, fastest for the boss to grasp the main line and the whole; no jargon piles (gloss jargon on first use); nothing contrary to fact (numbers and conclusions quote command output and the artifact manifest only); no code-segment or path dumps (evidence pointers listed in one section, no paths in the body). The mail body lets the boss tell at a glance whether the output is what was asked — nine fixed sections: (1) an opening paragraph of progress and verdict (what was done, how it went, whether it meets the boss's requirement; the summary field); (2) the deliverables list (deliverables: one line per artifact — what it is + which sentence of the boss's words it answers (quote <=15 chars) + the attachment link; content worth adopting from historical AI documents is merged here); (3) final state (commits/pushes/tests/known limitations); (4) deviations from the boss's requirements explained one by one (deviations); (5) the decision list (decisionList); (6) open questions answered one by one (questionAnswers: question text -> direct answer -> where the evidence is; when asked where something lives, answer the form too — raw or derived, whether a writer exists); (7) the autonomous-decision list (autonomousDecisions: decision -> reason -> consequence if rejected -> Occam self-assessment \"adds complexity vs simplifies\"; any complexity-increasing decision must be here, never only in the ledger); (8) deferred and declined as fixed subsections (each with its reason — a recorded deferral is a decision, not an omission; a declined idea is not re-proposed next run; fill the deferred/declined/processLessons fields faithfully, empty arrays when none); (9) process lessons (each = rule + why + scope; adopted lessons persist and load with the next run, a disproven lesson is marked superseded and never kept beside a new one; re-validate against the current repo on load) + one line of advice. The mail is a decision-layer document: no process narrative (that is the ledger), one conclusion sentence at the top of each section, each requirement stated once, aiming at two pages or less. At closing, tidy the delivery (2026-11-05 boss rules, hard; sweep the whole repository for historical redundancy first — including leftovers from earlier rounds and runs — not just this round's products): (1) code AND documents the final deliverable does not need (experiment scripts, superseded implementation versions, drafts and intermediate reports — historical redundancy, code and documents alike) -> git mv straight into Agents/; (2) an AI-generated document that has become history -> merge only the content worth adopting into the deliverables wording of the newest ToBoss mail, its body counting as historical redundancy -> git mv into Agents/; (3) docs/ keeps formal content only (the deliverable bodies the boss's words name); the repo root and docs/ pile up no working files; (4) LoopMail/FromBoss.md (written by the boss) stays as it is — what the boss wrote is never modified; (5) any file under LoopMail/ other than ToBoss.md/FromBoss.md is judged case by case — files the boss placed get the FromBoss_ prefix and stay untouched, stray agent-made products are put away per (1)/(2), and anything uncertain is treated as boss-placed; never delete a file throughout. git add -A && git commit, return FinalReport.",
 );
 // Question guard (mechanical): questions in the boss's words with no answer in the report count as a missed requirement — answer once, then record honestly
@@ -1004,7 +1028,7 @@ if (askedQ > 0 && (!reported.questionAnswers || reported.questionAnswers.length 
   if (!reported.questionAnswers || reported.questionAnswers.length === 0) log("Report still lacks answered questions (recorded honestly; the boss's words contain " + askedQ + " question mark(s))");
 }
 // The final-report commit is pushed and verified by the orchestrator (the closing ask no longer instructs a push; never push with an un-gated commit at HEAD)
-let finalPush = push0.target === "" ? "push skipped: " + push0.note : (ungatedHead ? "not pushed: an un-gated commit is at HEAD (recorded honestly)" : "not pushed");
+let finalPush = push0.target === "" ? "push skipped: " + push0.note : (branch === "" ? "not pushed: detached HEAD, the target branch is indeterminate (recorded honestly)" : (ungatedHead ? "not pushed: an un-gated commit is at HEAD (recorded honestly)" : "not pushed"));
 if (push0.target !== "" && branch !== "") {
   if (!ungatedHead) {
     const headFinal = await HEAD0();
@@ -1019,7 +1043,7 @@ if (push0.target !== "" && branch !== "") {
           finalPush = "push executed, verification unavailable (recorded honestly)";
         }
       } else {
-        finalPush = "push exit code " + pf.exitCode + " (recorded honestly: " + (pf.stderr || "").slice(0, 200) + ")";
+        finalPush = "push exit code " + pf.exitCode + " (recorded honestly: " + maskUrl((pf.stderr || "").slice(0, 200)) + ")";
       }
     } catch {
       finalPush = "push failed to launch (recorded honestly)";

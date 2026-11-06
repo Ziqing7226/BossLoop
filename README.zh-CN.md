@@ -4,7 +4,7 @@
 
 **为老板干活的 AI 团队循环，有界、对抗验证，并向你如实汇报。**
 
-[![Version](https://img.shields.io/badge/version-v0.5.5-blue)](CITATION.cff)
+[![Version](https://img.shields.io/badge/version-v0.5.6-blue)](CITATION.cff)
 [![License](https://img.shields.io/badge/license-CC%20BY%204.0%20%2F%20Apache--2.0-green)](LICENSE)
 ![已在 ZCode 验证](https://img.shields.io/badge/%E5%B7%B2%E5%9C%A8%20ZCode%20%E9%AA%8C%E8%AF%81-orange)
 [![English](https://img.shields.io/badge/docs-English-blue)](README.md)
@@ -35,7 +35,7 @@ bossloop 是一组开源 Agent 工作流：一支自主的 AI 团队——规划
 ![没有 bossloop：彻夜盯屏；有 bossloop：读报告](assets/before-after.jpg)
 
 - **低成本。** 强模型做管理，廉价模型做开发——复刻真实工程团队的降本增效打法。廉价档可以是本地部署的开源模型（例如在自己的 GPU 上跑 Qwen3.8）；它提出的危险操作由强模型裁决，未经批准的写法过不了门禁。省 token，办大事。
-- **高质量。** 循环自我对抗：每轮都有冷启动测试工程师攻击作品（绝不见作者自述）、门禁全部机械化并埋必须失败的金丝雀、问题必须附复现证据、返修迭代直到全绿。
+- **高质量。** 循环自我对抗：每轮都有冷启动测试工程师攻击作品（绝不见作者自述）、门禁全部机械化并埋必须失败的金丝雀、任务卡必须逐字携带老板原话（机械对拍拒绝转述引用）、问题必须附复现证据、返修迭代直到全绿。
 - **少人工。** 全流程工作流化：有界轮次、账本断点、初级→高级自动升级（工程循环）；你只在老板该出场的地方出场——给要求、裁决打断、读汇报。
 
 ![强模型做管理，廉价模型做开发](assets/low-cost.jpg)

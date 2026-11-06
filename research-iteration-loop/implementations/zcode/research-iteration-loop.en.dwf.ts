@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Research Iteration Loop (v0.5.5), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3) from the latest reviews; the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map + a mechanical selfcheck gate with a canary, owning the test fixtures); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
+description: Research Iteration Loop (v0.5.6), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3) from the latest reviews; the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map + a mechanical selfcheck gate with a canary, owning the test fixtures); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
 args:
   idea:
     type: string
@@ -208,7 +208,7 @@ const TEST_EN = [
   "Test expectations may only derive from the spec table or a registered requirement, never from the current implementation; every assertion's comment names its source. Writing a misreading into a must-pass test is the worst moat of all.",
   "Number-hallucination warning: a good-looking number is not a good outcome — scrutinize whether what the number means is really as simple as it appears; the theory behind it may itself be wrong, and the flattering number then reinforces that theoretical illusion. Understanding a number presupposes solid knowledge of the theory beneath it: for every headline number ask — what theory or mechanism does it rest on, and what would it still show if that theory were wrong?",
   "You own the claim→evidence map (Agents/claim_map.md): every manuscript number ↔ an archived artifact + a re-runnable check; write the check before the claim. The file must carry a claim-map marker and be tabular.",
-  "You create/maintain Agents/selfcheck.py under Agents/ (test and debug scripts always live under Agents/ — only boss-facing files go in the repo root and docs/): it must contain at least one deliberately-broken canary case that must FAIL, marked `canary`; when run, the selfcheck must actually execute the canary, observe its failure, and print one machine-readable line at the end of its output: CANARY: expected-FAIL observed-FAIL (the orchestrator parses this line — missing or observed-PASS means the suite is invalid) — a suite that cannot go red proves nothing.",
+  "You create/maintain Agents/selfcheck.py under Agents/ (test and debug scripts always live under Agents/ — only boss-facing files go in the repo root and docs/): it must contain at least one deliberately-broken canary case that must FAIL, marked `canary`; when run, the selfcheck must actually execute the canary, observe its failure, and print one machine-readable line at the end of its standard output: CANARY: expected-FAIL observed-FAIL (the orchestrator parses this line — missing or observed-PASS means the suite is invalid) — a suite that cannot go red proves nothing.",
   "Long-context discipline: when the diff or review surface is large, inventory the changes first, then deep-read the high-risk areas (logic changes, gate-relevant, danger-operation sites); the verdict's coverage field must state what was reviewed deeply and what was only skimmed — it is written before you know where the problems are, and any later problem in a skimmed area is reconciled against it.",
   "Every verdict carries evidence.",
   "Full-read duty: every file touched by this round's diff must be read in full (including the context around the changes) — never conclude from a few paragraphs; skims live only outside this round's diff and are declared in coverage; redirect long command output to a file and take summaries via tail/grep.",
@@ -324,7 +324,7 @@ try {
 const G = (gitArgs: string[], timeoutMs = 120000): Promise<WorldRunResult> =>
   world.run("git", repoRoot !== "" ? ["-C", repoRoot, ...gitArgs] : gitArgs, { timeoutMs });
 /** Last commit hash, empty when git is unavailable */
-/** 凭据掩码：remote URL 的 user:token@ 段绝不进入日志/账本/问句 */
+/** Credential masking: the user:token@ part of a remote URL never reaches logs, the ledger, or asks */
 const maskUrl = (u: string): string => u.replace(/\/\/[^/@]+@/, "//***@");
 const HEADR = async (): Promise<string> => {
   for (let t = 0; t < 2; t++) {
@@ -332,7 +332,7 @@ const HEADR = async (): Promise<string> => {
       const l = await git.log(1);
       return l[0]?.hash ?? "";
     } catch {
-      /* 瞬态失败：重试一次（B#25） */
+      /* transient failure: retry once (B#25) */
     }
   }
   return "";
@@ -416,7 +416,7 @@ if ((survey.paperRequests || []).length > 0) {
   log("Paper fetch requests (non-blocking, for the boss): " + survey.paperRequests.join("; "));
 }
 // Intake completeness check (mechanical, same as the engineering loop): did the brief's four sections actually reach the file? Repair once, then record honestly
-const intakeMarkersR = ["sentence inventory", "acceptance criteria", "spec table", "open question"];
+const intakeMarkersR = ["sentence inventory", "requirements and acceptance criteria", "artifact spec table", "open questions"];
 let intakeMissingR: string[] = [];
 const checkIntakeR = async (): Promise<void> => {
   let bt = "";
@@ -441,6 +441,7 @@ if (intakeMissingR.length > 0) {
   await checkIntakeR();
   log(intakeMissingR.length === 0 ? "Intake completeness: passed after repair" : "Intake completeness still missing: " + intakeMissingR.join("; ") + " — recorded honestly, continuing");
 }
+let round1FullMissing = false; // the round-1 FULL-missing flag (feeds the researcher ban and the evaluation report)
 let branchR = "main";
 try {
   const b = await G(["rev-parse", "--abbrev-ref", "HEAD"], 60000);
@@ -449,8 +450,8 @@ try {
   branchR = "main";
 }
 if (branchR === "HEAD") {
-  branchR = ""; // detached HEAD：目标分支不确定——全部推送跳过（fail-closed，B#20），老板确认分支后重跑
-  log("警告：仓库处于 detached HEAD 状态，目标分支不确定——本轮所有推送跳过并如实记录（确认分支后重跑）");
+  branchR = ""; // detached HEAD: the target branch is indeterminate — every push is skipped (fail-closed, B#20); rerun after the branch is confirmed
+  log("Warning: the repository is in a detached-HEAD state and the target branch is indeterminate — every push this round is skipped and recorded honestly (rerun after the branch is confirmed)");
 }
 const rawResumeR = Math.round(survey.resumeFrom);
 if (!Number.isFinite(rawResumeR) || rawResumeR < 0) log("Warning: resumeFrom invalid (" + String(survey.resumeFrom) + ") — treated as 0 (recorded honestly)");
@@ -521,28 +522,45 @@ for (let round = startRound; round <= rounds; round++) {
   if ((cards.proposals || []).length < 1 || (cards.proposals || []).length > 3) {
     log("Round " + round + " portfolio still invalid (" + (cards.proposals || []).length + " entries); recorded honestly and continuing");
   }
-  // Card-to-ledger verbatim check (retelling-distortion defense): a card citing an Rn must share a verbatim run of at least 12 chars with the opening mail (whitespace-normalized) — a retelling that flips content words cannot match
-  let reqTextC = "";
+  // Card-to-opening-mail verbatim check (retelling-distortion defense, line-level): a card citing an Rn must fully contain that Rn's registered line from the opening mail (with its Rn prefix, whitespace-normalized) — a flipped word inside the sentence, a borrowed sentence from another Rn, and bypasses via shared strings like paths are all caught; language-neutral, no character-count magic
+  let reqRawC = "";
   try {
-    reqTextC = (await files.read("LoopMail/ToBoss.md")).replace(/\s+/g, "");
+    reqRawC = await files.read("LoopMail/ToBoss.md");
   } catch {
-    reqTextC = "";
+    reqRawC = "";
   }
-  if (reqTextC !== "") {
+  if (reqRawC === "") {
+    log("Retelling-distortion defense not run: LoopMail/ToBoss.md is unreadable — recorded honestly (all other defenses unchanged)");
+  } else {
+    const linesByRn = new Map<string, string[]>();
+    for (const rawLine of reqRawC.split("\n")) {
+      const rns = Array.from(new Set(rawLine.match(/\bR\d+\b/g) || []));
+      if (rns.length === 0) continue;
+      const lineN = rawLine.replace(/\s+/g, "");
+      for (const rn of rns) {
+        const parts = linesByRn.get(rn) || [];
+        if (parts.indexOf(lineN) < 0) parts.push(lineN);
+        linesByRn.set(rn, parts);
+      }
+    }
     const verbatimOk = (card: string): boolean => {
       const c = card.replace(/\s+/g, "");
-      for (let i = 0; i + 12 <= c.length; i++) {
-        if (reqTextC.includes(c.slice(i, i + 12))) return true;
+      const cited = Array.from(new Set(card.match(/\bR\d+\b/g) || []));
+      for (const rn of cited) {
+        const lines = linesByRn.get(rn) || [];
+        if (!lines.some((l) => c.indexOf(l) >= 0)) return false;
       }
-      return false;
+      return cited.length > 0;
     };
+    const noRn = (cards.cards || []).filter((c) => !/\bR\d+\b/.test(c));
     let paraphrased = (cards.cards || []).filter((c) => /\bR\d+\b/.test(c) && !verbatimOk(c));
+    if (noRn.length > 0) log("Round " + round + " has " + noRn.length + " card(s) without an Rn reference — a violation of the carding discipline (every card traces to a requirement entry); recorded honestly");
     if (paraphrased.length > 0) {
       cards = await chief.ask<WorkCards>(
-        "Card-to-ledger check failed (retelling-distortion defense): these cards cite an Rn but no verbatim run of at least 12 chars from the LoopMail/ToBoss.md opening mail can be found inside them — the card's paraphrase may have changed content words (object/operation/quantifier/negation/numbers):\n" + paraphrased.map((c) => "- " + c.slice(0, 80)).join("\n") + "\nRewrite these cards with the opening mail's verbatim sentence embedded (with its Rn; a compressed phrase only as the title) and return every other field unchanged (do not add blocked/done); if the opening mail itself is missing the original words, complete the mail first. Return WorkCards.",
+        "Card-to-opening-mail check failed (retelling-distortion defense, line-level): these cards cite an Rn but do not fully contain that Rn's registered line from the opening mail — the card's paraphrase may have changed content words (object/operation/quantifier/negation/numbers):\n" + paraphrased.map((c) => "- " + c.slice(0, 80)).join("\n") + "\nRewrite these cards: copy the registered line for the cited Rn from LoopMail/ToBoss.md verbatim into the card (with its Rn prefix; a compressed phrase only as the title) and return every other field unchanged (keep the title and proposals unchanged); if the opening mail itself is missing the original words, complete the mail first. Return WorkCards.",
       );
       paraphrased = (cards.cards || []).filter((c) => /\bR\d+\b/.test(c) && !verbatimOk(c));
-      log(paraphrased.length === 0 ? "Card-to-ledger check: passed after rewrite" : "Card-to-ledger check still failing for " + paraphrased.length + " card(s) — recorded honestly, continuing; downstream anchors to the opening mail's words");
+      log(paraphrased.length === 0 ? "Card-to-opening-mail check: passed after rewrite" : "Card-to-opening-mail check still failing for " + paraphrased.length + " card(s) — recorded honestly, continuing; downstream anchors to the opening mail's words");
     }
   }
   log("Round " + round + " task: " + cards.title + "; portfolio: " + (cards.proposals || []).join(", "));
@@ -552,11 +570,14 @@ for (let round = startRound; round <= rounds; round++) {
     "This round's cards: " + (cards.cards || []).join("; ") + "\n" +
     "Build and self-test. Discipline: end-to-end real runs, numbers with exact definitions, faithful competitor reproduction; every proposal selected this round must be fully validated (three stages: MINI_PILOT/PILOT are for debugging only, claims come from FULL); by the end of round 1 there must be at least one end-to-end number from a complete comparison. Before comparing against prior work, record a caliber table (each competitor's raw convention, dataset, metric definition); bound representation/preprocessing assumptions with zero-cost standard-tool anchor experiments before building the full method; run at least one boundary experiment per round (where the approach breaks, parameter sensitivity) and state each claim's evidence scope (datasets and conditions). Report experiments (attempted/passed) honestly; archive null results with a mechanism explanation.",
   );
-  if (round === 1 && !(dev.numbers || []).some((n) => /\bFULL\b/i.test(n))) {
+  if (round === 1 && !(dev.numbers || []).some((n) => /^\s*FULL/.test(n))) {
     dev = await algo.ask<DevReport>(
-      "Round 1 must end with at least one end-to-end number from a complete (FULL-stage) comparison; a minimal comparison is not a substitute. Run it now and return DevReport (numbers carries the value prefixed with its stage, e.g. FULL, and its exact definition); if genuinely impossible, say so and leave numbers empty.",
+      "Round 1 must end with at least one end-to-end number from a complete (FULL-stage) comparison; a minimal comparison is not a substitute. Run it now and return DevReport (numbers carries the value prefixed with its stage name — starting with FULL/PILOT/MINI_PILOT; the mechanical check judges by the FULL prefix); if genuinely impossible, name the blocking constraint (data / compute / time window) and leave numbers empty — the statement will be recorded in the ledger and shown honestly in the evaluation report.",
     );
-    if (!(dev.numbers || []).some((n) => /\bFULL\b/i.test(n))) log("Round 1 has no FULL-stage end-to-end number (still missing after remediation) - recorded honestly; the manuscript must not claim validation");
+    if (!(dev.numbers || []).some((n) => /^\s*FULL/.test(n))) {
+      round1FullMissing = true;
+      log("Round 1 has no FULL-stage end-to-end number (still missing after remediation) - recorded honestly; the manuscript must not claim validation");
+    }
   }
   // Destructive operations: the cheap tier declares, the strong-tier Chief rules execute / safe form / skip
   if ((dev.dangerRequests || []).length > 0) {
@@ -569,23 +590,32 @@ for (let round = startRound; round <= rounds; round++) {
     "Review the build. The author's self-report follows (treat it as leads and coverage hints only — verify every number and claim against the claim map and archived artifacts; a self-report never earns a free pass): " + JSON.stringify(dev) + "\n" +
     "This round's diff = the previous archive commit..the current working tree (untracked files included). Read the LoopMail/ToBoss.md opening mail's artifact spec table first: verify against its pass criteria, not structure alone. " +
     "Duties: code review / roundtrip (incl. adversarial inputs) / generalization / perturbation stability; update the claim→evidence map (Agents/claim_map.md); " +
-    "create or update Agents/selfcheck.py with a must-fail canary case, and expectations derived from the spec table or a registered requirement (comment the source), never from the current implementation. For headline numbers that enter claims or go/no-go decisions and involve multi-step aggregation, recompute them via a second path from archived intermediates (a different grouping or formula — a second implementation is not required); archive the intermediates that make this a minutes-long check, not a rerun. A mismatch freezes the number pending audit — never wave it off as a rounding note. Single-source direct measurements are exempt (roundtrip and canary already cover them). When a number is retracted, sweep the whole repo for documents repeating it (ledger history, READMEs, figures) and list the corrections for this round. Return TestVerdict (the artifacts field lists this round's figures/tables, including gitignored ones).",
+    "create or update Agents/selfcheck.py with at least one must-fail canary case; when run, the selfcheck must actually execute the canary, observe its failure, and print one machine-readable line at the end of its standard output: CANARY: expected-FAIL observed-FAIL (the orchestrator parses this line — missing or observed-PASS means the suite is invalid). Expectations derived from the spec table or a registered requirement (comment the source), never from the current implementation. For headline numbers that enter claims or go/no-go decisions and involve multi-step aggregation, recompute them via a second path from archived intermediates (a different grouping or formula — a second implementation is not required); archive the intermediates that make this a minutes-long check, not a rerun. A mismatch freezes the number pending audit — never wave it off as a rounding note. Single-source direct measurements are exempt (roundtrip and canary already cover them). When a number is retracted, sweep the whole repo for documents repeating it (ledger history, READMEs, figures) and list the corrections for this round. Return TestVerdict (the artifacts field lists this round's figures/tables, including gitignored ones).",
   );
   // Image artifacts -> visual review (mechanically triggered); its issues join this round's fix list and ride the existing fix flow — no images, no cost
   const isImgR = (p: string): boolean => /\.(png|jpe?g|svg|webp|gif)$/i.test(p);
+  let imgDetectOkR = true; // whether image detection succeeded (failure must be disclosed — the true-equivalent port of the engineering loop's v0.5.4 fixes)
   let imageFilesR: string[] = (verdict.artifacts || []).filter((p) => isImgR(p));
   try {
     const stR = await G(["status", "--porcelain"], 60000);
     for (const line of (stR.stdout || "").split("\n")) {
       const tR = line.trim();
       if (tR.length < 4) continue;
-      const pR = tR.slice(3).trim();
+      const pRraw = tR.slice(3).trim();
+      const pRunq = pRraw.startsWith("\"") && pRraw.endsWith("\"") && pRraw.length > 1 ? pRraw.slice(1, -1) : pRraw; // porcelain quotes paths with spaces — strip before matching
+      const pRparts = pRunq.split(" -> "); // rename entries: take the new path
+      const pR = (pRparts[pRparts.length - 1] || pRunq).trim();
       if (isImgR(pR) && imageFilesR.indexOf(pR) < 0) imageFilesR.push(pR);
     }
+    const igR = await G(["ls-files", "--others", "--ignored", "--exclude-standard", "--", "*.png", "*.jpg", "*.jpeg", "*.svg", "*.webp", "*.gif"], 60000);
+    for (const pI of (igR.stdout || "").split("\n").map((s) => s.trim())) {
+      // a gitignored deliverable figure can only live in a boss-facing location (repo root or docs/) — dependency dirs and Agents/ do not count as delivery
+      if (pI !== "" && isImgR(pI) && imageFilesR.indexOf(pI) < 0 && (pI.indexOf("/") < 0 || pI.indexOf("docs/") === 0)) imageFilesR.push(pI);
+    }
   } catch {
-    /* detection failed: treat as no images, recorded honestly in the ledger */
+    imgDetectOkR = false; // a failed detection must be disclosed, never silently treated as no images
   }
-  let visualNoteR = imageFilesR.length === 0 ? "no image artifacts this round: not applicable" : "not reviewed yet";
+  let visualNoteR = imageFilesR.length === 0 ? (imgDetectOkR ? "no image artifacts this round: not applicable" : "image-artifact detection failed — treated as no images, recorded honestly") : "not reviewed yet";
   if (imageFilesR.length > 0) {
     phase("Visual review of image artifacts");
     const vvR = await agent("Visual review-R" + round, persona(VISUAL_EN + PROFILE_LINE, STRONG)).ask<VisualVerdict>(
@@ -709,7 +739,7 @@ for (let round = startRound; round <= rounds; round++) {
 
   phase("Researcher: revise manuscript");
   const paper = await researcher.ask<string>(
-    "Engineering and testing are done; this is your only revision window this round." + (round === 1 && (dev.numbers || []).length === 0 ? "[Prohibition] Round 1 has no FULL end-to-end number — the manuscript must not claim validation; mark the affected claims as unverified.\n" : "") + "Dev report: " + JSON.stringify(dev) +
+    "Engineering and testing are done; this is your only revision window this round." + (round === 1 && !(dev.numbers || []).some((n) => /^\s*FULL/.test(n)) ? "[Prohibition] Round 1 has no FULL end-to-end number — the manuscript must not claim validation; mark the affected claims as unverified.\n" : "") + "Dev report: " + JSON.stringify(dev) +
     "\nFix / extra-experiment report (its new numbers are equally citable): " + JSON.stringify(fixDev) + "\nTest verdict: " + verdict.summary +
     "\nRevise docs/paper_draft.md truthfully: only mapped numbers, [TODO] for gaps. Return a short revision summary.",
   );
@@ -795,7 +825,7 @@ for (let round = startRound; round <= rounds; round++) {
   rows.push({
     round,
     task: cards.title,
-    portfolio: cards.proposals.join(", "),
+    portfolio: (cards.proposals || []).join(", "),
     dev: dev.summary + (fixDev !== dev ? " (incl. fixes)" : ""),
     experiments: [dev.experiments, fixDev !== dev ? fixDev.experiments : ""].filter((s) => s && s !== "none").join("; ") || "not reported",
     test: gate,
@@ -807,12 +837,24 @@ for (let round = startRound; round <= rounds; round++) {
 }
 
 phase("Preliminary evaluation report");
+// Closing re-read of FromBoss.md (same as the engineering loop): boss feedback written after the last round can never evaporate; merged into the question universe
+let closingBossNoteR = "";
+try {
+  closingBossNoteR = (await files.read("LoopMail/FromBoss.md")).trim();
+} catch {
+  closingBossNoteR = "";
+}
+if (closingBossNoteR !== "") log("Re-read LoopMail/FromBoss.md at closing: found " + closingBossNoteR.length + " chars of boss feedback — injected into the evaluation ask for item-by-item disposal, never silently dropped");
+let reconGap = ""; // Rns still missing dispositions after the repair (injected into the evaluation ask, same as the engineering loop's mapGap)
 const resumeNote = rows.length === 0 ? "The ledger shows all rounds already complete; produce the evaluation report directly from the ledger and archived artifacts. " : "";
 let evalResult = await chief.ask<EvalReport>(
   resumeNote + rounds + " rounds complete — hard stop. All reviews:\n" + plan.slice(0, 6000) + "\n" +
   "Round records: " + JSON.stringify(rows) + "\n" +
   (startRound > 1 ? "[Evidence scope] This run resumed at round " + startRound + ": the reviews and round records above cover this run's rounds only — the report must state its evidence scope explicitly, never letting the boss believe it covers all rounds.\n" : "") +
   "If the round records show round 1 had no end-to-end number, the report must state it plainly: no FULL number in round 1, the manuscript must not claim validation.\n" +
+  (closingBossNoteR !== "" ? "[Boss feedback (re-read at closing, LoopMail/FromBoss.md)] these are directives the boss wrote mid-run with no round left to apply them — dispose of each or list it under decisions for the boss, never silently:\n" + closingBossNoteR + "\n" : "") +
+  (reconGap !== "" ? "[Mechanical check failed] " + reconGap + " — the report must honestly disclose these requirements as not delivered, never silently.\n" : "") +
+  (round1FullMissing ? "[Mechanical check] Round 1 had no FULL-stage end-to-end number — the report and the manuscript must explicitly say so.\n" : "") +
   "Write the Preliminary Evaluation Report: verdict (continue/pivot/stop), expected success with reasoning that cites the experiment-mortality trend and the reader's novelty check, plus an explicit note that it is a qualitative judgement expressed numerically rather than a calibrated probability, novelty grounded in the 3 closest works, impact, points to watch if continued (each annotated with the evidence scope of the claim it concerns — datasets and conditions), " +
   "questionAnswers (question text -> direct answer -> where the evidence is; when asked where something lives, answer the form too — raw or derived, whether a writer exists), autonomousDecisions (decision -> reason -> consequence if rejected -> Occam self-assessment \"adds complexity vs simplifies\"; any complexity-increasing decision must be here, never only in the ledger), " +
   "deferred and declined fixed sections (each item with its reason — a recorded deferral is a decision, not an omission; a declined idea is not re-proposed next run; fill both fields faithfully, empty arrays when none), reviewerQuotes (verbatim, never paraphrased), deviations from the boss's requirements explained one by one (deviations: deviation + reason + the alternative chosen; empty array when none), process lessons (processLessons: each = rule + why + scope; lessons the boss adopts persist and load with the next run, a disproven lesson is marked superseded), and one line of advice including a decision list of things only the boss can do (accounts, data, resources). " +
@@ -826,6 +868,12 @@ try {
 }
 if (!evalOnDisk.slice(0, 2000).includes("Preliminary Evaluation Report")) {
   await chief.ask<string>("The evaluation report never landed (no Preliminary Evaluation Report mail at the top of LoopMail/ToBoss.md): insert the report as a new mail at the top of LoopMail/ToBoss.md and git add -A && git commit; return one sentence.");
+  try {
+    evalOnDisk = await files.read("LoopMail/ToBoss.md");
+  } catch {
+    evalOnDisk = "";
+  }
+  if (!evalOnDisk.slice(0, 2000).includes("Preliminary Evaluation Report")) log("The report is still not on disk after the repair ask — recorded honestly");
 }
 // Sentence-by-sentence reconciliation coverage check: every Rn from the opening mail must carry a disposition in the ledger's final chapter (delivered / partial / not delivered -> evidence location) — an evaporated Rn is a missed requirement
 {
@@ -842,7 +890,7 @@ if (!evalOnDisk.slice(0, 2000).includes("Preliminary Evaluation Report")) {
     toBossF = "";
   }
   const rnUnivF = Array.from(new Set(toBossF.match(/\bR\d+\b/g) || [])).sort();
-  const rnGoneF = rnUnivF.filter((rn) => !(new RegExp("\\b" + rn + "\\b")).test(ledgerTailF));
+  const rnGoneF = rnUnivF.filter((rn) => !(new RegExp("\\b" + rn + "\\b[^.]{0,60}(not delivered|partial|delivered)")).test(ledgerTailF));
   if (rnGoneF.length > 0) {
     await chief.ask<string>(
       "Reconciliation coverage check failed: the ledger's final chapter has no disposition for these opening-mail Rns: " + rnGoneF.join(", ") + " — mark each one delivered / partial / not delivered -> evidence location, never omit (an evaporated Rn is a missed requirement), git add -A && git commit, return one sentence.",
@@ -852,12 +900,13 @@ if (!evalOnDisk.slice(0, 2000).includes("Preliminary Evaluation Report")) {
     } catch {
       ledgerTailF = "";
     }
-    const stillGoneF = rnUnivF.filter((rn) => !(new RegExp("\\b" + rn + "\\b")).test(ledgerTailF));
+    const stillGoneF = rnUnivF.filter((rn) => !(new RegExp("\\b" + rn + "\\b[^.]{0,60}(not delivered|partial|delivered)")).test(ledgerTailF));
+    reconGap = stillGoneF.length === 0 ? "" : "reconciliation still missing dispositions for these Rns: " + stillGoneF.join(", ");
     log(stillGoneF.length === 0 ? "Reconciliation coverage: passed after repair" : "Reconciliation coverage still missing " + stillGoneF.length + " Rn(s) (" + stillGoneF.join(", ") + ") — recorded honestly");
   }
 }
 // Question guard (mechanical): questions in the boss's words with no answer in the report count as a missed requirement — answer once, then record honestly
-const askedQ = ((idea + " " + focus).match(/？|\?/g) || []).length;
+const askedQ = ((idea + " " + focus + " " + closingBossNoteR).match(/？|\?/g) || []).length;
 if (askedQ > 0 && (!evalResult.questionAnswers || evalResult.questionAnswers.length === 0)) {
   evalResult = await chief.ask<EvalReport>(
     "The boss's words contain " + askedQ + " question mark(s) but questionAnswers is empty — a question evaporating at intake is a missed requirement. Answer each one (question text -> direct answer, including the form -> where the evidence is; write \"cannot answer: reason\" where you truly cannot), write it back to the latest mail in LoopMail/ToBoss.md and git add -A && git commit (amend into the report commit only when it exists and is unpushed; never rewrite pushed history), then return the full EvalReport.",
