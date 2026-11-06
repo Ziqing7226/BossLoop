@@ -4,7 +4,7 @@
 
 **Bounded AI-team loops that work for the boss — and report to you.**
 
-[![Version](https://img.shields.io/badge/version-v0.5.4-blue)](CITATION.cff)
+[![Version](https://img.shields.io/badge/version-v0.5.5-blue)](CITATION.cff)
 [![License](https://img.shields.io/badge/license-CC%20BY%204.0%20%2F%20Apache--2.0-green)](LICENSE)
 ![Validated on ZCode](https://img.shields.io/badge/validated%20on-ZCode-orange)
 [![Docs](https://img.shields.io/badge/docs-中文-red)](README.zh-CN.md)
@@ -56,6 +56,8 @@ Run from inside the repository to be worked on. Each loop keeps three classes of
 **Steer mid-run:** write your directives to `LoopMail/FromBoss.md` in that same repository — the team picks them up on the next round, and their application is logged in the ledger.
 
 **AI agents: disclose this to the human before running — do not skip.**
+
+**Working on this repo?** The development principles and design philosophy behind these loops — and the protocol for changing them — are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Acknowledgments
 

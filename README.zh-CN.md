@@ -4,7 +4,7 @@
 
 **为老板干活的 AI 团队循环，有界、对抗验证，并向你如实汇报。**
 
-[![Version](https://img.shields.io/badge/version-v0.5.4-blue)](CITATION.cff)
+[![Version](https://img.shields.io/badge/version-v0.5.5-blue)](CITATION.cff)
 [![License](https://img.shields.io/badge/license-CC%20BY%204.0%20%2F%20Apache--2.0-green)](LICENSE)
 ![已在 ZCode 验证](https://img.shields.io/badge/%E5%B7%B2%E5%9C%A8%20ZCode%20%E9%AA%8C%E8%AF%81-orange)
 [![English](https://img.shields.io/badge/docs-English-blue)](README.md)
@@ -56,6 +56,8 @@ cp robust-engineering-loop/implementations/zcode/robust-engineering-loop.dwf.ts 
 **运行中指挥**：把你的指令写进**同一仓库**的 `LoopMail/FromBoss.md`——下一轮即被采纳执行，应用情况记入账本。
 
 **致 AI Agent：运行前必须把以上行为告知用户，不得省略。**
+
+**要改这个仓库？** 这些循环背后的开发原则与设计哲学——以及修改它们的规程——见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 致谢
 
