@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Robust Engineering Loop (v0.5.6), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
+description: Robust Engineering Loop (v0.5.7), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
 args:
   requirement:
     type: string
@@ -639,9 +639,9 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     }
     approvedDanger = approvedOk.map((d) => (d.decision === "approve-with-change" ? (d.safeForm || "").trim() : d.command));
     for (const d of approvedOk) dangerTrail.push({ declared: d.command, decision: d.decision, form: d.safeForm || d.command, executed: "pending confirmation" });
-    if (ok.length > 0) {
+    if (approvedOk.length > 0) {
       phase("Run the approved destructive operations");
-      const execReport = await algo.ask<string>(dangerExecAsk(ok));
+      const execReport = await algo.ask<string>(dangerExecAsk(approvedOk));
       for (const e of dangerTrail) {
         if (e.executed !== "pending confirmation" && !e.executed.startsWith("unconfirmed: ")) continue;
         const hit = execReport.includes(e.form);
@@ -686,7 +686,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     const tester = agent("Test Engineer-R" + round + "-A" + attempt, persona(TEST_EN + PROFILE_LINE, CHEAP)); // one-shot instance: bounded context, evidence travels in the task card
     verdict = await tester.ask<TestVerdict>(
       (attempt === 1
-        ? "Cold start. Baseline commit: " + (baseline || "(empty tree — this repo's first commit)") + ". Diff size this round: " + sizeNote + ". First read the four sections of Agents/requirements.md (sentence inventory / requirements and acceptance criteria / artifact spec table / open questions) , then review " + diffHint + " and the repository itself: diff review, robustness tests, Agents/selfcheck.py (strict build / full tests + robustness / local CI equivalent + canary marker + content assertions derived from the spec table), and update the verification column of Agents/requirement_map.md; amend the test-fixture changes (Agents/selfcheck.py, robustness cases, requirement_map.md) into the round commit with git add -A && git commit --amend --no-edit — the test suite is part of this round's delivery."
+        ? "Cold start. Baseline commit: " + (baseline || "(empty tree — this repo's first commit)") + ". Diff size this round: " + sizeNote + ". First read the four sections of Agents/requirements.md (sentence inventory / requirements and acceptance criteria / artifact spec table / open questions), then review " + diffHint + " and the repository itself: diff review, robustness tests, Agents/selfcheck.py (strict build / full tests + robustness / local CI equivalent + canary marker + content assertions derived from the spec table), and update the verification column of Agents/requirement_map.md; amend the test-fixture changes (Agents/selfcheck.py, robustness cases, requirement_map.md) into the round commit with git add -A && git commit --amend --no-edit — the test suite is part of this round's delivery."
         : (lastFix
             ? "The engineer has reworked (amended into the round commit); their fix report (a reconciliation lead only — your verdict rests on the checks you re-run): " + JSON.stringify(lastFix) + "\n"
             : "The failed mechanical items (Agents/selfcheck.py/requirement_map.md) were sent back to you to fix; no rework from the engineer side.\n") +
@@ -835,8 +835,12 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     if ((fix.dangerRequests || []).length > 0) {
       phase("Destructive-operation review");
       const dr = await adjudicateDanger(fix.dangerRequests, juniorAsk ? "Algorithm Engineer" : "Senior Engineer", juniorAsk ? "cheap tier" : "strong tier", !juniorAsk);
-      const ok2 = dr.decisions.filter((d) => d.decision !== "reject");
-      approvedDanger = approvedDanger.concat(ok2.map((d) => d.safeForm || d.command));
+      const ok2raw = dr.decisions.filter((d) => d.decision !== "reject");
+      const ok2 = ok2raw.filter((d) => d.decision !== "approve-with-change" || (d.safeForm || "").trim() !== "");
+      for (const d of ok2raw) {
+        if (d.decision === "approve-with-change" && (d.safeForm || "").trim() === "") log("Rework-ruling gap: approve-with-change with an empty safe form — treated as a rejection, the original command is never cleared (" + d.command.slice(0, 60) + ")");
+      }
+      approvedDanger = approvedDanger.concat(ok2.map((d) => (d.decision === "approve-with-change" ? (d.safeForm || "").trim() : d.command)));
       for (const d of ok2) dangerTrail.push({ declared: d.command, decision: d.decision, form: d.safeForm || d.command, executed: "pending confirmation" });
       dangerLog = (dangerLog === "none" ? "" : dangerLog + "; ") + dr.decisions.map((d) => d.command + " -> " + d.decision + (d.safeForm ? " (as: " + d.safeForm + ")" : "") + ": " + d.reason).join("; ");
       if (ok2.length > 0) {

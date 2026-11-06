@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 科研迭代循环（v0.5.6）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表 + 含 canary 的 selfcheck 机械门禁，测试基建归其所有）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
+description: 科研迭代循环（v0.5.7）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表 + 含 canary 的 selfcheck 机械门禁，测试基建归其所有）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
 args:
   idea:
     type: string
@@ -647,6 +647,53 @@ for (let round = startRound; round <= rounds; round++) {
       claimMapOk = false;
     }
   }
+  // claim_map 实质核查（假映射表防线）：工件须在盘上可达、稿件小数级数字须有映射行覆盖（"先写检查再做主张"的机械面）；补修一次，仍缺如实记录
+  if (claimMapOk) {
+    const auditClaimMap = async (): Promise<string[]> => {
+      const badM: string[] = [];
+      let mapM = "";
+      try {
+        mapM = await files.read("Agents/claim_map.md");
+      } catch {
+        mapM = "";
+      }
+      let paperM = "";
+      try {
+        paperM = await files.read("docs/paper_draft.md");
+      } catch {
+        paperM = "";
+      }
+      if (paperM === "") return ["__unreadable__"];
+      const covered = mapM.split("\n").filter((l) => !/非主张数字|not-a-claim/.test(l)).join("\n").replace(/\s+/g, "");
+      for (const tok of Array.from(new Set(paperM.match(/\d+\.\d+/g) || []))) {
+        if (covered.indexOf(tok) < 0) badM.push("稿件数字 " + tok + " 无映射行覆盖（claim↔evidence 缺口）");
+      }
+      for (const row of mapM.split("\n")) {
+        const t = row.trim();
+        if (!t.startsWith("|") || /^[\|:\-\s]+$/.test(t)) continue;
+        const cells = t.split("|").map((c) => c.trim()).filter((cx) => cx !== "");
+        const art = cells.length >= 2 ? cells[1] : "";
+        const isPath = art !== "" && !/^(n\/a|na|none|无|—|–|tbd)$/i.test(art) && (art.indexOf("/") >= 0 || /\.(png|jpe?g|gif|svg|webp|csv|json|txt|md|pdf|npz|npy|pt|pth|ckpt|log|yaml|yml)$/i.test(art));
+        if (cells.length >= 2 && isPath) {
+          try {
+            await files.read(cells[1]);
+          } catch {
+            badM.push("映射行工件不可达：" + cells[1]);
+          }
+        }
+      }
+      return badM;
+    };
+    const badM = await auditClaimMap();
+    if (badM[0] === "__unreadable__") log("claim_map 实质核查未运行：docs/paper_draft.md 不可读——如实记录");
+    else if (badM.length > 0) {
+      await tester.ask<string>(
+        "claim_map 实质核查未过（假映射表防线）：\n" + badM.slice(0, 10).join("\n") + (badM.length > 10 ? "\n……（共 " + badM.length + " 项）" : "") + "\n逐项修正：稿件数字补映射行（数字 | 存档工件 | 可重跑检查命令，绝不虚构工件路径）；不可达路径改为真实存档位置；确非主张数字的（版本号、章节号、表编号）在映射表末尾加一行「<!-- 非主张数字: <数字> -->」登记豁免，核查跳过该行。git add -A && git commit，返回一句话。",
+      );
+      const stillM = await auditClaimMap();
+      log(stillM[0] === "__unreadable__" ? "claim_map 实质核查复核时稿件不可读——如实记录" : stillM.length === 0 ? "claim_map 实质核查：修正后通过" : "claim_map 实质核查仍有 " + stillM.length + " 项未对上——如实记录，稿件披露以 claim_map 缺口为准");
+    }
+  }
   let canary = false;
   let canaryRun = false;
   let fullSelfOut = "";
@@ -746,11 +793,25 @@ for (let round = startRound; round <= rounds; round++) {
   );
 
   phase("编辑邀请审稿人");
-  const invite = await editor.ask<Invite>(
+  let invite = await editor.ask<Invite>(
     "稿件已更新（docs/paper_draft.md，摘要：" + paper.slice(0, 500) + "）。\n" +
     "提炼关键词，决定邀请几位审稿人（1–3），并撰写收紧的审稿简报（稿件+映射表+定向问题，不含全仓库）。返回 Invite。",
   );
   const n = Math.max(1, Math.min(3, Math.round(invite.count)));
+  // 盲审泄漏扫描（机械）：审稿简报不得携带运行者身份特征——发现即退回编辑剥离一次
+  let identityScan = "";
+  try {
+    const gn = await G(["config", "user.name"], 60000);
+    identityScan = (gn.stdout || "").trim();
+  } catch {
+    identityScan = "";
+  }
+  if (identityScan !== "" && invite.brief.indexOf(identityScan) >= 0) {
+    invite = await editor.ask<Invite>(
+      "盲审泄漏扫描未过：审稿简报含运行者身份特征「" + identityScan + "」。剥离该特征（作者/单位/项目名改为匿名指称）后重发 Invite；其余字段照旧。",
+    );
+    if (invite.brief.indexOf(identityScan) >= 0) log("盲审简报剥离后仍含身份特征——如实记录，盲审完整性存疑");
+  }
 
   phase("审稿团评审");
   const settled = await Promise.allSettled(
@@ -763,14 +824,28 @@ for (let round = startRound; round <= rounds; round++) {
   const readerRev = await reader.ask<Review>(
     "通读文献后审稿（材料范围：稿件摘要、所引参考文献——含 docs/refs/ 论文库——与网络检索；不翻看账本、git 历史或源码工作区）。稿件摘要：" + paper.slice(0, 500) + "\n核对引用与叙事、查新、提问，并给出迭代建议。小心数字幻觉：好的数据表现不代表好的情况——严谨考虑稿件数字的含义是不是表面那么简单，支撑它的理论可能本身有错，而漂亮的数字会加固这一理论幻觉。nearestWorks 必填：最相近的 3 篇工作与差异维度。",
   );
-  const reviews: Review[] = settled.map((s) =>
-    s.status === "fulfilled" ? s.value : { summary: "该审稿人未完成", issues: [], iteration: [], severity: "minor" },
-  );
+  // 缺席审稿人如实化：缺席不是一份 minor 评审——不伪造 severity，digest 显式标注缺席并计入账本
+  const absentN = settled.filter((s) => s.status !== "fulfilled").length;
+  if (absentN > 0) log("审稿团缺席 " + absentN + "/" + n + "——缺席不计入 severity 合计，如实记入账本（下轮重新邀请）");
+  const reviews: Review[] = [];
+  for (const s of settled) {
+    if (s.status === "fulfilled") reviews.push(s.value);
+  }
   reviews.push(readerRev);
-  const digest = reviews
-    .map((r, i) => "【" + (i < n ? "审稿人" + (i + 1) : "文献读者") + "｜" + r.severity + "】" + r.summary +
-      "\n- 质询：" + (r.issues.join("；") || "无") + "\n- 迭代建议：" + (r.iteration.join("；") || "无") +
-      (r.nearestWorks && r.nearestWorks.length > 0 ? "\n- 最相近工作：" + r.nearestWorks.join("；") : ""))
+  const digest = settled
+    .map((s, i) => {
+      const label = "审稿人" + (i + 1);
+      if (s.status !== "fulfilled") return "【" + label + "｜缺席】该审稿人未完成——评审覆盖不全，缺席不计入评审合计";
+      const r = s.value;
+      return "【" + label + "｜" + r.severity + "】" + r.summary +
+        "\n- 质询：" + (r.issues.join("；") || "无") + "\n- 迭代建议：" + (r.iteration.join("；") || "无") +
+        (r.nearestWorks && r.nearestWorks.length > 0 ? "\n- 最相近工作：" + r.nearestWorks.join("；") : "");
+    })
+    .concat([
+      "【文献读者｜" + readerRev.severity + "】" + readerRev.summary +
+        "\n- 质询：" + (readerRev.issues.join("；") || "无") + "\n- 迭代建议：" + (readerRev.iteration.join("；") || "无") +
+        (readerRev.nearestWorks && readerRev.nearestWorks.length > 0 ? "\n- 最相近工作：" + readerRev.nearestWorks.join("；") : ""),
+    ])
     .join("\n\n");
 
   phase("本轮存档");
@@ -782,7 +857,7 @@ for (let round = startRound; round <= rounds; round++) {
     head0 = "";
   }
   const archived = await chief.ask<string>(
-    "把本轮记入 Agents/ledger.md（头部含仓库标识行" + (repoRoot ? "：" + repoRoot : "") + "与一行一轮的目录：本轮先更新目录行、再追加详情）：任务/产出/存档前 HEAD " + (head0 || "空树").slice(0, 7) + "/危险操作裁决（" + dangerLog + "）/测试（覆盖声明：" + (verdict.coverage || "").slice(0, 300) + "；视觉审阅：" + visualNoteR.slice(0, 200) + "）/审稿/下轮方向。然后 git add -A && git commit（备份推送由编排器执行并核验，你不执行 push；向云端发布永远是老板的明确动作）。返回一句话。",
+    "把本轮记入 Agents/ledger.md（头部含仓库标识行" + (repoRoot ? "：" + repoRoot : "") + "与一行一轮的目录：本轮先更新目录行、再追加详情；审稿团 " + n + " 人中缺席 " + absentN + " 人）：任务/产出/存档前 HEAD " + (head0 || "空树").slice(0, 7) + "/危险操作裁决（" + dangerLog + "）/测试（覆盖声明：" + (verdict.coverage || "").slice(0, 300) + "；视觉审阅：" + visualNoteR.slice(0, 200) + "）/审稿/下轮方向。然后 git add -A && git commit（备份推送由编排器执行并核验，你不执行 push；向云端发布永远是老板的明确动作）。返回一句话。",
   );
   let head1 = "";
   try {
@@ -799,12 +874,12 @@ for (let round = startRound; round <= rounds; round++) {
   }
   log("第 " + round + " 轮存档" + (commitOk ? "已核验（HEAD=" + head1.slice(0, 7) + "）" : "补救后仍需人工核查"));
   // 备份推送由编排器执行并核验（与工程循环同款，实测升级）：失败或核验不过都如实记录，绝不改推别处
-  let pushStateR = "跳过推送：" + push0.note;
+  let pushStateR = branchR === "" ? "跳过推送：detached HEAD，分支不确定（如实记录）" : "跳过推送：" + push0.note;
   const headPush = await HEADR();
   if (push0.target !== "" && branchR !== "" && headPush !== "") {
     try {
       const p = await G(["push", push0.target, "HEAD:" + branchR], 300000);
-      if (p.exitCode !== 0) log("第 " + round + " 轮备份推送退出码 " + p.exitCode + "：" + (p.stderr || p.stdout || "").slice(0, 200) + "——如实记录");
+      if (p.exitCode !== 0) log("第 " + round + " 轮备份推送退出码 " + p.exitCode + "：" + maskUrl((p.stderr || p.stdout || "")).slice(0, 200) + "——如实记录");
     } catch {
       log("第 " + round + " 轮备份推送未启动（如实记录）");
     }
@@ -812,7 +887,7 @@ for (let round = startRound; round <= rounds; round++) {
       const ls = await G(["ls-remote", push0.target, "refs/heads/" + branchR]);
       const rh = ((ls.stdout || "").split("\t")[0] || "").trim();
       pushStateR = rh === headPush && headPush !== ""
-        ? "已推送并核验（" + headPush.slice(0, 7) + "@" + push0.target + "/" + branchR + "）"
+        ? "已推送并核验（" + headPush.slice(0, 7) + "@" + maskUrl(push0.target) + "/" + branchR + "）"
         : "推送核验失败（如实记录：remote=" + rh.slice(0, 7) + "）";
     } catch {
       pushStateR = "推送核验失败（ls-remote 不可达，如实记录）";
@@ -837,45 +912,8 @@ for (let round = startRound; round <= rounds; round++) {
   plan = digest;
 }
 
-phase("初步评估报告");
-// 收尾重读 FromBoss.md（工程循环同款）：末轮之后老板写入的反馈绝不蒸发；并入疑问句宇宙
-let closingBossNoteR = "";
-try {
-  closingBossNoteR = (await files.read("LoopMail/FromBoss.md")).trim();
-} catch {
-  closingBossNoteR = "";
-}
-if (closingBossNoteR !== "") log("收尾时重读 LoopMail/FromBoss.md：发现老板反馈 " + closingBossNoteR.length + " 字——注入评估问句逐条处置，绝不静默蒸发");
 let reconGap = ""; // 逐句对账补修后仍缺的 Rn（注入评估问句强制披露，与工程循环 mapGap 同款）
-const resumeNote = rows.length === 0 ? "账本显示全部轮次已完成，本次运行直接从账本与存档产物出评估报告。" : "";
-let evalResult = await chief.ask<EvalReport>(
-  resumeNote + rounds + " 轮已完成，硬停。全部审稿意见：\n" + plan.slice(0, 6000) + "\n" +
-  "轮次记录（含每轮实验死亡率 experiments 字段）：" + JSON.stringify(rows) + "\n" +
-  (startRound > 1 ? "【证据基座范围】本次运行从第 " + startRound + " 轮续跑：上述审稿意见与轮次记录只含本次运行的轮次——评估必须显式注明证据基座范围，绝不让老板误以为覆盖全部轮次。\n" : "") +
-  "若轮次记录显示第 1 轮无端到端数字，报告必须显式声明「第 1 轮无 FULL 数字，稿件不得声称已验证」。\n" +
-  (closingBossNoteR !== "" ? "【老板反馈（收尾时重读 LoopMail/FromBoss.md）】以下为老板运行中写入、尚无轮次可落实的指令——逐条处置或在报告的待老板决策节列明，绝不静默：\n" + closingBossNoteR + "\n" : "") +
-  (reconGap !== "" ? "【机械核查未过】" + reconGap + "——报告必须如实披露这些要求的未交付状态，绝不静默。\n" : "") +
-  (round1FullMissing ? "【机械核查】第 1 轮无 FULL 级端到端数字——报告与稿件必须显式声明未验证。\n" : "") +
-  "撰写《初步评估报告》：verdict（继续/转向/停止）、预期成功率（推理依据必须引用实验死亡率趋势与文献读者的新颖性核查结论；并明确标注『这是定性判断的数值化表达，非校准概率』）、创新性（引用最相近 3 篇工作与实质差异维度）、影响力、继续做要注意的点（每条注明对应主张的证据范围——数据集与条件）、" +
-  "reviewerQuotes（逐字引用每位审稿人结论，不得改写）、待答问题逐条（questionAnswers：问题原文→直接答案→证据位置；问「存在哪」时连形态一起答——是 raw 还是派生格式、有没有写出器）、自主决定清单（autonomousDecisions：决定→理由→若否决的后果→奥卡姆自评「增加复杂度还是删减」；凡增加复杂度的决定必须进这一节，不能只写账本）、遗留与否决各设固定小节（deferred/declined，各带理由——记录在案的延后是决策而非遗漏，被否决的想法不得下轮重新提案；字段如实填写，无则空数组）、与老板要求相悖的偏离逐条说明（deviations：偏离+原因+替代选择；无则空数组）、流程教训（processLessons：每条=规则+为什么+适用范围；老板采纳的教训持久化并随下次运行加载，被证伪的教训标记废弃）、给老板的建议（含仅老板能做的决策清单：账号、数据、资源类）。" +
-  "逐句对账收尾（内部事务）：开局邮件逐句清点的每句 Rn 逐条标注 已交付/部分/未交付→证据位置，写进账本终章与 Agents/claim_map.md 的对账列——绝不以对账表形式出现在老板邮件正文，没有条目支撑的「已落实」不算完成。这份报告是决策层文档，并作为一封新邮件追加到 LoopMail/ToBoss.md 头部（2026-11-05 老板邮件化体系：ToBoss.md＝总工交付邮件正本，新邮件插头部、倒序追加、旧邮件永不删改；docs/＝正式内容如稿件与 REPORT.ipynb；正式文件在邮件中以链接作附件引用；写作纪律（2026-11-05 老板原话，硬性）：去冗余的艺术——最少的汇报、最快让老板把握主线和全貌，禁止堆砌黑话（行话首次出现用白话括注），禁止与事实不符（数字与结论只引用命令输出与产物 manifest），禁止堆砌代码段与路径指引（证据指针集中一节列，正文不堆路径））：不写过程流水账（第几次门禁通过、返修几轮、审稿几条——那些在账本）、每节开头一句结论、同一件事只说一次、以 ≤2 页为目标。收尾同时整理交付（2026-11-05 老板规则，硬性；先全仓盘点历史冗余——包括此前各轮与各次运行遗留的——再动手，一律 git mv，绝不删除——删除文件是老板的动作）：①凡非最终产出需要的代码与文档（实验脚本、被替换的实现版本、草稿与中间报告等历史冗余，包括代码和文档）→ 直接 git mv 进 Agents/；②AI 生成且已成历史的文档→只把值得采纳且有意义的内容并入 ToBoss 最新邮件的交付清单表述，文档本体算作历史冗余 git mv 进 Agents/；③docs/ 只保留正式内容（稿件本体等），仓库根与 docs/ 不堆工作文件；④老板写入或提供的文件（LoopMail/FromBoss.md、docs/refs/ 论文库）原样保留，绝不改动老板写下的内容；⑤LoopMail/ 下异于 ToBoss.md/FromBoss.md 的文件逐一判定归属——老板放置的文件名加前缀 FromBoss_ 并原样保留，agent 自己散落的按①②归位，拿不准的一律按老板放置处理；工作脚手架（账本、映射表、Agents/selfcheck.py、测试调试脚本、被证伪的历史）全部在 Agents/ 下。追加邮件到 LoopMail/ToBoss.md，git add -A && git commit。",
-);
-let evalOnDisk = "";
-try {
-  evalOnDisk = await files.read("LoopMail/ToBoss.md");
-} catch {
-  evalOnDisk = "";
-}
-if (!evalOnDisk.slice(0, 2000).includes("初步评估报告")) {
-  await chief.ask<string>("评估报告未落盘（LoopMail/ToBoss.md 头部未见《初步评估报告》邮件）：把报告作为新邮件插入 LoopMail/ToBoss.md 头部并 git add -A && git commit，返回一句话。");
-  try {
-    evalOnDisk = await files.read("LoopMail/ToBoss.md");
-  } catch {
-    evalOnDisk = "";
-  }
-  if (!evalOnDisk.slice(0, 2000).includes("初步评估报告")) log("评估报告补写后仍未落盘——如实记录");
-}
-// 逐句对账覆盖机械核查：开局邮件的每个 Rn 必须在账本终章有处置标注（已交付/部分/未交付→证据位置）——蒸发即漏需求
+// 逐句对账覆盖机械核查（在评估问句前运行，使缺口注入生效）：开局邮件的每个 Rn 必须在账本终章有处置标注（已交付/部分/未交付→证据位置）——蒸发即漏需求
 {
   let ledgerTailF = "";
   try {
@@ -905,6 +943,43 @@ if (!evalOnDisk.slice(0, 2000).includes("初步评估报告")) {
     log(stillGoneF.length === 0 ? "逐句对账覆盖：补齐后通过" : "逐句对账覆盖仍缺 " + stillGoneF.length + " 条（" + stillGoneF.join("、") + "）——已如实记录");
   }
 }
+phase("初步评估报告");
+// 收尾重读 FromBoss.md（工程循环同款）：末轮之后老板写入的反馈绝不蒸发；并入疑问句宇宙
+let closingBossNoteR = "";
+try {
+  closingBossNoteR = (await files.read("LoopMail/FromBoss.md")).trim();
+} catch {
+  closingBossNoteR = "";
+}
+if (closingBossNoteR !== "") log("收尾时重读 LoopMail/FromBoss.md：发现老板反馈 " + closingBossNoteR.length + " 字——注入评估问句逐条处置，绝不静默蒸发");
+const resumeNote = rows.length === 0 ? "账本显示全部轮次已完成，本次运行直接从账本与存档产物出评估报告。" : "";
+let evalResult = await chief.ask<EvalReport>(
+  resumeNote + rounds + " 轮已完成，硬停。全部审稿意见：\n" + plan.slice(0, 6000) + "\n" +
+  "轮次记录（含每轮实验死亡率 experiments 字段）：" + JSON.stringify(rows) + "\n" +
+  (startRound > 1 ? "【证据基座范围】本次运行从第 " + startRound + " 轮续跑：上述审稿意见与轮次记录只含本次运行的轮次——评估必须显式注明证据基座范围，绝不让老板误以为覆盖全部轮次。\n" : "") +
+  "若轮次记录显示第 1 轮无端到端数字，报告必须显式声明「第 1 轮无 FULL 数字，稿件不得声称已验证」。\n" +
+  (closingBossNoteR !== "" ? "【老板反馈（收尾时重读 LoopMail/FromBoss.md）】以下为老板运行中写入、尚无轮次可落实的指令——逐条处置或在报告的待老板决策节列明，绝不静默：\n" + closingBossNoteR + "\n" : "") +
+  (reconGap !== "" ? "【机械核查未过】" + reconGap + "——报告必须如实披露这些要求的未交付状态，绝不静默。\n" : "") +
+  (round1FullMissing ? "【机械核查】第 1 轮无 FULL 级端到端数字——报告与稿件必须显式声明未验证。\n" : "") +
+  "撰写《初步评估报告》：verdict（继续/转向/停止）、预期成功率（推理依据必须引用实验死亡率趋势与文献读者的新颖性核查结论；并明确标注『这是定性判断的数值化表达，非校准概率』）、创新性（引用最相近 3 篇工作与实质差异维度）、影响力、继续做要注意的点（每条注明对应主张的证据范围——数据集与条件）、" +
+  "reviewerQuotes（逐字引用每位审稿人结论，不得改写）、待答问题逐条（questionAnswers：问题原文→直接答案→证据位置；问「存在哪」时连形态一起答——是 raw 还是派生格式、有没有写出器）、自主决定清单（autonomousDecisions：决定→理由→若否决的后果→奥卡姆自评「增加复杂度还是删减」；凡增加复杂度的决定必须进这一节，不能只写账本）、遗留与否决各设固定小节（deferred/declined，各带理由——记录在案的延后是决策而非遗漏，被否决的想法不得下轮重新提案；字段如实填写，无则空数组）、与老板要求相悖的偏离逐条说明（deviations：偏离+原因+替代选择；无则空数组）、流程教训（processLessons：每条=规则+为什么+适用范围；老板采纳的教训持久化并随下次运行加载，被证伪的教训标记废弃）、给老板的建议（含仅老板能做的决策清单：账号、数据、资源类）。" +
+  "逐句对账收尾（内部事务）：开局邮件逐句清点的每句 Rn 逐条标注 已交付/部分/未交付→证据位置，写进账本终章与 Agents/claim_map.md 的对账列——绝不以对账表形式出现在老板邮件正文，没有条目支撑的「已落实」不算完成。这份报告是决策层文档，并作为一封新邮件追加到 LoopMail/ToBoss.md 头部（2026-11-05 老板邮件化体系：ToBoss.md＝总工交付邮件正本，新邮件插头部、倒序追加、旧邮件永不删改；docs/＝正式内容如稿件与 REPORT.ipynb；正式文件在邮件中以链接作附件引用；写作纪律（2026-11-05 老板原话，硬性）：去冗余的艺术——最少的汇报、最快让老板把握主线和全貌，禁止堆砌黑话（行话首次出现用白话括注），禁止与事实不符（数字与结论只引用命令输出与产物 manifest），禁止堆砌代码段与路径指引（证据指针集中一节列，正文不堆路径））：不写过程流水账（第几次门禁通过、返修几轮、审稿几条——那些在账本）、每节开头一句结论、同一件事只说一次、以 ≤2 页为目标。收尾同时整理交付（2026-11-05 老板规则，硬性；先全仓盘点历史冗余——包括此前各轮与各次运行遗留的——再动手，一律 git mv，绝不删除——删除文件是老板的动作）：①凡非最终产出需要的代码与文档（实验脚本、被替换的实现版本、草稿与中间报告等历史冗余，包括代码和文档）→ 直接 git mv 进 Agents/；②AI 生成且已成历史的文档→只把值得采纳且有意义的内容并入 ToBoss 最新邮件的交付清单表述，文档本体算作历史冗余 git mv 进 Agents/；③docs/ 只保留正式内容（稿件本体等），仓库根与 docs/ 不堆工作文件；④老板写入或提供的文件（LoopMail/FromBoss.md、docs/refs/ 论文库）原样保留，绝不改动老板写下的内容；⑤LoopMail/ 下异于 ToBoss.md/FromBoss.md 的文件逐一判定归属——老板放置的文件名加前缀 FromBoss_ 并原样保留，agent 自己散落的按①②归位，拿不准的一律按老板放置处理；工作脚手架（账本、映射表、Agents/selfcheck.py、测试调试脚本、被证伪的历史）全部在 Agents/ 下。追加邮件到 LoopMail/ToBoss.md，git add -A && git commit。",
+);
+let evalOnDisk = "";
+try {
+  evalOnDisk = await files.read("LoopMail/ToBoss.md");
+} catch {
+  evalOnDisk = "";
+}
+if (!evalOnDisk.slice(0, 2000).includes("初步评估报告")) {
+  await chief.ask<string>("评估报告未落盘（LoopMail/ToBoss.md 头部未见《初步评估报告》邮件）：把报告作为新邮件插入 LoopMail/ToBoss.md 头部并 git add -A && git commit，返回一句话。");
+  try {
+    evalOnDisk = await files.read("LoopMail/ToBoss.md");
+  } catch {
+    evalOnDisk = "";
+  }
+  if (!evalOnDisk.slice(0, 2000).includes("初步评估报告")) log("评估报告补写后仍未落盘——如实记录");
+}
 // 疑问句防蒸发（机械）：老板原话含疑问而报告没有答案即视为漏需求——补答一次，仍缺则如实记录
 const askedQ = ((idea + " " + focus + " " + closingBossNoteR).match(/？|\?/g) || []).length;
 if (askedQ > 0 && (!evalResult.questionAnswers || evalResult.questionAnswers.length === 0)) {
@@ -914,7 +989,7 @@ if (askedQ > 0 && (!evalResult.questionAnswers || evalResult.questionAnswers.len
   if (!evalResult.questionAnswers || evalResult.questionAnswers.length === 0) log("报告仍缺待答问题（已如实记录，老板原话含 " + askedQ + " 处疑问）");
 }
 // 评估报告提交由编排器推送并核验（与工程循环同款）
-let finalPushR = push0.target === "" ? "跳过推送：" + push0.note : "未推送";
+let finalPushR = push0.target === "" ? "跳过推送：" + push0.note : (branchR === "" ? "未推送：detached HEAD，分支不确定（如实记录）" : "未推送");
 if (push0.target !== "" && branchR !== "") {
   const headFinalR = await HEADR();
   try {
@@ -928,7 +1003,7 @@ if (push0.target !== "" && branchR !== "") {
         finalPushR = "推送已执行，落盘核验不可用（如实记录）";
       }
     } else {
-      finalPushR = "推送退出码 " + p.exitCode + "（如实记录：" + (p.stderr || "").slice(0, 200) + "）";
+      finalPushR = "推送退出码 " + p.exitCode + "（如实记录：" + maskUrl((p.stderr || "")).slice(0, 200) + "）";
     }
   } catch {
     finalPushR = "推送未启动（如实记录）";

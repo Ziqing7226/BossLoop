@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 鲁棒工程循环（v0.5.6）：把一句开发要求变成经过冷启动对抗验证的实现。总工建要求台账（老板原话逐字）并承诺 N 轮（老板可锁定）；每轮开发+文档单笔提交 → 冷启动门禁（diff 审查、鲁棒性测试、canary、零警告构建、上一轮 remote CI 结转）→ 先复现再返修（误诊须证据反驳）、amend 并入本轮提交（初级 3 次未解升级高级工程师，10 次未过打断上报）；全绿才推送约定 remote（默认 GitCoffer，append-only 永不 force）；账本断点续跑；破坏性操作申报-裁决-执行三段核验、绝不转交用户；模型分档 tiered/uniform。
+description: 鲁棒工程循环（v0.5.7）：把一句开发要求变成经过冷启动对抗验证的实现。总工建要求台账（老板原话逐字）并承诺 N 轮（老板可锁定）；每轮开发+文档单笔提交 → 冷启动门禁（diff 审查、鲁棒性测试、canary、零警告构建、上一轮 remote CI 结转）→ 先复现再返修（误诊须证据反驳）、amend 并入本轮提交（初级 3 次未解升级高级工程师，10 次未过打断上报）；全绿才推送约定 remote（默认 GitCoffer，append-only 永不 force）；账本断点续跑；破坏性操作申报-裁决-执行三段核验、绝不转交用户；模型分档 tiered/uniform。
 args:
   requirement:
     type: string
@@ -643,9 +643,9 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     }
     approvedDanger = approvedOk.map((d) => (d.decision === "approve-with-change" ? (d.safeForm || "").trim() : d.command));
     for (const d of approvedOk) dangerTrail.push({ declared: d.command, decision: d.decision, form: d.safeForm || d.command, executed: "待执行确认" });
-    if (ok.length > 0) {
+    if (approvedOk.length > 0) {
       phase("执行已批准的危险操作");
-      const execReport = await algo.ask<string>(dangerExecAsk(ok));
+      const execReport = await algo.ask<string>(dangerExecAsk(approvedOk));
       for (const e of dangerTrail) {
         if (e.executed !== "待执行确认" && !e.executed.startsWith("未确认：")) continue;
         const hit = execReport.includes(e.form);
@@ -839,8 +839,12 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     if ((fix.dangerRequests || []).length > 0) {
       phase("危险操作审核");
       const dr = await adjudicateDanger(fix.dangerRequests, juniorAsk ? "算法工程师" : "高级工程师", juniorAsk ? "廉价模型档" : "强模型档", !juniorAsk);
-      const ok2 = dr.decisions.filter((d) => d.decision !== "reject");
-      approvedDanger = approvedDanger.concat(ok2.map((d) => d.safeForm || d.command));
+      const ok2raw = dr.decisions.filter((d) => d.decision !== "reject");
+      const ok2 = ok2raw.filter((d) => d.decision !== "approve-with-change" || (d.safeForm || "").trim() !== "");
+      for (const d of ok2raw) {
+        if (d.decision === "approve-with-change" && (d.safeForm || "").trim() === "") log("返修裁决缺口：approve-with-change 但安全写法为空——按拒绝处理，绝不放行原始命令（" + d.command.slice(0, 60) + "）");
+      }
+      approvedDanger = approvedDanger.concat(ok2.map((d) => (d.decision === "approve-with-change" ? (d.safeForm || "").trim() : d.command)));
       for (const d of ok2) dangerTrail.push({ declared: d.command, decision: d.decision, form: d.safeForm || d.command, executed: "待执行确认" });
       dangerLog = (dangerLog === "无" ? "" : dangerLog + "；") + dr.decisions.map((d) => d.command + " → " + d.decision + (d.safeForm ? "（改：" + d.safeForm + "）" : "") + "：" + d.reason).join("；");
       if (ok2.length > 0) {
