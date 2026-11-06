@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Research Iteration Loop (v0.5.7), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3) from the latest reviews; the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map + a mechanical selfcheck gate with a canary, owning the test fixtures); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
+description: Research Iteration Loop (v0.5.8), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3) from the latest reviews; the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map + a mechanical selfcheck gate with a canary, owning the test fixtures); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
 args:
   idea:
     type: string
@@ -480,18 +480,25 @@ async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
     log("Destructive ruling incomplete or mismatched with the requests (" + decisions.length + "/" + reqs.length + ") — treating all as rejected, recorded honestly");
     decisions = reqs.map((r) => ({ command: r.command, decision: "reject" as const, safeForm: "", reason: "Incomplete ruling; rejected wholesale for safety" }));
   }
+  for (const d of decisions) {
+    if (d.decision === "approve-with-change" && (d.safeForm || "").trim() === "") {
+      log("Ruling gap: approve-with-change with an empty safe form — treated as a rejection, the original command never runs (" + d.command.slice(0, 60) + ")");
+      d.decision = "reject";
+      d.reason = (d.reason || "") + " (empty safe form; treated as a rejection)";
+    }
+  }
   let entry = decisions.map((d) => d.command + " -> " + d.decision + (d.safeForm ? " (as: " + d.safeForm + ")" : "") + ": " + d.reason).join("; ");
   const ok = decisions.filter((d) => d.decision !== "reject");
   if (ok.length > 0) {
     phase("Run the approved destructive operations");
     const execReport = await algo.ask<string>(
-      "Run the Chief-approved destructive operations, exactly as approved (use safeForm when non-empty); do not widen the scope: " + ok.map((d, i) => (i + 1) + ". " + (d.safeForm || d.command)).join("; ") + ". Then git add -A && git commit and return one sentence (listing the commands actually executed).",
+      "Run the Chief-approved destructive operations, exactly as approved; do not widen the scope, do not add unapproved commands: " + ok.map((d, i) => (i + 1) + ". " + (d.safeForm || d.command)).join("; ") + ". Your report must quote each approved form listed above verbatim (the consistency check matches verbatim; paraphrases and omissions count as unconfirmed); then git add -A && git commit and return one sentence.",
     );
     for (const d of ok) {
       const form = d.safeForm || d.command;
-      if (!execReport.includes(form) && !execReport.includes(d.command)) log("Dangerous-operation execution unconfirmed: " + d.command + " — recorded honestly, flagged in the ledger");
+      if (!execReport.includes(form)) log("Dangerous-operation execution unconfirmed: " + d.command + " — recorded honestly, flagged in the ledger");
     }
-    entry += "; execution confirmation: " + (ok.every((d) => execReport.includes(d.safeForm || d.command) || execReport.includes(d.command)) ? "all match the approved forms" : "some unconfirmed (see log)");
+    entry += "; execution confirmation: " + (ok.every((d) => execReport.includes(d.safeForm || d.command)) ? "all match the approved forms" : "some unconfirmed (see log)");
   } else {
     log("All destructive requests rejected: no workaround allowed");
   }
@@ -499,6 +506,7 @@ async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
 }
 
 for (let round = startRound; round <= rounds; round++) {
+  const roundHead0 = await HEADR(); // the HEAD where this round starts: the baseline for the image detection's diff source (same as the engineering loop)
   let dangerLog = "none"; // this round's destructive-operation rulings (into the ledger)
   let bossNote = "";
   try {
@@ -522,7 +530,7 @@ for (let round = startRound; round <= rounds; round++) {
   if ((cards.proposals || []).length < 1 || (cards.proposals || []).length > 3) {
     log("Round " + round + " portfolio still invalid (" + (cards.proposals || []).length + " entries); recorded honestly and continuing");
   }
-  // Card-to-opening-mail verbatim check (retelling-distortion defense, line-level): a card citing an Rn must fully contain that Rn's registered line from the opening mail (with its Rn prefix, whitespace-normalized) — a flipped word inside the sentence, a borrowed sentence from another Rn, and bypasses via shared strings like paths are all caught; language-neutral, no character-count magic
+  // Card-to-opening-mail verbatim check (retelling-distortion defense, line-level): a card citing an Rn must fully contain that Rn's registered line from the opening mail (with its Rn prefix, whitespace-normalized) — a flipped word inside the sentence, a borrowed sentence from another Rn, and bypasses via shared strings like paths are all caught; only lines that open with the Rn count as registered lines (index lines and cross-reference lines never pass; heading, list or emphasis decoration is fine); language-neutral, no character-count magic
   let reqRawC = "";
   try {
     reqRawC = await files.read("LoopMail/ToBoss.md");
@@ -534,6 +542,7 @@ for (let round = startRound; round <= rounds; round++) {
   } else {
     const linesByRn = new Map<string, string[]>();
     for (const rawLine of reqRawC.split("\n")) {
+      if (!/^\s*(?:#{1,6}\s*|[-*+]\s*|\d{1,3}[.、)]\s*|[*_]{0,2})*R\d+\b/.test(rawLine)) continue; // only lines that open with the Rn count as registered lines — index lines and cross-reference lines never pass (heading, list or emphasis decoration is fine)
       const rns = Array.from(new Set(rawLine.match(/\bR\d+\b/g) || []));
       if (rns.length === 0) continue;
       const lineN = rawLine.replace(/\s+/g, "");
@@ -607,6 +616,12 @@ for (let round = startRound; round <= rounds; round++) {
       const pR = (pRparts[pRparts.length - 1] || pRunq).trim();
       if (isImgR(pR) && imageFilesR.indexOf(pR) < 0) imageFilesR.push(pR);
     }
+    if (roundHead0) { // the baseline..HEAD source: images committed since the round started must be reviewed too (same as the engineering loop)
+      const dfR = await G(["diff", "--name-only", roundHead0 + "..HEAD"], 60000);
+      for (const pD of (dfR.stdout || "").split("\n").map((s) => s.trim())) {
+        if (pD !== "" && isImgR(pD) && imageFilesR.indexOf(pD) < 0) imageFilesR.push(pD);
+      }
+    }
     const igR = await G(["ls-files", "--others", "--ignored", "--exclude-standard", "--", "*.png", "*.jpg", "*.jpeg", "*.svg", "*.webp", "*.gif"], 60000);
     for (const pI of (igR.stdout || "").split("\n").map((s) => s.trim())) {
       // a gitignored deliverable figure can only live in a boss-facing location (repo root or docs/) — dependency dirs and Agents/ do not count as delivery
@@ -663,8 +678,11 @@ for (let round = startRound; round <= rounds; round++) {
         paperM = "";
       }
       if (paperM === "") return ["__unreadable__"];
-      const covered = mapM.split("\n").filter((l) => !/非主张数字|not-a-claim/.test(l)).join("\n").replace(/\s+/g, "");
+      const linesM = mapM.split("\n");
+      const covered = linesM.filter((l) => !/^\s*<!--[^>]*(?:非主张数字|not-a-claim)/.test(l)).join("\n").replace(/\s+/g, "");
+      const exemptToksM = Array.from(new Set(linesM.filter((l) => /^\s*<!--[^>]*(?:非主张数字|not-a-claim)/.test(l)).join("\n").match(/\d+\.\d+/g) || []));
       for (const tok of Array.from(new Set(paperM.match(/\d+\.\d+/g) || []))) {
+        if (exemptToksM.indexOf(tok) >= 0) continue; // numbers registered on an exemption line leave the coverage sweep — the exemption lets an honest map pass, not fail forever
         if (covered.indexOf(tok) < 0) badM.push("manuscript number " + tok + " has no map row (a claim-without-evidence gap)");
       }
       for (const row of mapM.split("\n")) {
@@ -687,7 +705,7 @@ for (let round = startRound; round <= rounds; round++) {
     if (badM[0] === "__unreadable__") log("claim-map substance check not run: docs/paper_draft.md is unreadable — recorded honestly");
     else if (badM.length > 0) {
       await tester.ask<string>(
-        "claim-map substance check failed (fake-map defense):\n" + badM.slice(0, 10).join("\n") + (badM.length > 10 ? "\n... (" + badM.length + " items total)" : "") + "\nFix each: add a map row for every manuscript number (number | archived artifact | re-runnable check — never invent an artifact path); point unreachable paths at the real archived location; for numbers that are not claims at all (version numbers, section numbers, table ids) add an exemption line \"<!-- not-a-claim: <number> -->\" at the end of the map — the check skips those lines. git add -A && git commit, return one sentence.",
+        "claim-map substance check failed (fake-map defense):\n" + badM.slice(0, 10).join("\n") + (badM.length > 10 ? "\n... (" + badM.length + " items total)" : "") + "\nFix each: add a map row for every manuscript number (number | archived artifact | re-runnable check — never invent an artifact path); point unreachable paths at the real archived location; for numbers that are not claims at all (version numbers, section numbers, table ids) add an exemption line \"<!-- not-a-claim: <number> -->\" at the end of the map — those numbers then leave the coverage sweep. git add -A && git commit, return one sentence.",
       );
       const stillM = await auditClaimMap();
       log(stillM[0] === "__unreadable__" ? "claim-map substance recheck hit an unreadable manuscript — recorded honestly" : stillM.length === 0 ? "claim-map substance check: passed after repair" : "claim-map substance check still failing for " + stillM.length + " item(s) — recorded honestly; the manuscript disclosure follows the map's gaps");
@@ -848,23 +866,11 @@ for (let round = startRound; round <= rounds; round++) {
     .join("\n\n");
 
   phase("Archive round");
-  let head0 = "";
-  try {
-    const l0 = await git.log(1);
-    head0 = l0[0]?.hash ?? "";
-  } catch {
-    head0 = "";
-  }
+  const head0 = await HEADR(); // retried on transient failure (B#25) — archive verification never bare-reads
   const archived = await chief.ask<string>(
     "Record this round in Agents/ledger.md (head carries the repository identity line" + (repoRoot ? ": " + repoRoot : "") + " and a one-line-per-round index: update this round's index line first, then append the detail; review panel of " + n + " with " + absentN + " absent) — task/build/HEAD before archive " + (head0 || "empty tree").slice(0, 7) + "/destructive-operation ruling (" + dangerLog + ")/test (coverage statement: " + (verdict.coverage || "").slice(0, 300) + "; visual review: " + visualNoteR.slice(0, 200) + ")/reviews/next direction. Then git add -A && git commit (the backup push is executed and verified by the orchestrator — you never push; publishing to the cloud is always the boss's explicit action). Return one sentence.",
   );
-  let head1 = "";
-  try {
-    const l1 = await git.log(1);
-    head1 = l1[0]?.hash ?? "";
-  } catch {
-    head1 = "";
-  }
+  const head1 = await HEADR(); // retried on transient failure (B#25) — archive verification never bare-reads
   const commitOk = head1 !== "" && head1 !== head0;
   if (!commitOk) {
     await chief.ask<string>(

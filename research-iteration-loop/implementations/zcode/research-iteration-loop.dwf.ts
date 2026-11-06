@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 科研迭代循环（v0.5.7）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表 + 含 canary 的 selfcheck 机械门禁，测试基建归其所有）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
+description: 科研迭代循环（v0.5.8）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表 + 含 canary 的 selfcheck 机械门禁，测试基建归其所有）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
 args:
   idea:
     type: string
@@ -481,18 +481,25 @@ async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
     log("危险操作裁决不完整或与申报不对应（" + decisions.length + "/" + reqs.length + " 条）——整体按驳回处理，如实记录");
     decisions = reqs.map((r) => ({ command: r.command, decision: "reject" as const, safeForm: "", reason: "裁决不完整或与申报不对应，整体驳回以保安全" }));
   }
+  for (const d of decisions) {
+    if (d.decision === "approve-with-change" && (d.safeForm || "").trim() === "") {
+      log("危险操作裁决缺口：approve-with-change 但安全写法为空——按拒绝处理，绝不放行原始命令（" + d.command.slice(0, 60) + "）");
+      d.decision = "reject";
+      d.reason = (d.reason || "") + "（安全写法为空，按拒绝处理）";
+    }
+  }
   let entry = decisions.map((d) => d.command + "→" + d.decision + (d.safeForm ? "（改：" + d.safeForm + "）" : "") + "：" + d.reason).join("；");
   const ok = decisions.filter((d) => d.decision !== "reject");
   if (ok.length > 0) {
     phase("执行已批准的危险操作");
     const execReport = await algo.ask<string>(
-      "执行总工程师已批准的危险操作，严格按批准写法（safeForm 非空时用 safeForm），不得扩大范围：" + ok.map((d, i) => (i + 1) + ". " + (d.safeForm || d.command)).join("；") + "。完成后 git add -A && git commit，返回一句话（须列明实际执行的命令）。",
+      "执行总工程师已批准的危险操作，严格按批准写法，不得扩大范围、不得新增未批准的命令：" + ok.map((d, i) => (i + 1) + ". " + (d.safeForm || d.command)).join("；") + "。回报中必须逐字引用上列每条批准写法（一致性核查按逐字匹配，漏引或转述都算未确认）；完成后 git add -A && git commit，返回一句话。",
     );
     for (const d of ok) {
       const form = d.safeForm || d.command;
-      if (!execReport.includes(form) && !execReport.includes(d.command)) log("危险操作执行确认缺失：" + d.command + "——如实记录，账本将标注未确认");
+      if (!execReport.includes(form)) log("危险操作执行确认缺失：" + d.command + "——如实记录，账本将标注未确认");
     }
-    entry += "；执行确认：" + (ok.every((d) => execReport.includes(d.safeForm || d.command) || execReport.includes(d.command)) ? "全部与批准写法一致" : "存在未确认项（见日志）");
+    entry += "；执行确认：" + (ok.every((d) => execReport.includes(d.safeForm || d.command)) ? "全部与批准写法一致" : "存在未确认项（见日志）");
   } else {
     log("危险操作全部驳回：不得绕过，另寻安全路径");
   }
@@ -500,6 +507,7 @@ async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
 }
 
 for (let round = startRound; round <= rounds; round++) {
+  const roundHead0 = await HEADR(); // 本轮起点 HEAD：图像检测 diff 源的基线（工程循环同款）
   let dangerLog = "无"; // 本轮危险操作裁决（入账本）
   let bossNote = "";
   try {
@@ -523,7 +531,7 @@ for (let round = startRound; round <= rounds; round++) {
   if ((cards.proposals || []).length < 1 || (cards.proposals || []).length > 3) {
     log("第 " + round + " 轮方案组合仍不合规（" + (cards.proposals || []).length + " 个），如实记录并继续");
   }
-  // 卡面-开局邮件逐字对拍（转述失真防线，句级）：引用了 Rn 的卡必须完整内嵌开局邮件中该 Rn 的登记行（含 Rn 前缀，空白规约后逐字比对）——句内翻词、跨 Rn 借句、借路径等公共字符串旁路全部拦下；语言中立、无字符数魔数
+  // 卡面-开局邮件逐字对拍（转述失真防线，句级）：引用了 Rn 的卡必须完整内嵌开局邮件中该 Rn 的登记行（含 Rn 前缀，空白规约后逐字比对）——句内翻词、跨 Rn 借句、借路径等公共字符串旁路全部拦下；登记行只认以 Rn 开头的行（目录行/交叉引用行不算，标题/列表/强调装饰不碍）；语言中立、无字符数魔数
   let reqRawC = "";
   try {
     reqRawC = await files.read("LoopMail/ToBoss.md");
@@ -535,6 +543,7 @@ for (let round = startRound; round <= rounds; round++) {
   } else {
     const linesByRn = new Map<string, string[]>();
     for (const rawLine of reqRawC.split("\n")) {
+      if (!/^\s*(?:#{1,6}\s*|[-*+]\s*|\d{1,3}[.、)]\s*|[*_]{0,2})*R\d+\b/.test(rawLine)) continue; // 登记行只认以 Rn 开头的行——目录行/交叉引用行不得当通行证（标题/列表/强调装饰不碍）
       const rns = Array.from(new Set(rawLine.match(/\bR\d+\b/g) || []));
       if (rns.length === 0) continue;
       const lineN = rawLine.replace(/\s+/g, "");
@@ -608,6 +617,12 @@ for (let round = startRound; round <= rounds; round++) {
       const pR = (pRparts[pRparts.length - 1] || pRunq).trim();
       if (isImgR(pR) && imageFilesR.indexOf(pR) < 0) imageFilesR.push(pR);
     }
+    if (roundHead0) { // baseline..HEAD 图像源：本轮起点以来已提交的图同样要过目（工程循环同款）
+      const dfR = await G(["diff", "--name-only", roundHead0 + "..HEAD"], 60000);
+      for (const pD of (dfR.stdout || "").split("\n").map((s) => s.trim())) {
+        if (pD !== "" && isImgR(pD) && imageFilesR.indexOf(pD) < 0) imageFilesR.push(pD);
+      }
+    }
     const igR = await G(["ls-files", "--others", "--ignored", "--exclude-standard", "--", "*.png", "*.jpg", "*.jpeg", "*.svg", "*.webp", "*.gif"], 60000);
     for (const pI of (igR.stdout || "").split("\n").map((s) => s.trim())) {
       // 被 .gitignore 的交付图只可能在老板面向的位置（仓库根或 docs/）——依赖目录与 Agents/ 不算交付
@@ -664,8 +679,11 @@ for (let round = startRound; round <= rounds; round++) {
         paperM = "";
       }
       if (paperM === "") return ["__unreadable__"];
-      const covered = mapM.split("\n").filter((l) => !/非主张数字|not-a-claim/.test(l)).join("\n").replace(/\s+/g, "");
+      const linesM = mapM.split("\n");
+      const covered = linesM.filter((l) => !/^\s*<!--[^>]*(?:非主张数字|not-a-claim)/.test(l)).join("\n").replace(/\s+/g, "");
+      const exemptToksM = Array.from(new Set(linesM.filter((l) => /^\s*<!--[^>]*(?:非主张数字|not-a-claim)/.test(l)).join("\n").match(/\d+\.\d+/g) || []));
       for (const tok of Array.from(new Set(paperM.match(/\d+\.\d+/g) || []))) {
+        if (exemptToksM.indexOf(tok) >= 0) continue; // 豁免行登记的数字退出覆盖扫描——豁免是让诚实映射表收声，不是让它永不通过
         if (covered.indexOf(tok) < 0) badM.push("稿件数字 " + tok + " 无映射行覆盖（claim↔evidence 缺口）");
       }
       for (const row of mapM.split("\n")) {
@@ -688,7 +706,7 @@ for (let round = startRound; round <= rounds; round++) {
     if (badM[0] === "__unreadable__") log("claim_map 实质核查未运行：docs/paper_draft.md 不可读——如实记录");
     else if (badM.length > 0) {
       await tester.ask<string>(
-        "claim_map 实质核查未过（假映射表防线）：\n" + badM.slice(0, 10).join("\n") + (badM.length > 10 ? "\n……（共 " + badM.length + " 项）" : "") + "\n逐项修正：稿件数字补映射行（数字 | 存档工件 | 可重跑检查命令，绝不虚构工件路径）；不可达路径改为真实存档位置；确非主张数字的（版本号、章节号、表编号）在映射表末尾加一行「<!-- 非主张数字: <数字> -->」登记豁免，核查跳过该行。git add -A && git commit，返回一句话。",
+        "claim_map 实质核查未过（假映射表防线）：\n" + badM.slice(0, 10).join("\n") + (badM.length > 10 ? "\n……（共 " + badM.length + " 项）" : "") + "\n逐项修正：稿件数字补映射行（数字 | 存档工件 | 可重跑检查命令，绝不虚构工件路径）；不可达路径改为真实存档位置；确非主张数字的（版本号、章节号、表编号）在映射表末尾加一行「<!-- 非主张数字: <数字> -->」登记豁免，该数字不再进入覆盖扫描。git add -A && git commit，返回一句话。",
       );
       const stillM = await auditClaimMap();
       log(stillM[0] === "__unreadable__" ? "claim_map 实质核查复核时稿件不可读——如实记录" : stillM.length === 0 ? "claim_map 实质核查：修正后通过" : "claim_map 实质核查仍有 " + stillM.length + " 项未对上——如实记录，稿件披露以 claim_map 缺口为准");
@@ -849,23 +867,11 @@ for (let round = startRound; round <= rounds; round++) {
     .join("\n\n");
 
   phase("本轮存档");
-  let head0 = "";
-  try {
-    const l0 = await git.log(1);
-    head0 = l0[0]?.hash ?? "";
-  } catch {
-    head0 = "";
-  }
+  const head0 = await HEADR(); // 瞬态失败重试（B#25）——存档核验不再裸读
   const archived = await chief.ask<string>(
     "把本轮记入 Agents/ledger.md（头部含仓库标识行" + (repoRoot ? "：" + repoRoot : "") + "与一行一轮的目录：本轮先更新目录行、再追加详情；审稿团 " + n + " 人中缺席 " + absentN + " 人）：任务/产出/存档前 HEAD " + (head0 || "空树").slice(0, 7) + "/危险操作裁决（" + dangerLog + "）/测试（覆盖声明：" + (verdict.coverage || "").slice(0, 300) + "；视觉审阅：" + visualNoteR.slice(0, 200) + "）/审稿/下轮方向。然后 git add -A && git commit（备份推送由编排器执行并核验，你不执行 push；向云端发布永远是老板的明确动作）。返回一句话。",
   );
-  let head1 = "";
-  try {
-    const l1 = await git.log(1);
-    head1 = l1[0]?.hash ?? "";
-  } catch {
-    head1 = "";
-  }
+  const head1 = await HEADR(); // 瞬态失败重试（B#25）——存档核验不再裸读
   const commitOk = head1 !== "" && head1 !== head0;
   if (!commitOk) {
     await chief.ask<string>(

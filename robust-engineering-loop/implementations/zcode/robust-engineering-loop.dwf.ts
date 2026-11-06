@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 鲁棒工程循环（v0.5.7）：把一句开发要求变成经过冷启动对抗验证的实现。总工建要求台账（老板原话逐字）并承诺 N 轮（老板可锁定）；每轮开发+文档单笔提交 → 冷启动门禁（diff 审查、鲁棒性测试、canary、零警告构建、上一轮 remote CI 结转）→ 先复现再返修（误诊须证据反驳）、amend 并入本轮提交（初级 3 次未解升级高级工程师，10 次未过打断上报）；全绿才推送约定 remote（默认 GitCoffer，append-only 永不 force）；账本断点续跑；破坏性操作申报-裁决-执行三段核验、绝不转交用户；模型分档 tiered/uniform。
+description: 鲁棒工程循环（v0.5.8）：把一句开发要求变成经过冷启动对抗验证的实现。总工建要求台账（老板原话逐字）并承诺 N 轮（老板可锁定）；每轮开发+文档单笔提交 → 冷启动门禁（diff 审查、鲁棒性测试、canary、零警告构建、上一轮 remote CI 结转）→ 先复现再返修（误诊须证据反驳）、amend 并入本轮提交（初级 3 次未解升级高级工程师，10 次未过打断上报）；全绿才推送约定 remote（默认 GitCoffer，append-only 永不 force）；账本断点续跑；破坏性操作申报-裁决-执行三段核验、绝不转交用户；模型分档 tiered/uniform。
 args:
   requirement:
     type: string
@@ -460,9 +460,17 @@ async function adjudicateDanger(reqs: DangerRequest[], requester: string, reques
     ? await chief.ask<DangerReview>(askText)
     : await senior.ask<DangerReview>(askText);
   let decisions = raw.decisions ?? [];
-  if (decisions.length !== reqs.length) {
-    log("危险操作裁决不完整（" + decisions.length + "/" + reqs.length + " 条）——整体按驳回处理，如实记录");
-    decisions = reqs.map((r) => ({ command: r.command, decision: "reject" as const, safeForm: "", reason: "裁决不完整，整体驳回以保安全" }));
+  const mismatched = decisions.length === reqs.length && reqs.some((r, i) => !decisions[i] || decisions[i].command !== r.command);
+  if (decisions.length !== reqs.length || mismatched) {
+    log("危险操作裁决不完整或与申报不对应（" + decisions.length + "/" + reqs.length + " 条）——整体按驳回处理，如实记录");
+    decisions = reqs.map((r) => ({ command: r.command, decision: "reject" as const, safeForm: "", reason: "裁决不完整或与申报不对应，整体驳回以保安全" }));
+  }
+  for (const d of decisions) {
+    if (d.decision === "approve-with-change" && (d.safeForm || "").trim() === "") {
+      log("危险操作裁决缺口：approve-with-change 但安全写法为空——按拒绝处理，绝不放行原始命令（" + d.command.slice(0, 60) + "）");
+      d.decision = "reject";
+      d.reason = (d.reason || "") + "（安全写法为空，按拒绝处理）";
+    }
   }
   return { summary: raw.summary, decisions };
 }
@@ -471,7 +479,7 @@ async function adjudicateDanger(reqs: DangerRequest[], requester: string, reques
 function dangerExecAsk(approved: DangerDecision[]): string {
   return "执行已批准的危险操作，严格按批准写法（safeForm 非空时用 safeForm），不得扩大范围、不得新增未批准的命令：\n" +
     approved.map((d, i) => (i + 1) + ". " + (d.safeForm || d.command) + "（批准理由：" + d.reason + "）").join("\n") +
-    "\n回报中必须逐字引用每个已批准命令的原文（一致性核查按逐字匹配，漏引或转述都算未确认）；完成后 git add -A && git commit --amend --no-edit 并入本轮提交（本轮尚无提交则直接 commit），返回一句话。";
+    "\n回报中必须逐字引用上列每条批准写法（一致性核查按逐字匹配，漏引或转述都算未确认）；完成后 git add -A && git commit --amend --no-edit 并入本轮提交（本轮尚无提交则直接 commit），返回一句话。";
 }
 // 入账完整性机械核查：四节与开局简报是否真的写进了文件——缺了就补一次，补不上如实记录（这是"漏登记 5/7 条"的机械对账点）
 const intakeMarkers = ["逐句清点", "要求与验收标准", "产物规格表", "待答问题"];
@@ -570,7 +578,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     interrupted = true;
     break;
   }
-  // 卡面-台账逐字对拍（转述失真防线，句级）：引用了 Rn 的卡必须完整内嵌台账中该 Rn 的登记行（含 Rn 前缀，空白规约后逐字比对）——句内翻词、跨 Rn 借句、借路径等公共字符串旁路全部拦下；语言中立、无字符数魔数
+  // 卡面-台账逐字对拍（转述失真防线，句级）：引用了 Rn 的卡必须完整内嵌台账中该 Rn 的登记行（含 Rn 前缀，空白规约后逐字比对）——句内翻词、跨 Rn 借句、借路径等公共字符串旁路全部拦下；登记行只认以 Rn 开头的行（目录行/交叉引用行不算，标题/列表/强调装饰不碍）；语言中立、无字符数魔数
   let reqRawC = "";
   try {
     reqRawC = await files.read("Agents/requirements.md");
@@ -582,6 +590,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   } else {
     const linesByRn = new Map<string, string[]>();
     for (const rawLine of reqRawC.split("\n")) {
+      if (!/^\s*(?:#{1,6}\s*|[-*+]\s*|\d{1,3}[.、)]\s*|[*_]{0,2})*R\d+\b/.test(rawLine)) continue; // 登记行只认以 Rn 开头的行——目录行/交叉引用行不得当通行证（标题/列表/强调装饰不碍）
       const rns = Array.from(new Set(rawLine.match(/\bR\d+\b/g) || []));
       if (rns.length === 0) continue;
       const lineN = rawLine.replace(/\s+/g, "");
@@ -637,15 +646,11 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     dangerLog = review.decisions.map((d) => d.command + " → " + d.decision + (d.safeForm ? "（改：" + d.safeForm + "）" : "") + "：" + d.reason).join("；");
     log("第 " + round + " 轮危险操作裁决：" + dangerLog.slice(0, 300));
     const ok = review.decisions.filter((d) => d.decision !== "reject");
-    const approvedOk = ok.filter((d) => d.decision !== "approve-with-change" || (d.safeForm || "").trim() !== "");
-    for (const d of ok) {
-      if (d.decision === "approve-with-change" && (d.safeForm || "").trim() === "") log("危险操作裁决缺口：approve-with-change 但安全写法为空——按拒绝处理，绝不放行原始命令（" + d.command.slice(0, 60) + "）");
-    }
-    approvedDanger = approvedOk.map((d) => (d.decision === "approve-with-change" ? (d.safeForm || "").trim() : d.command));
-    for (const d of approvedOk) dangerTrail.push({ declared: d.command, decision: d.decision, form: d.safeForm || d.command, executed: "待执行确认" });
-    if (approvedOk.length > 0) {
+    approvedDanger = ok.map((d) => (d.decision === "approve-with-change" ? (d.safeForm || "").trim() : d.command));
+    for (const d of ok) dangerTrail.push({ declared: d.command, decision: d.decision, form: d.safeForm || d.command, executed: "待执行确认" });
+    if (ok.length > 0) {
       phase("执行已批准的危险操作");
-      const execReport = await algo.ask<string>(dangerExecAsk(approvedOk));
+      const execReport = await algo.ask<string>(dangerExecAsk(ok));
       for (const e of dangerTrail) {
         if (e.executed !== "待执行确认" && !e.executed.startsWith("未确认：")) continue;
         const hit = execReport.includes(e.form);
@@ -839,11 +844,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     if ((fix.dangerRequests || []).length > 0) {
       phase("危险操作审核");
       const dr = await adjudicateDanger(fix.dangerRequests, juniorAsk ? "算法工程师" : "高级工程师", juniorAsk ? "廉价模型档" : "强模型档", !juniorAsk);
-      const ok2raw = dr.decisions.filter((d) => d.decision !== "reject");
-      const ok2 = ok2raw.filter((d) => d.decision !== "approve-with-change" || (d.safeForm || "").trim() !== "");
-      for (const d of ok2raw) {
-        if (d.decision === "approve-with-change" && (d.safeForm || "").trim() === "") log("返修裁决缺口：approve-with-change 但安全写法为空——按拒绝处理，绝不放行原始命令（" + d.command.slice(0, 60) + "）");
-      }
+      const ok2 = dr.decisions.filter((d) => d.decision !== "reject");
       approvedDanger = approvedDanger.concat(ok2.map((d) => (d.decision === "approve-with-change" ? (d.safeForm || "").trim() : d.command)));
       for (const d of ok2) dangerTrail.push({ declared: d.command, decision: d.decision, form: d.safeForm || d.command, executed: "待执行确认" });
       dangerLog = (dangerLog === "无" ? "" : dangerLog + "；") + dr.decisions.map((d) => d.command + " → " + d.decision + (d.safeForm ? "（改：" + d.safeForm + "）" : "") + "：" + d.reason).join("；");
@@ -909,7 +910,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       try {
         const p = await G(["push", push0.target, "HEAD:" + branch], 300000);
         pushExit = p.exitCode;
-        if (pushExit !== 0) log("第 " + (t + 1) + " 次推送退出码 " + pushExit + "：" + maskUrl((p.stderr || p.stdout || "").slice(0, 200)));
+        if (pushExit !== 0) log("第 " + (t + 1) + " 次推送退出码 " + pushExit + "：" + maskUrl((p.stderr || p.stdout || "")).slice(0, 200));
       } catch {
         log("第 " + (t + 1) + " 次推送命令未启动（如实记录）");
       }
@@ -945,7 +946,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     // 账本提交同样由编排器直接推送并核验：全程无 agent 转述
     try {
       const pl = await G(["push", push0.target, "HEAD:" + branch], 300000);
-      if (pl.exitCode !== 0) log("账本提交推送退出码 " + pl.exitCode + "：" + maskUrl((pl.stderr || "").slice(0, 200)) + "——如实记录");
+      if (pl.exitCode !== 0) log("账本提交推送退出码 " + pl.exitCode + "：" + maskUrl((pl.stderr || "")).slice(0, 200) + "——如实记录");
     } catch {
       log("账本提交推送未启动（如实记录）");
     }
@@ -1051,7 +1052,7 @@ if (push0.target !== "" && branch !== "") {
           finalPush = "推送已执行，落盘核验不可用（如实记录）";
         }
       } else {
-        finalPush = "推送退出码 " + pf.exitCode + "（如实记录：" + maskUrl((pf.stderr || "").slice(0, 200)) + "）";
+        finalPush = "推送退出码 " + pf.exitCode + "（如实记录：" + maskUrl((pf.stderr || "")).slice(0, 200) + "）";
       }
     } catch {
       finalPush = "推送未启动（如实记录）";
@@ -1110,5 +1111,5 @@ return {
   rounds_completed: rows.length,
   requirement_coverage: (reported.requirementOutcomes || []).length,
   deviations: (reported.deviations || []).length,
-  next_action: reported.decisionList.length > 0 ? "待老板决策：" + reported.decisionList[0] : "交付完成，等待老板验收",
+  next_action: (reported.decisionList || []).length > 0 ? "待老板决策：" + reported.decisionList[0] : "交付完成，等待老板验收",
 };

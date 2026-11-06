@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Robust Engineering Loop (v0.5.7), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
+description: Robust Engineering Loop (v0.5.8), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
 args:
   requirement:
     type: string
@@ -455,9 +455,17 @@ async function adjudicateDanger(reqs: DangerRequest[], requester: string, reques
     ? await chief.ask<DangerReview>(askText)
     : await senior.ask<DangerReview>(askText);
   let decisions = raw.decisions ?? [];
-  if (decisions.length !== reqs.length) {
-    log("Destructive ruling incomplete (" + decisions.length + "/" + reqs.length + ") — treating all as rejected, recorded honestly");
-    decisions = reqs.map((r) => ({ command: r.command, decision: "reject" as const, safeForm: "", reason: "Incomplete ruling; rejected wholesale for safety" }));
+  const mismatched = decisions.length === reqs.length && reqs.some((r, i) => !decisions[i] || decisions[i].command !== r.command);
+  if (decisions.length !== reqs.length || mismatched) {
+    log("Destructive ruling incomplete or mismatched with the requests (" + decisions.length + "/" + reqs.length + ") — treating all as rejected, recorded honestly");
+    decisions = reqs.map((r) => ({ command: r.command, decision: "reject" as const, safeForm: "", reason: "Incomplete or mismatched ruling; rejected wholesale for safety" }));
+  }
+  for (const d of decisions) {
+    if (d.decision === "approve-with-change" && (d.safeForm || "").trim() === "") {
+      log("Ruling gap: approve-with-change with an empty safe form — treated as a rejection, the original command never runs (" + d.command.slice(0, 60) + ")");
+      d.decision = "reject";
+      d.reason = (d.reason || "") + " (empty safe form; treated as a rejection)";
+    }
   }
   return { summary: raw.summary, decisions };
 }
@@ -466,7 +474,7 @@ async function adjudicateDanger(reqs: DangerRequest[], requester: string, reques
 function dangerExecAsk(approved: DangerDecision[]): string {
   return "Run the approved destructive operations, exactly as approved (use safeForm when non-empty); do not widen the scope, do not add unapproved commands:\n" +
     approved.map((d, i) => (i + 1) + ". " + (d.safeForm || d.command) + " (approved because: " + d.reason + ")").join("\n") +
-    "\nYour report must quote each approved command's original text verbatim (the consistency check matches verbatim; paraphrases and omissions count as unconfirmed); then git add -A && git commit --amend --no-edit into the round commit (plain commit if the round has none yet) and return one sentence.";
+    "\nYour report must quote each approved form listed above verbatim (the consistency check matches verbatim; paraphrases and omissions count as unconfirmed); then git add -A && git commit --amend --no-edit into the round commit (plain commit if the round has none yet) and return one sentence.";
 }
 // Intake completeness check (mechanical): did the four sections and the opening brief actually reach the files? Repair once, then record honestly — this is the mechanical counterpart of "5 of 7 requirements never registered"
 const intakeMarkers = ["sentence inventory", "requirements and acceptance criteria", "artifact spec table", "open questions"];
@@ -566,7 +574,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     interrupted = true;
     break;
   }
-  // Card-to-ledger verbatim check (retelling-distortion defense, line-level): a card citing an Rn must fully contain that Rn's registered line from the ledger (with its Rn prefix, whitespace-normalized) — a flipped word inside the sentence, a borrowed sentence from another Rn, and bypasses via shared strings like paths are all caught; language-neutral, no character-count magic
+  // Card-to-ledger verbatim check (retelling-distortion defense, line-level): a card citing an Rn must fully contain that Rn's registered line from the ledger (with its Rn prefix, whitespace-normalized) — a flipped word inside the sentence, a borrowed sentence from another Rn, and bypasses via shared strings like paths are all caught; only lines that open with the Rn count as registered lines (index lines and cross-reference lines never pass; heading, list or emphasis decoration is fine); language-neutral, no character-count magic
   let reqRawC = "";
   try {
     reqRawC = await files.read("Agents/requirements.md");
@@ -578,6 +586,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   } else {
     const linesByRn = new Map<string, string[]>();
     for (const rawLine of reqRawC.split("\n")) {
+      if (!/^\s*(?:#{1,6}\s*|[-*+]\s*|\d{1,3}[.、)]\s*|[*_]{0,2})*R\d+\b/.test(rawLine)) continue; // only lines that open with the Rn count as registered lines — index lines and cross-reference lines never pass (heading, list or emphasis decoration is fine)
       const rns = Array.from(new Set(rawLine.match(/\bR\d+\b/g) || []));
       if (rns.length === 0) continue;
       const lineN = rawLine.replace(/\s+/g, "");
@@ -633,15 +642,11 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     dangerLog = review.decisions.map((d) => d.command + " -> " + d.decision + (d.safeForm ? " (as: " + d.safeForm + ")" : "") + ": " + d.reason).join("; ");
     log("Round " + round + " destructive-operation ruling: " + dangerLog.slice(0, 300));
     const ok = review.decisions.filter((d) => d.decision !== "reject");
-    const approvedOk = ok.filter((d) => d.decision !== "approve-with-change" || (d.safeForm || "").trim() !== "");
-    for (const d of ok) {
-      if (d.decision === "approve-with-change" && (d.safeForm || "").trim() === "") log("Ruling gap: approve-with-change with an empty safe form — treated as a rejection, the original command is never cleared (" + d.command.slice(0, 60) + ")");
-    }
-    approvedDanger = approvedOk.map((d) => (d.decision === "approve-with-change" ? (d.safeForm || "").trim() : d.command));
-    for (const d of approvedOk) dangerTrail.push({ declared: d.command, decision: d.decision, form: d.safeForm || d.command, executed: "pending confirmation" });
-    if (approvedOk.length > 0) {
+    approvedDanger = ok.map((d) => (d.decision === "approve-with-change" ? (d.safeForm || "").trim() : d.command));
+    for (const d of ok) dangerTrail.push({ declared: d.command, decision: d.decision, form: d.safeForm || d.command, executed: "pending confirmation" });
+    if (ok.length > 0) {
       phase("Run the approved destructive operations");
-      const execReport = await algo.ask<string>(dangerExecAsk(approvedOk));
+      const execReport = await algo.ask<string>(dangerExecAsk(ok));
       for (const e of dangerTrail) {
         if (e.executed !== "pending confirmation" && !e.executed.startsWith("unconfirmed: ")) continue;
         const hit = execReport.includes(e.form);
@@ -835,11 +840,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     if ((fix.dangerRequests || []).length > 0) {
       phase("Destructive-operation review");
       const dr = await adjudicateDanger(fix.dangerRequests, juniorAsk ? "Algorithm Engineer" : "Senior Engineer", juniorAsk ? "cheap tier" : "strong tier", !juniorAsk);
-      const ok2raw = dr.decisions.filter((d) => d.decision !== "reject");
-      const ok2 = ok2raw.filter((d) => d.decision !== "approve-with-change" || (d.safeForm || "").trim() !== "");
-      for (const d of ok2raw) {
-        if (d.decision === "approve-with-change" && (d.safeForm || "").trim() === "") log("Rework-ruling gap: approve-with-change with an empty safe form — treated as a rejection, the original command is never cleared (" + d.command.slice(0, 60) + ")");
-      }
+      const ok2 = dr.decisions.filter((d) => d.decision !== "reject");
       approvedDanger = approvedDanger.concat(ok2.map((d) => (d.decision === "approve-with-change" ? (d.safeForm || "").trim() : d.command)));
       for (const d of ok2) dangerTrail.push({ declared: d.command, decision: d.decision, form: d.safeForm || d.command, executed: "pending confirmation" });
       dangerLog = (dangerLog === "none" ? "" : dangerLog + "; ") + dr.decisions.map((d) => d.command + " -> " + d.decision + (d.safeForm ? " (as: " + d.safeForm + ")" : "") + ": " + d.reason).join("; ");
@@ -905,7 +906,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       try {
         const p = await G(["push", push0.target, "HEAD:" + branch], 300000);
         pushExit = p.exitCode;
-        if (pushExit !== 0) log("Push attempt " + (t + 1) + " exit code " + pushExit + ": " + maskUrl((p.stderr || p.stdout || "").slice(0, 200)));
+        if (pushExit !== 0) log("Push attempt " + (t + 1) + " exit code " + pushExit + ": " + maskUrl((p.stderr || p.stdout || "")).slice(0, 200));
       } catch {
         log("Push attempt " + (t + 1) + " failed to launch (recorded honestly)");
       }
@@ -941,7 +942,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     // The ledger commit is pushed and verified by the orchestrator as well: no agent paraphrase anywhere
     try {
       const pl = await G(["push", push0.target, "HEAD:" + branch], 300000);
-      if (pl.exitCode !== 0) log("Ledger-commit push exit code " + pl.exitCode + ": " + maskUrl((pl.stderr || "").slice(0, 200)) + " — recorded honestly");
+      if (pl.exitCode !== 0) log("Ledger-commit push exit code " + pl.exitCode + ": " + maskUrl((pl.stderr || "")).slice(0, 200) + " — recorded honestly");
     } catch {
       log("Ledger-commit push failed to launch (recorded honestly)");
     }
@@ -1047,7 +1048,7 @@ if (push0.target !== "" && branch !== "") {
           finalPush = "push executed, verification unavailable (recorded honestly)";
         }
       } else {
-        finalPush = "push exit code " + pf.exitCode + " (recorded honestly: " + maskUrl((pf.stderr || "").slice(0, 200)) + ")";
+        finalPush = "push exit code " + pf.exitCode + " (recorded honestly: " + maskUrl((pf.stderr || "")).slice(0, 200) + ")";
       }
     } catch {
       finalPush = "push failed to launch (recorded honestly)";
@@ -1106,5 +1107,5 @@ return {
   rounds_completed: rows.length,
   requirement_coverage: (reported.requirementOutcomes || []).length,
   deviations: (reported.deviations || []).length,
-  next_action: reported.decisionList.length > 0 ? "Awaiting the boss: " + reported.decisionList[0] : "Delivery complete; awaiting the boss's acceptance",
+  next_action: (reported.decisionList || []).length > 0 ? "Awaiting the boss: " + reported.decisionList[0] : "Delivery complete; awaiting the boss's acceptance",
 };
