@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Robust Engineering Loop (v0.6.0), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
+description: Robust Engineering Loop (v0.6.1), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
 args:
   requirement:
     type: string
@@ -264,7 +264,9 @@ const hashObj = async (p: string): Promise<string> => {
     /* workspace frame failed: fall back to the repo-root frame */
   }
   const r = await G(["hash-object", p], 60000);
-  return (r.stdout || "").trim();
+  const outH = (r.stdout || "").trim();
+  if (outH === "") log('Content hash empty on both frames: ' + p + " — the cache key degrades to a bare path (recorded honestly, family audit #13)");
+  return outH;
 };
 /** Push divergence pre-check (field defect 4: two runs on one repository produce twin commits and non-fast-forward push backlogs) — diverged when the remote branch is not an ancestor of local HEAD; a failed probe never blocks (the push itself stays fail-closed) */
 const pushDiverged = async (target: string, branch: string): Promise<boolean> => {
@@ -340,16 +342,46 @@ artifact.table("rounds", {
 
 phase("Chief: requirement ledger & master plan");
 let chief = agent("Chief Engineer", persona(CHIEF_EN + PROFILE_LINE, STRONG)); // strong tier: analysis and planning (pre-loop instance: commitment intake, migration recheck, interrupts; re-instantiated fresh every round once the round loop starts, B#27)
+let repoRoot = "";
+try {
+  const tr = await world.run("git", ["rev-parse", "--show-toplevel"], { timeoutMs: 60000 });
+  repoRoot = (tr.stdout || "").trim();
+} catch {
+  repoRoot = "";
+}
+/** World-read layer threading (family audit #18): files.* resolve against the run root — direct frame first (the reliable form when run root = repo root, field defect 2 lesson 3), empty/failed falls back to the repo-root frame; both empty returns "" per the original semantics */
+const readRepo = async (p: string): Promise<string> => {
+  try {
+    const d = await files.read(p);
+    if (d !== "") return d;
+  } catch {
+    /* direct frame failed: fall back to the repo-root frame */
+  }
+  if (repoRoot !== "") {
+    try {
+      return await files.read(repoRoot + "/" + p);
+    } catch {
+      /* both frames failed */
+    }
+  }
+  return "";
+};
+const globRepo = async (p: string): Promise<string[]> => {
+  const dG = await files.glob(p).catch((): string[] => []);
+  if (dG.length > 0) return dG;
+  if (repoRoot !== "") return await files.glob(repoRoot + "/" + p).catch((): string[] => []);
+  return [];
+};
 let ledger = "";
 try {
-  ledger = await files.read("Agents/ledger.md");
+  ledger = await readRepo("Agents/ledger.md");
 } catch {
   ledger = "";
 }
 log("Startup path probe: Agents/ledger.md test-read " + (ledger !== "" ? "hit (" + ledger.length + " chars)" : "empty — normal on a first run; if the repo should have a ledger, the run-root/repo-root path basis is wrong and must be checked now (field defect 2 lesson: a wrong path basis shows up as false reds, not as errors)"));
 if (ledger === "") {
   try {
-    const ag = await files.glob("Agents/*");
+    const ag = await globRepo("Agents/*");
     if (ag.length > 0) log("Warning: Agents/ is non-empty (" + ag.length + " entries) but Agents/ledger.md reads empty — the ledger may exceed the read cap; verify the resume round count manually, never silently treat this as a fresh repo");
   } catch {
     /* probe failed — no extra information */
@@ -359,7 +391,7 @@ if (ledger !== "" && typeof args.rounds !== "number") log("Hint: rounds argument
 let legacyLayout = false; // pre-LoopMail layouts (docs/workflow/, or the intermediate docs/brief.md and docs/boss_directives.md) — migrate everything before resuming; migration is a one-time conversion, after which reads and writes use the LoopMail paths only, with no dual-path fallbacks
 if (ledger === "") {
   try {
-    ledger = await files.read("docs/workflow/ledger.md");
+    ledger = await readRepo("docs/workflow/ledger.md");
     legacyLayout = ledger !== "";
   } catch {
     ledger = "";
@@ -368,14 +400,14 @@ if (ledger === "") {
 if (!legacyLayout) {
   let modernMail = "";
   try {
-    modernMail = (await files.read("LoopMail/FromBoss.md")).trim();
+    modernMail = (await readRepo("LoopMail/FromBoss.md")).trim();
   } catch {
     modernMail = "";
   }
   if (modernMail === "") {
     for (const p of ["docs/boss_directives.md", "docs/brief.md"]) {
       try {
-        await files.read(p);
+        await readRepo(p);
         legacyLayout = true; // intermediate layout: a migration trigger (not a read fallback — after migrating, only the LoopMail paths are used)
         break;
       } catch {
@@ -385,14 +417,9 @@ if (!legacyLayout) {
   }
 }
 if (legacyLayout) log("Pre-LoopMail layout detected: migrate everything before working (git mv only, never delete) — working files into Agents/, directives -> LoopMail/FromBoss.md, the brief -> LoopMail/ToBoss.md; migration is a one-time conversion, after which reads and writes use the LoopMail paths only");
-let repoRoot = "";
-try {
-  const tr = await world.run("git", ["rev-parse", "--show-toplevel"], { timeoutMs: 60000 });
-  repoRoot = (tr.stdout || "").trim();
-} catch {
-  repoRoot = "";
-}
+
 if (repoRoot !== "") repoDiscipline = "\n[Repository-root discipline] this session's working directory is not necessarily the repo root: the development repository root is " + repoRoot + ". Write every git command as git -C \"" + repoRoot + "\" <subcommand> (add/commit/log/reflog/status alike); read and write in-repo files by absolute path (prefixed " + repoRoot + "/); never touch same-named stray copies under the working directory; when unsure, verify with git -C \"" + repoRoot + "\" status first.";
+const GC = repoRoot !== "" ? "git -C \"" + repoRoot + "\"" : "git"; // ask-text git threading (family audit #16): a cheap-tier executor follows the most recent, most specific instruction — the ask layer's git chains must carry -C themselves (the system side is covered by the persona discipline)
 chief = agent("Chief Engineer", persona(CHIEF_EN + PROFILE_LINE, STRONG)); // pre-loop instance rebuilt: repoDiscipline is now filled — the first build happened before resolution, its persona frozen without the discipline (review #1)
 /** The orchestrator's single git entry: explicit -C <repo root> so a workspace root ≠ repo root stops failing silently (field-tested) */
 const G = (gitArgs: string[], timeoutMs = 120000): Promise<WorldRunResult> =>
@@ -423,7 +450,7 @@ try {
 if (repoWarn !== "") log("Warning: " + repoWarn + "; recorded honestly in the ledger");
 let bossDirectives0 = "";
 try {
-  bossDirectives0 = (await files.read("LoopMail/FromBoss.md")).trim();
+  bossDirectives0 = (await readRepo("LoopMail/FromBoss.md")).trim();
 } catch {
   bossDirectives0 = "";
 }
@@ -432,7 +459,7 @@ const commit0 = await chief.ask<Commitment>(
   (bossDirectives0 ? "[Boss feedback, LoopMail/FromBoss.md] (instructions the boss issued — apply each one):\n" + bossDirectives0 + "\n" : "") +
   (repoRoot ? "Repo root: " + repoRoot + " (flag it honestly if the ledger records a different root; the working directory is not necessarily the repo root — every git command is git -C \"" + repoRoot + "\", and in-repo files are read/written by absolute path).\n" : "") +
   (repoWarn !== "" ? "[Environment warning] " + repoWarn + " — proceed anyway, but pushes/commit verification may be unavailable; record it in the ledger.\n" : "") +
-  (legacyLayout ? "[Migration] Legacy layout detected: put the working files where the new layout wants them (skip items already in place): git mv the docs/workflow/ ledger.md, requirements.md and requirement_map.md and the root selfcheck.py into Agents/ when present, and docs/boss_directives.md -> LoopMail/FromBoss.md and docs/brief.md -> LoopMail/ToBoss.md (git mv); merge the historical final_brief.md into the ToBoss mail wording, then move its body into Agents/; add a one-line LoopMail protocol header to either file when missing (FromBoss: append in order / never modify what the boss wrote; ToBoss: new mails at the top / old mails never modified / the four writing bans), git add -A && git commit, then resume\n" : "") +
+  (legacyLayout ? "[Migration] Legacy layout detected: put the working files where the new layout wants them (skip items already in place): git mv the docs/workflow/ ledger.md, requirements.md and requirement_map.md and the root selfcheck.py into Agents/ when present, and docs/boss_directives.md -> LoopMail/FromBoss.md and docs/brief.md -> LoopMail/ToBoss.md (git mv); merge the historical final_brief.md into the ToBoss mail wording, then move its body into Agents/; add a one-line LoopMail protocol header to either file when missing (FromBoss: append in order / never modify what the boss wrote; ToBoss: new mails at the top / old mails never modified / the four writing bans), " + GC + " add -A && " + GC + " commit, then resume\n" : "") +
   (ledger ? "Existing ledger (head index + tail detail; the resume basis):\n" + (ledger.length > 6000 ? ledger.slice(0, 1600) + "\n... (middle omitted) ...\n" + ledger.slice(-3200) : ledger) + "\nIf it shows N rounds already completed for this requirement, resumeFrom = N (continue at round N+1, never redo); otherwise 0.\n" : "No ledger: resumeFrom = 0.\n") +
   "Before round 1, four things: 1) create Agents/requirements.md — headed by one authority line (Agents/requirements.md = requirement record; Agents/requirement_map.md = verification record; Agents/ledger.md = history record); four mandatory sections: sentence inventory (each message split sentence by sentence, marked registered-Rn / not-applicable / needs-clarification), the boss's words verbatim numbered (R1/R2...) with interpretation and machine-checkable acceptance criteria, the artifact spec table (axis / domain / resolution / colour encoding / pass criteria), and open questions (every interrogative sentence logged); if a scope-changing ambiguity exists, raise it in blocked.question first (the only pre-start question); 2) commit to roundsTotal with a one-line scope per round in roundsOutline" +
   (roundsArg > 0 ? " (the boss locked rounds=" + roundsArg + " — adopt it, no adding or dropping)" : " (planned by you; once fixed, no extension except via interrupt)") +
@@ -452,20 +479,20 @@ if (roundsTotal !== (roundsArg > 0 ? roundsArg : commit0.roundsTotal) && clampNo
 if (legacyLayout) {
   let migratedLedger = "";
   try {
-    migratedLedger = await files.read("Agents/ledger.md");
+    migratedLedger = await readRepo("Agents/ledger.md");
   } catch {
     migratedLedger = "";
   }
-  if (migratedLedger === "") await chief.ask<string>("Migration recheck failed: Agents/ledger.md reads empty — the legacy-layout migration (git mv into place) may be incomplete or uncommitted. Complete the migration and git add -A && git commit, then return one sentence; if there truly was no ledger to migrate, say so honestly.");
+  if (migratedLedger === "") await chief.ask<string>("Migration recheck failed: Agents/ledger.md reads empty — the legacy-layout migration (git mv into place) may be incomplete or uncommitted. Complete the migration and " + GC + " add -A && " + GC + " commit, then return one sentence; if there truly was no ledger to migrate, say so honestly.");
   try {
-    migratedLedger = await files.read("Agents/ledger.md");
+    migratedLedger = await readRepo("Agents/ledger.md");
   } catch {
     migratedLedger = "";
   }
   let mailsOk = true;
   for (const f of ["LoopMail/ToBoss.md", "LoopMail/FromBoss.md"]) {
     try {
-      if ((await files.read(f)).trim() === "") mailsOk = false;
+      if ((await readRepo(f)).trim() === "") mailsOk = false;
     } catch {
       mailsOk = false;
     }
@@ -475,7 +502,7 @@ if (legacyLayout) {
 if (commit0.blocked) {
   phase("Major issue interrupt");
   const ir = await chief.ask<string>(
-    "Interrupted per blocked. Complete the interrupt urgent mail at the top of LoopMail/ToBoss.md (problem, completed rounds and artifacts, points needing the boss's decision, suggested options), git add -A && git commit, and return a one-sentence summary for the boss.",
+    "Interrupted per blocked. Complete the interrupt urgent mail at the top of LoopMail/ToBoss.md (problem, completed rounds and artifacts, points needing the boss's decision, suggested options), " + GC + " add -A && " + GC + " commit, and return a one-sentence summary for the boss.",
   );
   await artifact.markdown("interrupt", "# Interrupt Report\n\n" + ir + "\n\n---\nAfter the boss decides, rerun this workflow with the decision note (the ledger holds the checkpoint).\n", { title: "Interrupt Report (delivery copy)", description: "Master copy: urgent mail in LoopMail/ToBoss.md; major issue, awaiting the boss's decision" });
   return { conclusion: "Interrupted: " + commit0.blocked.reason, question: commit0.blocked.question, rounds_completed: 0, next_action: "Rerun after the boss decides (resume from the ledger)" };
@@ -519,7 +546,7 @@ async function adjudicateDanger(reqs: DangerRequest[], requester: string, reques
 function dangerExecAsk(approved: DangerDecision[]): string {
   return "Run the approved destructive operations, exactly as approved (use safeForm when non-empty); do not widen the scope, do not add unapproved commands:\n" +
     approved.map((d, i) => (i + 1) + ". " + (d.safeForm || d.command) + " (approved because: " + d.reason + ")").join("\n") +
-    "\nYour report must quote each approved form listed above verbatim (the consistency check matches verbatim; paraphrases and omissions count as unconfirmed); then git add -A && git commit --amend --no-edit into the round commit (plain commit if the round has none yet) and return one sentence.";
+    "\nYour report must quote each approved form listed above verbatim (the consistency check matches verbatim; paraphrases and omissions count as unconfirmed); then " + GC + " add -A && " + GC + " commit --amend --no-edit into the round commit (plain commit if the round has none yet) and return one sentence.";
 }
 // Intake completeness check (mechanical): did the four sections and the opening brief actually reach the files? Repair once, then record honestly — this is the mechanical counterpart of "5 of 7 requirements never registered"
 const intakeMarkers = ["sentence inventory", "requirements and acceptance criteria", "artifact spec table", "open questions"];
@@ -527,13 +554,13 @@ let intakeMissing: string[] = [];
 const checkIntake = async (): Promise<void> => {
   let rt = "";
   try {
-    rt = await files.read("Agents/requirements.md");
+    rt = await readRepo("Agents/requirements.md");
   } catch {
     rt = "";
   }
   let bt = "";
   try {
-    bt = await files.read("LoopMail/ToBoss.md");
+    bt = await readRepo("LoopMail/ToBoss.md");
   } catch {
     bt = "";
   }
@@ -549,7 +576,7 @@ const checkIntake = async (): Promise<void> => {
 await checkIntake();
 if (intakeMissing.length > 0) {
   await chief.ask<string>(
-    "Intake completeness check failed: " + intakeMissing.join("; ") + ". Complete them and git add -A && git commit (section headings fixed as \"Sentence inventory\" / \"Requirements and acceptance criteria\" / \"Artifact spec table\" / \"Open questions\"; ToBoss.md opening mail in three parts: what you deliver / how each item passes / at most 3 unsure points), return one sentence.",
+    "Intake completeness check failed: " + intakeMissing.join("; ") + ". Complete them and " + GC + " add -A && " + GC + " commit (section headings fixed as \"Sentence inventory\" / \"Requirements and acceptance criteria\" / \"Artifact spec table\" / \"Open questions\"; ToBoss.md opening mail in three parts: what you deliver / how each item passes / at most 3 unsure points), return one sentence.",
   );
   await checkIntake();
   log(intakeMissing.length === 0 ? "Intake completeness: passed after repair" : "Intake completeness still missing: " + intakeMissing.join("; ") + " — recorded honestly, continuing");
@@ -584,7 +611,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   senior = agent("Senior Engineer-R" + round, persona(ALGO_EN + SENIOR_EN + PROFILE_LINE, STRONG));
   let bossNote = "";
   try {
-    bossNote = (await files.read("LoopMail/FromBoss.md")).trim();
+    bossNote = (await readRepo("LoopMail/FromBoss.md")).trim();
   } catch {
     bossNote = "";
   }
@@ -599,7 +626,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   );
   if (cards.blocked) {
     const ir = await chief.ask<string>(
-      "Interrupted per blocked (before round " + round + " started). Complete the interrupt urgent mail at the top of LoopMail/ToBoss.md, git add -A && git commit, return a one-sentence summary.",
+      "Interrupted per blocked (before round " + round + " started). Complete the interrupt urgent mail at the top of LoopMail/ToBoss.md, " + GC + " add -A && " + GC + " commit, return a one-sentence summary.",
     );
     if (push0.target !== "" && branch !== "") {
       // The interrupt-report commit is pushed by the orchestrator (the tree holds only gated work plus this docs commit); divergence pre-check (cross-loop audit F1) and no push on a resume's first round (F7: HEAD may carry last run's un-gated work)
@@ -623,7 +650,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   }
   if ((cards.cards || []).length === 0) {
     log("Round " + round + " issued zero cards without declaring done — treated as an interrupt (recorded honestly)");
-    const ir0 = await chief.ask<string>("Zero work cards and not done is a planning anomaly: write the reason to Agents/ledger.md and git add -A && git commit; return one sentence.");
+    const ir0 = await chief.ask<string>("Zero work cards and not done is a planning anomaly: write the reason to Agents/ledger.md and " + GC + " add -A && " + GC + " commit; return one sentence.");
     finalVerdict = { verdict: "interrupted", requirementOutcomes: [], deviations: [], summary: "", deliverables: [], state: ir0, decisionList: ["Chief could not issue round-" + round + " cards"], advice: "Planning anomaly; boss attention needed" };
     interrupted = true;
     break;
@@ -631,7 +658,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   // Card-to-ledger verbatim check (retelling-distortion defense, line-level): a card citing an Rn must fully contain that Rn's registered line from the ledger (with its Rn prefix, whitespace-normalized) — a flipped word inside the sentence, a borrowed sentence from another Rn, and bypasses via shared strings like paths are all caught; only lines that open with the Rn count as registered lines (index lines and cross-reference lines never pass; heading, list or emphasis decoration is fine); language-neutral, no character-count magic
   let reqRawC = "";
   try {
-    reqRawC = await files.read("Agents/requirements.md");
+    reqRawC = await readRepo("Agents/requirements.md");
   } catch {
     reqRawC = "";
   }
@@ -676,11 +703,11 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   let dev = await algo.ask<DevReport>(
     "Round " + round + " work cards:\n" + cards.cards.map((c, i) => (i + 1) + ". " + c).join("\n") +
     ((cards.remoteCiIssues || []).length > 0 ? "\nMandatory remote-CI fixes from last round:\n" + cards.remoteCiIssues.map((s) => "- " + s).join("\n") : "") +
-    "\nDevelop and update docs, then git add -A && git commit (one commit this round, one-sentence message). Return DevReport (requirementCoverage names the requirement ids each card covered).",
+    "\nDevelop and update docs, then " + GC + " add -A && " + GC + " commit (one commit this round, one-sentence message). Return DevReport (requirementCoverage names the requirement ids each card covered).",
   );
   let headA = await HEAD0();
   if (headA === "" || headA === baseline) {
-    dev = await algo.ask<DevReport>("This round's commit did not land (HEAD did not advance). Run git add -A && git commit now and return DevReport.");
+    dev = await algo.ask<DevReport>("This round's commit did not land (HEAD did not advance). Run " + GC + " add -A && " + GC + " commit now and return DevReport.");
     headA = await HEAD0();
   }
   const commitOk = headA !== "" && headA !== baseline;
@@ -745,7 +772,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     const tester = agent("Test Engineer-R" + round + "-A" + attempt, persona(TEST_EN + PROFILE_LINE, CHEAP)); // one-shot instance: bounded context, evidence travels in the task card
     verdict = await tester.ask<TestVerdict>(
       (attempt === 1
-        ? "Cold start. Baseline commit: " + (baseline || "(empty tree — this repo's first commit)") + ". Diff size this round: " + sizeNote + ". First read the four sections of Agents/requirements.md (sentence inventory / requirements and acceptance criteria / artifact spec table / open questions), then review " + diffHint + " and the repository itself: diff review, robustness tests, Agents/selfcheck.py (strict build / full tests + robustness / local CI equivalent + canary marker and the runtime CANARY: expected-FAIL observed-FAIL line + content assertions derived from the spec table), and update the verification column of Agents/requirement_map.md; amend the test-fixture changes (Agents/selfcheck.py, robustness cases, requirement_map.md) into the round commit with git add -A && git commit --amend --no-edit — the test suite is part of this round's delivery."
+        ? "Cold start. Baseline commit: " + (baseline || "(empty tree — this repo's first commit)") + ". Diff size this round: " + sizeNote + ". First read the four sections of Agents/requirements.md (sentence inventory / requirements and acceptance criteria / artifact spec table / open questions), then review " + diffHint + " and the repository itself: diff review, robustness tests, Agents/selfcheck.py (strict build / full tests + robustness / local CI equivalent + canary marker and the runtime CANARY: expected-FAIL observed-FAIL line + content assertions derived from the spec table), and update the verification column of Agents/requirement_map.md; amend the test-fixture changes (Agents/selfcheck.py, robustness cases, requirement_map.md) into the round commit with " + GC + " add -A && " + GC + " commit --amend --no-edit — the test suite is part of this round's delivery."
         : (lastFix
             ? "The engineer has reworked (amended into the round commit); their fix report (a reconciliation lead only — your verdict rests on the checks you re-run): " + JSON.stringify(lastFix) + "\n"
             : "The last gate failed on mechanical items; last round already went through one send-back-and-fix pass (that failure may have been transient or a same-form idle loop).\n") +
@@ -763,7 +790,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       canary = false;
     }
     try {
-      const map = await files.read("Agents/requirement_map.md");
+      const map = await readRepo("Agents/requirement_map.md");
       mapOk = map.includes("requirement-map") && map.split("\n").filter((l) => l.trim().startsWith("|")).length >= 2;
     } catch {
       mapOk = false;
@@ -909,7 +936,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       // Purely mechanical failure (no findings): Agents/selfcheck.py and the map are the tester's own fixtures — send them back to their owner, not through the engineer escalation path
       lastFix = null;
       await tester.ask<string>(
-        "The mechanical gate is not satisfied (verdict.passed=" + verdict.passed + "; commitOk=" + commitOk + "; danger declared/ruled/executed aligned=" + (dangerConsistent ? "yes" : "no") + "; canary=" + (canary ? (canaryRun ? "present (reported)" : "present, no CANARY line") : "missing") + "; requirement_map=" + (mapOk ? "valid" : "missing") + "; selfcheck exit=" + (canary ? exitCode : "not run") + ") while your verdict carries no findings. Agents/selfcheck.py and requirement_map.md are yours: fix or complete them and amend the changes into the round commit (git add -A && git commit --amend --no-edit); if selfcheck exposes an implementation defect, file it as a finding (with reproduction evidence) in your next verdict. If they are in fact defect-free, never invent fixes — return \"recheck green, nothing to complete\" directly; the next fully green recheck passes (field defect 6: asking to confirm a fix that never happened wedges an honest agent). Return one sentence.",
+        "The mechanical gate is not satisfied (verdict.passed=" + verdict.passed + "; commitOk=" + commitOk + "; danger declared/ruled/executed aligned=" + (dangerConsistent ? "yes" : "no") + "; canary=" + (canary ? (canaryRun ? "present (reported)" : "present, no CANARY line") : "missing") + "; requirement_map=" + (mapOk ? "valid" : "missing") + "; selfcheck exit=" + (canary ? exitCode : "not run") + ") while your verdict carries no findings. Agents/selfcheck.py and requirement_map.md are yours: fix or complete them and amend the changes into the round commit (" + GC + " add -A && " + GC + " commit --amend --no-edit); if selfcheck exposes an implementation defect, file it as a finding (with reproduction evidence) in your next verdict. If they are in fact defect-free, never invent fixes — return \"recheck green, nothing to complete\" directly; the next fully green recheck passes (field defect 6: asking to confirm a fix that never happened wedges an honest agent). Return one sentence.",
       );
       headA = await HEAD0();
       continue;
@@ -925,7 +952,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       "\nMechanical state (every verdict; a missing item is what makes same-form idle loops): verdict.passed=" + verdict.passed + "; commitOk=" + commitOk + "; canary=" + (canary ? (canaryRun ? "present (reported)" : "present, no CANARY line") : "missing") + "; requirement_map=" + (mapOk ? "valid" : "missing") + "; danger declared/ruled/executed aligned=" + (dangerConsistent ? "yes" : "no") + "; selfcheck exit=" + (canary ? exitCode : "not run") +
       (imageFiles.length > 0 ? "; image artifacts: " + imageFiles.join(", ") + "; visual review=" + (visualOk ? "passed" : "failed — " + visualNote) : "") +
       "\nOutput excerpt:\n" + output +
-      "\nReproduce every finding first: confirmed -> fix; misdiagnosis -> evidence rebuttal (FixOutcome.rebutted); a stale entry (older line numbers, already fixed, not reproducible on this round's code) is discarded and marked \"stale\" — never code against it. Then git add -A && git commit --amend --no-edit into the round commit. Never rewrite history below the baseline.",
+      "\nReproduce every finding first: confirmed -> fix; misdiagnosis -> evidence rebuttal (FixOutcome.rebutted); a stale entry (older line numbers, already fixed, not reproducible on this round's code) is discarded and marked \"stale\" — never code against it. Then " + GC + " add -A && " + GC + " commit --amend --no-edit into the round commit. Never rewrite history below the baseline.",
     );
     lastFix = fix;
     if ((fix.dangerRequests || []).length > 0) {
@@ -958,7 +985,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     const baselineStable = baseline === "" ? true : (log2[1]?.hash ?? "") === baseline;
     if (headFix === "" || headFix === headA || !baselineStable) {
       await fixer.ask<string>(
-        "Amend-discipline check failed (HEAD=" + (headFix || "none").slice(0, 7) + ", baseline stable=" + baselineStable + "). Fixes must be amended into the round commit without touching history below the baseline; run git add -A && git commit --amend --no-edit (after fixing anything uncommitted) and return one sentence.",
+        "Amend-discipline check failed (HEAD=" + (headFix || "none").slice(0, 7) + ", baseline stable=" + baselineStable + "). Fixes must be amended into the round commit without touching history below the baseline; run " + GC + " add -A && " + GC + " commit --amend --no-edit (after fixing anything uncommitted) and return one sentence.",
       );
     }
     headA = headFix;
@@ -968,7 +995,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   if (gate === "" || !gate.startsWith("pass")) {
     phase("Gate re-check limit reached, interrupt");
     const ir = await chief.ask<string>(
-      "Round " + round + " gate is still not green after 10 gate re-checks (" + gate + "). Major issue: insert the interrupt report as an urgent mail at the top of LoopMail/ToBoss.md (current state, failure evidence, fixes attempted, points needing the boss's decision), git add -A && git commit (do not push the un-gated commit unless the boss agreed otherwise), return a one-sentence summary.",
+      "Round " + round + " gate is still not green after 10 gate re-checks (" + gate + "). Major issue: insert the interrupt report as an urgent mail at the top of LoopMail/ToBoss.md (current state, failure evidence, fixes attempted, points needing the boss's decision), " + GC + " add -A && " + GC + " commit (do not push the un-gated commit unless the boss agreed otherwise), return a one-sentence summary.",
     );
     await artifact.markdown("interrupt", "# Interrupt Report (round " + round + " gate)\n\n" + ir + "\n\n---\nGate: " + gate + "\nAwaiting the boss's decision.\n", { title: "Interrupt Report (delivery copy)", description: "Master copy: urgent mail in LoopMail/ToBoss.md; gate still red after 10 re-checks" });
     finalVerdict = { verdict: "interrupted", requirementOutcomes: [], deviations: [], summary: "", deliverables: [], state: ir, decisionList: ["Round " + round + " gate not passed: " + gate], advice: "Gate persistently red; boss attention needed" };
@@ -1022,12 +1049,12 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
 
   phase("Chief archives the ledger");
   const archived = await chief.ask<string>(
-    "Record round " + round + " in Agents/ledger.md (head carries the repository identity line" + (repoRoot ? ": " + repoRoot : "") + " and the one-line-per-round index: update this round's index line first, then append the detail): cards, dev summary (" + (dev.summary || "").slice(0, 400) + "), destructive-operation ruling (" + dangerLog + (dangerTrail.length > 0 ? "; execution confirmation: " + (dangerTrail.every((e) => e.executed === e.form) ? "all match the approved forms" : "some unconfirmed — the next closure review must verify each one's on-disk effect") : "") + "), test verdict (findings " + findingsCount + " / rebuttals " + rebuttedCount + " / escalated " + escalations + "), coverage statement (" + (verdict.coverage || "").slice(0, 300) + "), visual review (" + visualNote.slice(0, 200) + "), gate " + gate + ", baseline " + (baseline || "empty tree").slice(0, 7) + ", push " + pushState + ", deferred/declined sections (with reasons, “none” when empty), requirement coverage (" + (dev.requirementCoverage || []).join("; ") + "), next direction. Then git add -A && git commit (the small ledger commit); return one sentence.",
+    "Record round " + round + " in Agents/ledger.md (head carries the repository identity line" + (repoRoot ? ": " + repoRoot : "") + " and the one-line-per-round index: update this round's index line first, then append the detail): cards, dev summary (" + (dev.summary || "").slice(0, 400) + "), destructive-operation ruling (" + dangerLog + (dangerTrail.length > 0 ? "; execution confirmation: " + (dangerTrail.every((e) => e.executed === e.form) ? "all match the approved forms" : "some unconfirmed — the next closure review must verify each one's on-disk effect") : "") + "), test verdict (findings " + findingsCount + " / rebuttals " + rebuttedCount + " / escalated " + escalations + "), coverage statement (" + (verdict.coverage || "").slice(0, 300) + "), visual review (" + visualNote.slice(0, 200) + "), gate " + gate + ", baseline " + (baseline || "empty tree").slice(0, 7) + ", push " + pushState + ", deferred/declined sections (with reasons, “none” when empty), requirement coverage (" + (dev.requirementCoverage || []).join("; ") + "), next direction. Then " + GC + " add -A && " + GC + " commit (the small ledger commit); return one sentence.",
   );
   let headLedger = await HEAD0();
   if (headLedger === "" || headLedger === headA) {
     log("The ledger commit did not land (HEAD did not advance, or the git read failed) — retrying the ledger append once");
-    await chief.ask<string>("The ledger commit did not land (HEAD did not advance): write this round's record into Agents/ledger.md, git add -A && git commit, and return one sentence.");
+    await chief.ask<string>("The ledger commit did not land (HEAD did not advance): write this round's record into Agents/ledger.md, " + GC + " add -A && " + GC + " commit, and return one sentence.");
     headLedger = await HEAD0();
   }
   if (push0.target !== "" && branch !== "" && headLedger !== "") {
@@ -1070,7 +1097,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
 
 let closingBossNote = "";
 try {
-  closingBossNote = (await files.read("LoopMail/FromBoss.md")).trim();
+  closingBossNote = (await readRepo("LoopMail/FromBoss.md")).trim();
 } catch {
   closingBossNote = "";
 }
@@ -1086,13 +1113,13 @@ let reqGapNote = ""; // disclosure injection when the closing requirements.md re
 if (!interrupted) {
   let mapTextF = "";
   try {
-    mapTextF = await files.read("Agents/requirement_map.md");
+    mapTextF = await readRepo("Agents/requirement_map.md");
   } catch {
     mapTextF = "";
   }
   let reqTextF = "";
   try {
-    reqTextF = await files.read("Agents/requirements.md");
+    reqTextF = await readRepo("Agents/requirements.md");
   } catch {
     reqTextF = "";
   }
@@ -1105,10 +1132,10 @@ if (!interrupted) {
   const rnMissingF = rnAllF.filter((rn) => !hasEntryF(rn));
   if (rnMissingF.length > 0) {
     await chief.ask<string>(
-      "Requirement-map coverage check failed: Agents/requirement_map.md has no reconciliation row for: " + rnMissingF.join(", ") + " — a requirement with no row is not done. Add the missing rows (requirement <-> implementation site <-> re-runnable verification command); requirements that were dropped or are not applicable get their disposition recorded in the ledger and marked in the map, git add -A && git commit, return one sentence.",
+      "Requirement-map coverage check failed: Agents/requirement_map.md has no reconciliation row for: " + rnMissingF.join(", ") + " — a requirement with no row is not done. Add the missing rows (requirement <-> implementation site <-> re-runnable verification command); requirements that were dropped or are not applicable get their disposition recorded in the ledger and marked in the map, " + GC + " add -A && " + GC + " commit, return one sentence.",
     );
     try {
-      mapTextF = await files.read("Agents/requirement_map.md");
+      mapTextF = await readRepo("Agents/requirement_map.md");
     } catch {
       mapTextF = "";
     }
@@ -1122,19 +1149,19 @@ let reported = await chief.ask<FinalReport>(
     "The boss's requirement, verbatim: " + requirement + (focus ? "; this run's focus: " + focus : "") + "\n" +
     (closingBossNote !== "" ? "[Boss feedback (re-read from LoopMail/FromBoss.md at closing)] The boss wrote the following mid-run with no round left to carry it — handle each item or list it under the mail's decision section, never silently:\n" + closingBossNote + "\n" : "") +
     (clampNote !== "" ? "[Round clamp] " + clampNote + " — list this in the final brief's decisions-for-the-boss section (for more rounds the boss locks them via the rounds argument and reruns).\n" : "") + mapGap + reqGapNote + interruptNote + (interrupted || startRound > roundsTotal ? "" : roundsTotal + " rounds complete — hard stop (or finished early).") + resumeNoteE +
-    " Using Agents/requirements.md and the ledger as the only basis, append the Final Brief as a new mail at the top of LoopMail/ToBoss.md (the 2026-11-05 boss mail system: ToBoss.md is the Chief's delivery-mail master file — new mails go at the top, appended in reverse order, old mails are never modified; docs/ holds formal content such as REPORT.ipynb and the manuscript; formal files are referenced in mails by relative links as attachments). The boss wants a brief, not a reconciliation (2026-11-05 boss rule): the reconciliation (requirement by requirement -> outcome -> evidence; fill requirementOutcomes faithfully — a requirement without an entry is not done) is your internal affair, going only into Agents/requirement_map.md and the ledger (never touching the tester's verification column), never into the boss's mail as a reconciliation table. Mail writing discipline (the boss's words of 2026-11-05, hard rules): the art of de-redundancy — report the minimum, fastest for the boss to grasp the main line and the whole; no jargon piles (gloss jargon on first use); nothing contrary to fact (numbers and conclusions quote command output and the artifact manifest only); no code-segment or path dumps (evidence pointers listed in one section, no paths in the body). The mail body lets the boss tell at a glance whether the output is what was asked — nine fixed sections: (1) an opening paragraph of progress and verdict (what was done, how it went, whether it meets the boss's requirement; the summary field); (2) the deliverables list (deliverables: one line per artifact — what it is + which sentence of the boss's words it answers (quote <=15 chars) + the attachment link; content worth adopting from historical AI documents is merged here); (3) final state (commits/pushes/tests/known limitations); (4) deviations from the boss's requirements explained one by one (deviations); (5) the decision list (decisionList); (6) open questions answered one by one (questionAnswers: question text -> direct answer -> where the evidence is; when asked where something lives, answer the form too — raw or derived, whether a writer exists); (7) the autonomous-decision list (autonomousDecisions: decision -> reason -> consequence if rejected -> Occam self-assessment \"adds complexity vs simplifies\"; any complexity-increasing decision must be here, never only in the ledger); (8) deferred and declined as fixed subsections (each with its reason — a recorded deferral is a decision, not an omission; a declined idea is not re-proposed next run; fill the deferred/declined/processLessons fields faithfully, empty arrays when none); (9) process lessons (each = rule + why + scope; adopted lessons persist and load with the next run, a disproven lesson is marked superseded and never kept beside a new one; re-validate against the current repo on load) + one line of advice. The mail is a decision-layer document: no process narrative (that is the ledger), one conclusion sentence at the top of each section, each requirement stated once, aiming at two pages or less. At closing, tidy the delivery (2026-11-05 boss rules, hard; sweep the whole repository for historical redundancy first — including leftovers from earlier rounds and runs — not just this round's products): (1) code AND documents the final deliverable does not need (experiment scripts, superseded implementation versions, drafts and intermediate reports — historical redundancy, code and documents alike) -> git mv straight into Agents/; (2) an AI-generated document that has become history -> merge only the content worth adopting into the deliverables wording of the newest ToBoss mail, its body counting as historical redundancy -> git mv into Agents/; (3) docs/ keeps formal content only (the deliverable bodies the boss's words name); the repo root and docs/ pile up no working files; (4) LoopMail/FromBoss.md (written by the boss) stays as it is — what the boss wrote is never modified; (5) any file under LoopMail/ other than ToBoss.md/FromBoss.md is judged case by case — files the boss placed get the FromBoss_ prefix and stay untouched, stray agent-made products are put away per (1)/(2), and anything uncertain is treated as boss-placed; never delete a file throughout. git add -A && git commit, return FinalReport.",
+    " Using Agents/requirements.md and the ledger as the only basis, append the Final Brief as a new mail at the top of LoopMail/ToBoss.md (the 2026-11-05 boss mail system: ToBoss.md is the Chief's delivery-mail master file — new mails go at the top, appended in reverse order, old mails are never modified; docs/ holds formal content such as REPORT.ipynb and the manuscript; formal files are referenced in mails by relative links as attachments). The boss wants a brief, not a reconciliation (2026-11-05 boss rule): the reconciliation (requirement by requirement -> outcome -> evidence; fill requirementOutcomes faithfully — a requirement without an entry is not done) is your internal affair, going only into Agents/requirement_map.md and the ledger (never touching the tester's verification column), never into the boss's mail as a reconciliation table. Mail writing discipline (the boss's words of 2026-11-05, hard rules): the art of de-redundancy — report the minimum, fastest for the boss to grasp the main line and the whole; no jargon piles (gloss jargon on first use); nothing contrary to fact (numbers and conclusions quote command output and the artifact manifest only); no code-segment or path dumps (evidence pointers listed in one section, no paths in the body). The mail body lets the boss tell at a glance whether the output is what was asked — nine fixed sections: (1) an opening paragraph of progress and verdict (what was done, how it went, whether it meets the boss's requirement; the summary field); (2) the deliverables list (deliverables: one line per artifact — what it is + which sentence of the boss's words it answers (quote <=15 chars) + the attachment link; content worth adopting from historical AI documents is merged here); (3) final state (commits/pushes/tests/known limitations); (4) deviations from the boss's requirements explained one by one (deviations); (5) the decision list (decisionList); (6) open questions answered one by one (questionAnswers: question text -> direct answer -> where the evidence is; when asked where something lives, answer the form too — raw or derived, whether a writer exists); (7) the autonomous-decision list (autonomousDecisions: decision -> reason -> consequence if rejected -> Occam self-assessment \"adds complexity vs simplifies\"; any complexity-increasing decision must be here, never only in the ledger); (8) deferred and declined as fixed subsections (each with its reason — a recorded deferral is a decision, not an omission; a declined idea is not re-proposed next run; fill the deferred/declined/processLessons fields faithfully, empty arrays when none); (9) process lessons (each = rule + why + scope; adopted lessons persist and load with the next run, a disproven lesson is marked superseded and never kept beside a new one; re-validate against the current repo on load) + one line of advice. The mail is a decision-layer document: no process narrative (that is the ledger), one conclusion sentence at the top of each section, each requirement stated once, aiming at two pages or less. At closing, tidy the delivery (2026-11-05 boss rules, hard; sweep the whole repository for historical redundancy first — including leftovers from earlier rounds and runs — not just this round's products): (1) code AND documents the final deliverable does not need (experiment scripts, superseded implementation versions, drafts and intermediate reports — historical redundancy, code and documents alike) -> git mv straight into Agents/; (2) an AI-generated document that has become history -> merge only the content worth adopting into the deliverables wording of the newest ToBoss mail, its body counting as historical redundancy -> git mv into Agents/; (3) docs/ keeps formal content only (the deliverable bodies the boss's words name); the repo root and docs/ pile up no working files; (4) LoopMail/FromBoss.md (written by the boss) stays as it is — what the boss wrote is never modified; (5) any file under LoopMail/ other than ToBoss.md/FromBoss.md is judged case by case — files the boss placed get the FromBoss_ prefix and stay untouched, stray agent-made products are put away per (1)/(2), and anything uncertain is treated as boss-placed; never delete a file throughout. " + GC + " add -A && " + GC + " commit, return FinalReport.",
 );
 // Final-brief landing check (closing-chain mechanical verification, same shape as the research loop's evalOnDisk; cross-loop audit F2): the master mail must be at the top of ToBoss.md — one repair, then a loud log
 let briefOnDisk = "";
 try {
-  briefOnDisk = await files.read("LoopMail/ToBoss.md");
+  briefOnDisk = await readRepo("LoopMail/ToBoss.md");
 } catch {
   briefOnDisk = "";
 }
 if (!briefOnDisk.slice(0, 2000).includes("final brief") && !briefOnDisk.slice(0, 2000).includes("Final Brief")) {
-  await chief.ask<string>("The final brief never landed (no final-brief mail at the top of LoopMail/ToBoss.md): insert the final brief as a new mail at the top of LoopMail/ToBoss.md and git add -A && git commit, return one sentence.");
+  await chief.ask<string>("The final brief never landed (no final-brief mail at the top of LoopMail/ToBoss.md): insert the final brief as a new mail at the top of LoopMail/ToBoss.md and " + GC + " add -A && " + GC + " commit, return one sentence.");
   try {
-    briefOnDisk = await files.read("LoopMail/ToBoss.md");
+    briefOnDisk = await readRepo("LoopMail/ToBoss.md");
   } catch {
     briefOnDisk = "";
   }
@@ -1144,7 +1171,7 @@ if (!briefOnDisk.slice(0, 2000).includes("final brief") && !briefOnDisk.slice(0,
 const askedQ = ((requirement + " " + focus + " " + closingBossNote).match(/？|\?/g) || []).length;
 if (askedQ > 0 && (!reported.questionAnswers || reported.questionAnswers.length === 0)) {
   reported = await chief.ask<FinalReport>(
-    "The boss's requirement, verbatim: " + requirement + (focus ? "; this run's focus: " + focus : "") + "\nThe boss's words contain " + askedQ + " question mark(s) but FinalReport.questionAnswers is empty — a question evaporating at intake is a missed requirement. Answer each one (question text -> direct answer, including the form: raw or derived, whether a writer exists -> where the evidence is; write \"cannot answer: reason\" where you truly cannot), write it back to the latest mail in LoopMail/ToBoss.md and git add -A && git commit --amend --no-edit, then return the full FinalReport.",
+    "The boss's requirement, verbatim: " + requirement + (focus ? "; this run's focus: " + focus : "") + "\nThe boss's words contain " + askedQ + " question mark(s) but FinalReport.questionAnswers is empty — a question evaporating at intake is a missed requirement. Answer each one (question text -> direct answer, including the form: raw or derived, whether a writer exists -> where the evidence is; write \"cannot answer: reason\" where you truly cannot), write it back to the latest mail in LoopMail/ToBoss.md and " + GC + " add -A && " + GC + " commit --amend --no-edit, then return the full FinalReport.",
   );
   if (!reported.questionAnswers || reported.questionAnswers.length === 0) log("Report still lacks answered questions (recorded honestly; the boss's words contain " + askedQ + " question mark(s))");
 }

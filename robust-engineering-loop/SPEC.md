@@ -1,6 +1,6 @@
 # Robust Engineering Loop
 
-**v0.6.0** · collection: `bossloop` · sibling: [Research Iteration Loop](../research-iteration-loop/SPEC.md)
+**v0.6.1** · collection: `bossloop` · sibling: [Research Iteration Loop](../research-iteration-loop/SPEC.md)
 
 > Give it a requirement. Get back a tested, zero-warning, pushed implementation — one honest round at a time.
 
