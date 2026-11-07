@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 科研迭代循环（v0.5.9）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表 + 含 canary 的 selfcheck 机械门禁，测试基建归其所有）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
+description: 科研迭代循环（v0.6.0）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表 + 含 canary 的 selfcheck 机械门禁，测试基建归其所有）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
 args:
   idea:
     type: string
@@ -201,7 +201,7 @@ const ALGO_ZH = [
 ].join("\n");
 
 const VISUAL_ZH = [
-  "你是视觉审阅员：只看图，不看代码，也不相信任何自述。用工具打开给定图像，逐张回答三问：①数据是否铺满应定义域（有无大片空白、是否只有极少数据点）；②坐标轴、刻度、单位、图例是否可读且与规格表一致；③这张图能否支撑本轮所声称的结论。",
+  "你是视觉审阅员：只看图，不看代码，也不相信任何自述。用工具打开给定图像，逐张核查。issues 只收「规格违反/产物缺陷」，每条必须引用规格表条目或可复现证据：分辨率/定义域错、色板错、渲染空洞或坏图、大片空白或极少数据点（可修的渲染缺陷）、与所声称结论矛盾的事实错误。「观感/信息量限制」不算 issue：规格未要求的元素缺席、首帧看不出算法差异（阴性如实记录本身就是证据）、信息量对结论支撑弱——这些写进 summary 并加「观感限制：」前缀如实呈现；观感好坏若属老板亲验范围，summary 注明「留老板亲验」——你的职责是如实呈现，不是代替老板裁决观感（实测缺陷 7：把产物固有信息量属性当门禁项＝不可收敛循环）。",
   "对照 LoopMail/ToBoss.md 开局邮件的产物规格表判断「应该是什么样」，而不是凭好看与否。只读，绝不修改任何文件；打不开的图如实说明。",
 ].join("\n");
 
@@ -254,8 +254,9 @@ const tiered = String(args.models ?? "tiered").toLowerCase() !== "uniform";
 const STRONG = "GLM-5.3" as const;
 const CHEAP = "GLM-5.3-Flash" as const;
 type ModelName = typeof STRONG | typeof CHEAP;
+let repoDiscipline = ""; // 仓库根纪律（实测缺陷 2：工作区根≠仓库根时 git 与文件读写系统性失效）——repoRoot 解析后填充，随 persona 注入所有角色
 const persona = (system: string, m: ModelName): { system: string; model?: ModelName } =>
-  tiered ? { system, model: m } : { system };
+  tiered ? { system: system + repoDiscipline, model: m } : { system: system + repoDiscipline };
 
 artifact.table("rounds", {
   title: "验证轮次看板",
@@ -280,6 +281,7 @@ try {
 } catch {
   ledger = "";
 }
+log("启动路径自检：Agents/ledger.md 试读" + (ledger !== "" ? "命中（" + ledger.length + " 字符）" : "为空——首次运行属正常；若库中应有账本，说明运行根/仓库根的路径基准有误，须立即核查（实测缺陷 2 部署教训：路径基准错表现为假红而非显式报错）"));
 if (ledger === "") {
   try {
     const agR = await files.glob("Agents/*");
@@ -325,6 +327,8 @@ try {
 } catch {
   repoRoot = "";
 }
+if (repoRoot !== "") repoDiscipline = "\n【仓库根纪律】本会话的工作目录未必是仓库根：开发仓库根是 " + repoRoot + "。git 命令一律写成 git -C \"" + repoRoot + "\" <子命令>（add/commit/log/reflog/status 全部如此）；读写仓库内文件一律用绝对路径（" + repoRoot + "/ 前缀）；绝不读写工作目录下的同名散落副本；不确定时先 git -C \"" + repoRoot + "\" status 核实。";
+chief = agent("总工程师", persona(CHIEF_ZH + PROFILE_LINE, STRONG)); // pre-loop 实例重建：repoDiscipline 已填充——首建发生在解析前，其 persona 冻结无纪律（终审 #1）
 /** 编排器统一 git 入口：显式 -C 仓库根——工作区根≠仓库根时不再静默失效（实测缺陷） */
 const G = (gitArgs: string[], timeoutMs = 120000): Promise<WorldRunResult> =>
   world.run("git", repoRoot !== "" ? ["-C", repoRoot, ...gitArgs] : gitArgs, { timeoutMs });
@@ -341,6 +345,22 @@ const HEADR = async (): Promise<string> => {
     }
   }
   return "";
+};
+/** 命令归一与命中（实测缺陷 1：路径分隔符/引号/空白漂移把已执行毒化成永久红）——命中=含批准写法原文或其归一形；批准写法之外的「原申报」不参与命中（approve-with-change 只认安全写法，§4.6） */
+const normCmd = (s: string): string => s.replace(/[\/\\]+/g, "/").replace(/["']/g, "").replace(/\s+/g, " ").trim();
+const execHit = (report: string, form: string): boolean => report.includes(form) || normCmd(report).includes(normCmd(form));
+/** 推送分叉预检（实测缺陷 4：同仓库并行运行的孪生提交使推送非快进积压）——远端分支不是本地 HEAD 祖先即分叉；探测失败不阻塞（推送本身仍 fail-closed） */
+const pushDiverged = async (target: string, branch: string): Promise<boolean> => {
+  if (target === "" || branch === "") return false;
+  try {
+    const lr = await G(["ls-remote", target, branch], 60000);
+    const sha = ((lr.stdout || "").trim().split(/\s+/)[0]) || "";
+    if (sha === "") return false; // 远端无此分支：首次推送
+    const mb = await G(["merge-base", "--is-ancestor", sha, "HEAD"], 60000);
+    return mb.exitCode !== 0;
+  } catch {
+    return false;
+  }
 };
 /** 解析约定备份推送目标（每轮由编排器推送并核验）：返回 {target(名字或URL，空=跳过推送), note} */
 async function resolvePushTargetR(): Promise<{ target: string; note: string }> {
@@ -396,7 +416,7 @@ try {
 if (repoWarn !== "") log("警告：" + repoWarn + "；已如实记入账本");
 const survey = await chief.ask<SurveyResult>(
   "待迭代的初步想法：" + idea + "\n" + (focus ? "老板特别关注：" + focus + "\n" : "") +
-  (repoRoot ? "当前仓库根：" + repoRoot + "（与账本记录不符时如实注明）。\n" : "") +
+  (repoRoot ? "当前仓库根：" + repoRoot + "（与账本记录不符时如实注明；工作目录未必是仓库根——git 命令一律 git -C \"" + repoRoot + "\"，仓库内文件读写用绝对路径）。\n" : "") +
   (repoWarn !== "" ? "【环境警告】" + repoWarn + "——本轮照常推进；在账本记明。\n" : "") +
   (legacyLayout ? "【迁移】检测到旧版布局：把工作文件归位到新布局（目标位置已是新布局的项跳过）：docs/workflow/ 下的 ledger.md、claim_map.md 与仓库根的 selfcheck.py 若存在则 git mv 进 Agents/，docs/boss_directives.md→LoopMail/FromBoss.md、docs/brief.md→LoopMail/ToBoss.md（git mv）；evaluation_report 历史报告并入 ToBoss 邮件表述后本体迁 Agents/；FromBoss.md/ToBoss.md 头注缺失时补一行 LoopMail 协议头注（FromBoss 正序追加/绝不删改老板写下的内容；ToBoss 新邮件插头部/倒序追加/旧邮件永不删改/四禁写作纪律），git add -A && git commit 后再续跑。\n" : "") +
   (ledger
@@ -416,6 +436,20 @@ if (legacyLayout) {
   if (migratedLedger === "") {
     await chief.ask<string>("迁移复核未通过：Agents/ledger.md 读取为空——旧布局迁移（git mv 归位）可能未完成或未提交。请补全迁移并 git add -A && git commit，返回一句话；确无账本可迁的如实说明。");
   }
+  try {
+    migratedLedger = await files.read("Agents/ledger.md");
+  } catch {
+    migratedLedger = "";
+  }
+  let mailsOk = true;
+  for (const f of ["LoopMail/ToBoss.md", "LoopMail/FromBoss.md"]) {
+    try {
+      if ((await files.read(f)).trim() === "") mailsOk = false;
+    } catch {
+      mailsOk = false;
+    }
+  }
+  log(migratedLedger !== "" && mailsOk ? "迁移复核：账本与 LoopMail 两文件均已落位" : "迁移复核仍有缺项（账本" + (migratedLedger !== "" ? "在" : "缺") + "、LoopMail 两文件" + (mailsOk ? "在" : "缺") + "）——如实记录，运行继续但迁移可能不完整（实测家族：半迁移静默进运行）");
 }
 if ((survey.paperRequests || []).length > 0) {
   log("求论文清单（非阻塞，供老板代取）：" + survey.paperRequests.join("；"));
@@ -466,6 +500,9 @@ let editor = agent("编辑", persona(EDITOR_ZH + PROFILE_LINE, STRONG)); // 强�
 let reader = agent("文献资深读者", persona(READER_ZH + PROFILE_LINE, STRONG)); // 强模型档
 // 以上四个角色与总工均为每轮重建（B#27）：轮循环顶部重新赋值，检查点是账本，不是任何人的会话记忆
 
+let visualCacheKeyR = ""; // 视觉结论记忆化（实测缺陷 7）：键=产物内容集合＋开局邮件规格表锚（lastIndexOf「产物规格表」——最底部出现即本次开局邮件；家族审计 #1 修正尾部切片锚错）哈希——规格变更使缓存失效；不含轮次（含了就永不命中，跨轮复用）
+let visualCacheNoteR = "";
+let visualCacheIssuesR: string[] = [];
 const rows: RoundRow[] = [];
 let plan = "第 " + startRound + " 轮：按调研结论执行（方案：" + survey.proposals.join("、") + "；竞品：" + survey.competitors.join("、") + "）";
 
@@ -493,20 +530,28 @@ async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
   const ok = decisions.filter((d) => d.decision !== "reject");
   if (ok.length > 0) {
     phase("执行已批准的危险操作");
-    const execReport = await algo.ask<string>(
+    let execReport = await algo.ask<string>(
       "执行总工程师已批准的危险操作，严格按批准写法，不得扩大范围、不得新增未批准的命令：" + ok.map((d, i) => (i + 1) + ". " + (d.safeForm || d.command)).join("；") + "。回报中必须逐字引用上列每条批准写法（一致性核查按逐字匹配，漏引或转述都算未确认）；完成后 git add -A && git commit，返回一句话。",
     );
+    const missedR = ok.filter((d) => !execHit(execReport, d.safeForm || d.command));
+    if (missedR.length > 0) {
+      const reExecR = await algo.ask<string>(
+        "危险操作执行确认复核：以下已批准命令的执行回报未含批准写法原文：\n" + missedR.map((d) => "- 批准写法：" + (d.safeForm || d.command)).join("\n") + "\n确已执行的：逐字引用批准写法原文（照抄，不得转述）；确未执行的：批准仍有效，按批准写法补执行（先备份、失败即停）后再逐字引用；确实无法执行的如实说明（家族审计 #4：诚实路径必须有活路）。返回一句话。",
+      );
+      execReport = execReport + "\n" + reExecR;
+    }
     for (const d of ok) {
       const form = d.safeForm || d.command;
-      if (!execReport.includes(form)) log("危险操作执行确认缺失：" + d.command + "——如实记录，账本将标注未确认");
+      if (!execHit(execReport, form)) log("危险操作执行确认缺失：" + d.command + "——如实记录，账本将标注未确认");
     }
-    entry += "；执行确认：" + (ok.every((d) => execReport.includes(d.safeForm || d.command)) ? "全部与批准写法一致" : "存在未确认项（见日志）");
+    entry += "；执行确认：" + (ok.every((d) => execHit(execReport, d.safeForm || d.command)) ? "全部与批准写法一致" : "存在未确认项（见日志）");
   } else {
     log("危险操作全部驳回：不得绕过，另寻安全路径");
   }
   return entry;
 }
 
+let claimGapNote = ""; // claim_map 实质核查未清零时的披露注入（家族审计 #2：披露承诺必须有消费机制）
 for (let round = startRound; round <= rounds; round++) {
   const roundHead0 = await HEADR(); // 本轮起点 HEAD：图像检测 diff 源的基线（工程循环同款）
   chief = agent("总工程师-R" + round, persona(CHIEF_ZH + PROFILE_LINE, STRONG)); // B#27：每轮全新实例——检查点是账本，不是任何人的会话记忆
@@ -639,15 +684,38 @@ for (let round = startRound; round <= rounds; round++) {
   }
   let visualNoteR = imageFilesR.length === 0 ? (imgDetectOkR ? "本轮无图像产物：不适用" : "图像产物检测失败——按无图处理，如实记录") : "尚未审阅";
   if (imageFilesR.length > 0) {
+    const vPartsR: string[] = [];
+    for (const pV of imageFilesR.slice().sort()) {
+      try { const hV = await world.run("git", ["hash-object", pV], { timeoutMs: 60000 }); vPartsR.push(pV + ":" + ((hV.stdout || "").trim().slice(0, 12) || "?")); } catch { vPartsR.push(pV); } // 不带 -C：产物路径是工作区相对，哈希必须与审阅员看到的副本同基准（终审 #2）
+    }
+    let specAnchorR = "";
+    try {
+      const tbSpecR = await files.read("LoopMail/ToBoss.md");
+      const kSpecR = Math.max(tbSpecR.lastIndexOf("产物规格表"), tbSpecR.lastIndexOf("Artifact spec table")); // 新邮件插头部：lastIndexOf=最底部出现=本次开局邮件的规格表（家族审计 #1：尾部切片自第二次运行起锚到上一轮旧邮件，规格变更不使缓存失效）
+      specAnchorR = kSpecR >= 0 ? tbSpecR.slice(kSpecR, kSpecR + 2500) : "";
+    } catch {
+      specAnchorR = "";
+    }
+    let specH = 0;
+    for (let i = 0; i < specAnchorR.length; i++) specH = (specH * 31 + specAnchorR.charCodeAt(i)) | 0; // 锚定不到规格表时 spec 分量为常数——退化为仅产物内容键（如实已知边界）
+    const vKeyR = vPartsR.join("|") + "|spec:" + specH;
+    if (vKeyR === visualCacheKeyR) {
+      visualNoteR = visualCacheNoteR + "（视觉结论复用：产物集合未变，未重派审阅）";
+      if (visualCacheIssuesR.length > 0) verdict.issues = verdict.issues.concat(visualCacheIssuesR);
+      log("视觉审阅：产物集合未变——复用上次结论，不重派审阅员（实测缺陷 7 的不可收敛循环由此消除）");
+    } else {
     phase("视觉审阅图像产物");
     const vvR = await agent("视觉审阅-R" + round, persona(VISUAL_ZH + PROFILE_LINE, STRONG)).ask<VisualVerdict>(
       "本轮任务：" + cards.title + "。规格见 LoopMail/ToBoss.md 开局邮件的产物规格表。逐张打开并审阅以下图像（相对工作区路径）：\n" + imageFilesR.join("\n") +
-      "\n三问：数据是否铺满应定义域；坐标轴/刻度/单位/图例是否可读且与规格一致；这张图能否支撑本轮所声称的结论。返回 VisualVerdict（问题写清文件名与你看到的现象）。",
+      "\nissues 只收规格违反/产物缺陷（分辨率或定义域错、色板错、渲染空洞或坏图、大片空白或极少数据点、与所声称结论矛盾的事实错误——每条引用规格表条目或可复现证据）；观感/信息量限制（规格未要求的元素缺席、首帧看不出差异、支撑弱）不进 issues，写进 summary 并加「观感限制：」前缀；观感属老板亲验范围的注明「留老板亲验」。返回 VisualVerdict（问题写清文件名与你看到的现象）。",
     );
     visualNoteR = vvR.summary + ((vvR.issues || []).length > 0 ? "｜问题：" + (vvR.issues || []).join("；") : "");
+    visualCacheKeyR = vKeyR; visualCacheNoteR = visualNoteR;
+    visualCacheIssuesR = (vvR.issues || []).map((x) => "【视觉】" + x);
     if ((vvR.issues || []).length > 0) {
-      verdict.issues = verdict.issues.concat((vvR.issues || []).map((x) => "【视觉】" + x));
+      verdict.issues = verdict.issues.concat(visualCacheIssuesR);
       log("视觉审阅发现问题，已并入本轮修复清单：" + visualNoteR.slice(0, 300));
+    }
     }
   }
   let claimMapOk = false;
@@ -712,10 +780,11 @@ for (let round = startRound; round <= rounds; round++) {
     if (badM[0] === "__unreadable__") log("claim_map 实质核查未运行：docs/paper_draft.md 不可读——如实记录");
     else if (badM.length > 0) {
       await tester.ask<string>(
-        "claim_map 实质核查未过（假映射表防线）：\n" + badM.slice(0, 10).join("\n") + (badM.length > 10 ? "\n……（共 " + badM.length + " 项）" : "") + "\n逐项修正：稿件数字补映射行（数字 | 存档工件 | 可重跑检查命令，绝不虚构工件路径）；不可达路径改为真实存档位置；确非主张数字的（版本号、章节号、表编号）在映射表末尾加一行「<!-- 非主张数字: <数字> -->」登记豁免，该数字不再进入覆盖扫描。git add -A && git commit，返回一句话。",
+        "claim_map 实质核查未过（假映射表防线）：\n" + badM.slice(0, 10).join("\n") + (badM.length > 10 ? "\n……（共 " + badM.length + " 项）" : "") + "\n逐项修正：稿件数字补映射行（数字 | 存档工件 | 可重跑检查命令，绝不虚构工件路径）；不可达路径改为真实存档位置；确非主张数字的（版本号、章节号、表编号）在映射表末尾加一行「<!-- 非主张数字: <数字> -->」登记豁免（逐条注明出处，如「版本号见封面」），该数字不再进入覆盖扫描；主张数字绝不登记豁免——豁免是收声通道不是遮盖通道（家族审计 #3）。git add -A && git commit，返回一句话。",
       );
       const stillM = await auditClaimMap();
       log(stillM[0] === "__unreadable__" ? "claim_map 实质核查复核时稿件不可读——如实记录" : stillM.length === 0 ? "claim_map 实质核查：修正后通过" : "claim_map 实质核查仍有 " + stillM.length + " 项未对上——如实记录，稿件披露以 claim_map 缺口为准");
+      if (stillM[0] !== "__unreadable__" && stillM.length > 0) claimGapNote = "claim_map 实质核查仍有 " + stillM.length + " 项未对上——报告必须如实披露这些 claim↔evidence 缺口，绝不静默。\n";
     }
   }
   let canary = false;
@@ -735,8 +804,8 @@ for (let round = startRound; round <= rounds; round++) {
     let launchErr = "";
     try {
       const r = interpIsPy3
-        ? await world.run("python3", ["Agents/selfcheck.py"], { timeoutMs: 3600000 })
-        : await world.run("python", ["Agents/selfcheck.py"], { timeoutMs: 3600000 });
+        ? await world.run("python3", [repoRoot !== "" ? repoRoot + "/Agents/selfcheck.py" : "Agents/selfcheck.py"], { timeoutMs: 3600000 })
+        : await world.run("python", [repoRoot !== "" ? repoRoot + "/Agents/selfcheck.py" : "Agents/selfcheck.py"], { timeoutMs: 3600000 });
       exitCode = r.exitCode;
       fullSelfOut = r.stdout || "";
       output = (r.stderr || r.stdout || "(无输出)").slice(0, 1500);
@@ -747,7 +816,7 @@ for (let round = startRound; round <= rounds; round++) {
       if (!interpIsPy3) {
         interpIsPy3 = true;
         try {
-          const r = await world.run("python3", ["Agents/selfcheck.py"], { timeoutMs: 3600000 });
+          const r = await world.run("python3", [repoRoot !== "" ? repoRoot + "/Agents/selfcheck.py" : "Agents/selfcheck.py"], { timeoutMs: 3600000 });
           exitCode = r.exitCode;
           fullSelfOut = r.stdout || "";
           output = (r.stderr || r.stdout || "(无输出)").slice(0, 1500);
@@ -804,6 +873,10 @@ for (let round = startRound; round <= rounds; round++) {
   );
   if (fixes.length > 0) {
     fixDev = await algo.ask<DevReport>("执行修复与补充实验：" + fixes.join("；") + "\n每条先在本轮代码上复现：过期条目（引用旧版本行号、已被修复、当前复现不了）直接丢弃并说明，绝不据此改动。返回 DevReport。");
+    if (round1FullMissing && (fixDev.numbers || []).some((n) => /^\s*FULL/.test(n))) {
+      round1FullMissing = false;
+      log("第 1 轮的 FULL 级端到端数字已在修复阶段补出（fixDev）——FULL 缺失禁令解除（家族审计 #7：dev∪fixDev 才是完整判定面，问句不得断言与 fixDev 矛盾的事实）");
+    }
     if ((fixDev.dangerRequests || []).length > 0) {
       dangerLog = (dangerLog === "无" ? "" : dangerLog + "；") + await dangerFlow(fixDev.dangerRequests);
     }
@@ -889,6 +962,7 @@ for (let round = startRound; round <= rounds; round++) {
   let pushStateR = branchR === "" ? "跳过推送：detached HEAD，分支不确定（如实记录）" : "跳过推送：" + push0.note;
   const headPush = await HEADR();
   if (push0.target !== "" && branchR !== "" && headPush !== "") {
+    if (await pushDiverged(push0.target, branchR)) log("推送预检：远端分支与本地 HEAD 分叉（同仓库并行运行的孪生提交风险，实测缺陷 4）——推送将按非快进失败并如实记录；确需并行运行，先与老板确认整合策略，绝不 force");
     try {
       const p = await G(["push", push0.target, "HEAD:" + branchR], 300000);
       if (p.exitCode !== 0) log("第 " + round + " 轮备份推送退出码 " + p.exitCode + "：" + maskUrl((p.stderr || p.stdout || "")).slice(0, 200) + "——如实记录");
@@ -924,6 +998,7 @@ for (let round = startRound; round <= rounds; round++) {
   plan = digest;
 }
 
+
 let reconGap = ""; // 逐句对账补修后仍缺的 Rn（注入评估问句强制披露，与工程循环 mapGap 同款）
 // 逐句对账覆盖机械核查（在评估问句前运行，使缺口注入生效）：开局邮件的每个 Rn 必须在账本终章有处置标注（已交付/部分/未交付→证据位置）——蒸发即漏需求
 {
@@ -938,6 +1013,10 @@ let reconGap = ""; // 逐句对账补修后仍缺的 Rn（注入评估问句强�
     toBossF = await files.read("LoopMail/ToBoss.md");
   } catch {
     toBossF = "";
+  }
+  if (toBossF === "") {
+    log("【对账核查警告】LoopMail/ToBoss.md 读取为空——逐句对账核查整体空转（路径基准错或文件缺失；家族审计 #12：读失败静默当无＝实测缺陷 2 教训同族）——按核查未运行如实披露");
+    reconGap = "逐句对账核查未能运行（LoopMail/ToBoss.md 不可读）——报告必须显式披露此异常，绝不静默";
   }
   const rnUnivF = Array.from(new Set(toBossF.match(/\bR\d+\b/g) || [])).sort();
   const rnGoneF = rnUnivF.filter((rn) => !(new RegExp("\\b" + rn + "\\b[^。]{0,30}(已交付|部分|未交付)")).test(ledgerTailF));
@@ -972,6 +1051,7 @@ let evalResult = await chief.ask<EvalReport>(
   (startRound > 1 ? "【证据基座范围】本次运行从第 " + startRound + " 轮续跑：上述审稿意见与轮次记录只含本次运行的轮次——评估必须显式注明证据基座范围，绝不让老板误以为覆盖全部轮次。\n" : "") +
   "若轮次记录显示第 1 轮无端到端数字，报告必须显式声明「第 1 轮无 FULL 数字，稿件不得声称已验证」。\n" +
   (closingBossNoteR !== "" ? "【老板反馈（收尾时重读 LoopMail/FromBoss.md）】以下为老板运行中写入、尚无轮次可落实的指令——逐条处置或在报告的待老板决策节列明，绝不静默：\n" + closingBossNoteR + "\n" : "") +
+  (claimGapNote !== "" ? "【机械核查未过】" + claimGapNote + "——报告必须如实披露，绝不静默。\n" : "") +
   (reconGap !== "" ? "【机械核查未过】" + reconGap + "——报告必须如实披露这些要求的未交付状态，绝不静默。\n" : "") +
   (round1FullMissing ? "【机械核查】第 1 轮无 FULL 级端到端数字——报告与稿件必须显式声明未验证。\n" : "") +
   "撰写《初步评估报告》：verdict（继续/转向/停止）、预期成功率（推理依据必须引用实验死亡率趋势与文献读者的新颖性核查结论；并明确标注『这是定性判断的数值化表达，非校准概率』）、创新性（引用最相近 3 篇工作与实质差异维度）、影响力、继续做要注意的点（每条注明对应主张的证据范围——数据集与条件）、" +
@@ -1005,6 +1085,7 @@ if (askedQ > 0 && (!evalResult.questionAnswers || evalResult.questionAnswers.len
 let finalPushR = push0.target === "" ? "跳过推送：" + push0.note : (branchR === "" ? "未推送：detached HEAD，分支不确定（如实记录）" : "未推送");
 if (push0.target !== "" && branchR !== "") {
   const headFinalR = await HEADR();
+  if (await pushDiverged(push0.target, branchR)) log("推送预检：远端分支与本地 HEAD 分叉（同仓库并行运行的孪生提交风险，跨循环审计 F1）——推送将按非快进失败并如实记录；绝不 force");
   try {
     const p = await G(["push", push0.target, "HEAD:" + branchR], 300000);
     if (p.exitCode === 0) {

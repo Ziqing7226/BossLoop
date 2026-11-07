@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Research Iteration Loop (v0.5.9), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3) from the latest reviews; the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map + a mechanical selfcheck gate with a canary, owning the test fixtures); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
+description: Research Iteration Loop (v0.6.0), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3) from the latest reviews; the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map + a mechanical selfcheck gate with a canary, owning the test fixtures); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
 args:
   idea:
     type: string
@@ -196,7 +196,7 @@ const ALGO_EN = [
 ].join("\n");
 
 const VISUAL_EN = [
-  "You are the Visual Reviewer: you look at images only — not the code, and never at anyone's self-report. Open each given image and answer three questions: (1) does the data fill the domain it should (large blank regions, only a handful of points); (2) are axes, ticks, units and legend readable and consistent with the spec table; (3) can this image support the conclusion this round claims.",
+  "You are the Visual Reviewer: you look at images only — not the code, and never at anyone's self-report. Open each given image and inspect it. issues carry spec violations and product defects only, each citing a spec-table row or reproducible evidence: wrong resolution/domain, wrong palette, rendering holes or broken images, large blank regions or a handful of data points (a fixable rendering defect), factual errors contradicting the claimed conclusion. Presentation/information limits are NOT issues: elements the spec never asked for, a first frame that cannot show the algorithm difference (an honestly recorded negative is itself evidence), weak informational support — those go into the summary under an 观感限制 (presentation-limits) prefix; when the look belongs to the boss's own judgement, note \"left for the boss to judge\" — your duty is faithful presentation, not ruling on looks in the boss's place (field defect 7: treating an artifact's inherent information limits as gate items makes the loop non-converging).",
   "Judge against the artifact spec table in the LoopMail/ToBoss.md opening mail — what it should look like — not against what looks pretty. Read-only, change nothing; say plainly which images you could not open.",
 ].join("\n");
 
@@ -249,8 +249,9 @@ const tiered = String(args.models ?? "tiered").toLowerCase() !== "uniform";
 const STRONG = "GLM-5.3" as const;
 const CHEAP = "GLM-5.3-Flash" as const;
 type ModelName = typeof STRONG | typeof CHEAP;
+let repoDiscipline = ""; // repository-root discipline (field defect 2: when the workspace root != the repo root, git and file reads systematically fail) — filled once repoRoot resolves, injected into every role via persona
 const persona = (system: string, m: ModelName): { system: string; model?: ModelName } =>
-  tiered ? { system, model: m } : { system };
+  tiered ? { system: system + repoDiscipline, model: m } : { system: system + repoDiscipline };
 
 artifact.table("rounds", {
   title: "Validation rounds",
@@ -275,6 +276,7 @@ try {
 } catch {
   ledger = "";
 }
+log("Startup path probe: Agents/ledger.md test-read " + (ledger !== "" ? "hit (" + ledger.length + " chars)" : "empty — normal on a first run; if the repo should have a ledger, the run-root/repo-root path basis is wrong and must be checked now (field defect 2 lesson: a wrong path basis shows up as false reds, not as errors)"));
 if (ledger === "") {
   try {
     const agR = await files.glob("Agents/*");
@@ -320,6 +322,8 @@ try {
 } catch {
   repoRoot = "";
 }
+if (repoRoot !== "") repoDiscipline = "\n[Repository-root discipline] this session's working directory is not necessarily the repo root: the development repository root is " + repoRoot + ". Write every git command as git -C \"" + repoRoot + "\" <subcommand> (add/commit/log/reflog/status alike); read and write in-repo files by absolute path (prefixed " + repoRoot + "/); never touch same-named stray copies under the working directory; when unsure, verify with git -C \"" + repoRoot + "\" status first.";
+chief = agent("Chief Engineer", persona(CHIEF_EN + PROFILE_LINE, STRONG)); // pre-loop instance rebuilt: repoDiscipline is now filled — the first build happened before resolution, its persona frozen without the discipline (review #1)
 /** The orchestrator's single git entry: explicit -C <repo root> so a workspace root ≠ repo root stops failing silently (field-tested) */
 const G = (gitArgs: string[], timeoutMs = 120000): Promise<WorldRunResult> =>
   world.run("git", repoRoot !== "" ? ["-C", repoRoot, ...gitArgs] : gitArgs, { timeoutMs });
@@ -336,6 +340,22 @@ const HEADR = async (): Promise<string> => {
     }
   }
   return "";
+};
+/** Command normalization and hit (field defect 1: path-separator/quote/whitespace drift poisoned an executed operation into a permanent red) — a hit = the report contains the approved form verbatim or its normalized shape; the declared original never counts for approve-with-change (only the safe form is approved, SPEC §4.6) */
+const normCmd = (s: string): string => s.replace(/[\/\\]+/g, "/").replace(/["']/g, "").replace(/\s+/g, " ").trim();
+const execHit = (report: string, form: string): boolean => report.includes(form) || normCmd(report).includes(normCmd(form));
+/** Push divergence pre-check (field defect 4: two runs on one repository produce twin commits and non-fast-forward push backlogs) — diverged when the remote branch is not an ancestor of local HEAD; a failed probe never blocks (the push itself stays fail-closed) */
+const pushDiverged = async (target: string, branch: string): Promise<boolean> => {
+  if (target === "" || branch === "") return false;
+  try {
+    const lr = await G(["ls-remote", target, branch], 60000);
+    const sha = ((lr.stdout || "").trim().split(/\s+/)[0]) || "";
+    if (sha === "") return false; // no such branch on the remote: first push
+    const mb = await G(["merge-base", "--is-ancestor", sha, "HEAD"], 60000);
+    return mb.exitCode !== 0;
+  } catch {
+    return false;
+  }
 };
 /** Resolve the agreed backup push target (pushed and verified by the orchestrator every round): {target (name or URL, "" = skip pushes), note} */
 async function resolvePushTargetR(): Promise<{ target: string; note: string }> {
@@ -391,7 +411,7 @@ try {
 if (repoWarn !== "") log("Warning: " + repoWarn + "; recorded honestly in the ledger");
 const survey = await chief.ask<SurveyResult>(
   "Rough idea to iterate on: " + idea + "\n" + (focus ? "Boss focus: " + focus + "\n" : "") +
-  (repoRoot ? "Repo root: " + repoRoot + " (flag it honestly if the ledger records a different root).\n" : "") +
+  (repoRoot ? "Repo root: " + repoRoot + " (flag it honestly if the ledger records a different root; the working directory is not necessarily the repo root — every git command is git -C \"" + repoRoot + "\", and in-repo files are read/written by absolute path).\n" : "") +
   (repoWarn !== "" ? "[Environment warning] " + repoWarn + " — proceed anyway; record it in the ledger.\n" : "") +
   (legacyLayout ? "[Migration] Legacy layout detected: put the working files where the new layout wants them (skip items already in place): git mv the docs/workflow/ ledger.md and claim_map.md and the root selfcheck.py into Agents/ when present, and docs/boss_directives.md -> LoopMail/FromBoss.md and docs/brief.md -> LoopMail/ToBoss.md (git mv); merge the historical evaluation_report into the ToBoss mail wording, then move its body into Agents/; add a one-line LoopMail protocol header to either file when missing (FromBoss: append in order / never modify what the boss wrote; ToBoss: new mails at the top / old mails never modified / the four writing bans), git add -A && git commit, then resume\n" : "") +
   (ledger
@@ -411,6 +431,20 @@ if (legacyLayout) {
   if (migratedLedger === "") {
     await chief.ask<string>("Migration re-check failed: Agents/ledger.md reads empty — the legacy-layout migration (git mv into place) may be incomplete or uncommitted. Complete it and git add -A && git commit; say so honestly if there was no ledger to migrate.");
   }
+  try {
+    migratedLedger = await files.read("Agents/ledger.md");
+  } catch {
+    migratedLedger = "";
+  }
+  let mailsOk = true;
+  for (const f of ["LoopMail/ToBoss.md", "LoopMail/FromBoss.md"]) {
+    try {
+      if ((await files.read(f)).trim() === "") mailsOk = false;
+    } catch {
+      mailsOk = false;
+    }
+  }
+  log(migratedLedger !== "" && mailsOk ? "Migration re-check: the ledger and both LoopMail files are in place" : "Migration re-check still incomplete (ledger " + (migratedLedger !== "" ? "present" : "missing") + ", LoopMail pair " + (mailsOk ? "present" : "missing") + ") — recorded honestly; the run continues but the migration may be partial (field family: a half-migration entering the run silently)");
 }
 if ((survey.paperRequests || []).length > 0) {
   log("Paper fetch requests (non-blocking, for the boss): " + survey.paperRequests.join("; "));
@@ -465,6 +499,9 @@ let editor = agent("Editor", persona(EDITOR_EN + PROFILE_LINE, STRONG)); // stro
 let reader = agent("Reference Reader", persona(READER_EN + PROFILE_LINE, STRONG)); // strong tier
 // All four roles and the Chief are re-instantiated every round (B#27): reassigned at the top of the round loop — the checkpoint is the ledger, not anyone's conversation memory
 
+let visualCacheKeyR = ""; // visual-verdict memoization (field defect 7): key = artifact-content set + an anchor on the opening mail's spec table (lastIndexOf — the bottom-most occurrence is this run's opening mail; family audit #1 fixed the mis-anchored tail slice) — a spec change invalidates the cache; no round in the key (it would never hit; reused across rounds)
+let visualCacheNoteR = "";
+let visualCacheIssuesR: string[] = [];
 const rows: RoundRow[] = [];
 let plan = "Round " + startRound + ": follow the survey (proposals: " + survey.proposals.join(", ") + "; competitors: " + survey.competitors.join(", ") + ")";
 
@@ -492,20 +529,28 @@ async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
   const ok = decisions.filter((d) => d.decision !== "reject");
   if (ok.length > 0) {
     phase("Run the approved destructive operations");
-    const execReport = await algo.ask<string>(
+    let execReport = await algo.ask<string>(
       "Run the Chief-approved destructive operations, exactly as approved; do not widen the scope, do not add unapproved commands: " + ok.map((d, i) => (i + 1) + ". " + (d.safeForm || d.command)).join("; ") + ". Your report must quote each approved form listed above verbatim (the consistency check matches verbatim; paraphrases and omissions count as unconfirmed); then git add -A && git commit and return one sentence.",
     );
+    const missedR = ok.filter((d) => !execHit(execReport, d.safeForm || d.command));
+    if (missedR.length > 0) {
+      const reExecR = await algo.ask<string>(
+        "Dangerous-operation execution re-check: the execution reports lack the approved-form text for these approved commands:\n" + missedR.map((d) => "- approved form: " + (d.safeForm || d.command)).join("\n") + "\nIf executed: quote the approved form verbatim (copy it, no paraphrasing); if not executed: the approval still stands — execute per the approved form (back up first, stop on failure) and then quote verbatim; if it truly cannot be executed, say so honestly (family audit #4: the honest path must be alive). Return one sentence.",
+      );
+      execReport = execReport + "\n" + reExecR;
+    }
     for (const d of ok) {
       const form = d.safeForm || d.command;
-      if (!execReport.includes(form)) log("Dangerous-operation execution unconfirmed: " + d.command + " — recorded honestly, flagged in the ledger");
+      if (!execHit(execReport, form)) log("Dangerous-operation execution unconfirmed: " + d.command + " — recorded honestly, flagged in the ledger");
     }
-    entry += "; execution confirmation: " + (ok.every((d) => execReport.includes(d.safeForm || d.command)) ? "all match the approved forms" : "some unconfirmed (see log)");
+    entry += "; execution confirmation: " + (ok.every((d) => execHit(execReport, d.safeForm || d.command)) ? "all match the approved forms" : "some unconfirmed (see log)");
   } else {
     log("All destructive requests rejected: no workaround allowed");
   }
   return entry;
 }
 
+let claimGapNote = ""; // disclosure injection when the claim-map substance check does not clear (family audit #2: a promised disclosure must have a consumer)
 for (let round = startRound; round <= rounds; round++) {
   const roundHead0 = await HEADR(); // the HEAD where this round starts: the baseline for the image detection's diff source (same as the engineering loop)
   chief = agent("Chief Engineer-R" + round, persona(CHIEF_EN + PROFILE_LINE, STRONG)); // B#27: a fresh instance every round — the checkpoint is the ledger, not anyone's conversation memory
@@ -638,15 +683,38 @@ for (let round = startRound; round <= rounds; round++) {
   }
   let visualNoteR = imageFilesR.length === 0 ? (imgDetectOkR ? "no image artifacts this round: not applicable" : "image-artifact detection failed — treated as no images, recorded honestly") : "not reviewed yet";
   if (imageFilesR.length > 0) {
+    const vPartsR: string[] = [];
+    for (const pV of imageFilesR.slice().sort()) {
+      try { const hV = await world.run("git", ["hash-object", pV], { timeoutMs: 60000 }); vPartsR.push(pV + ":" + ((hV.stdout || "").trim().slice(0, 12) || "?")); } catch { vPartsR.push(pV); } // no -C: artifact paths are workspace-relative — hash the copy the reviewer actually sees (review #2)
+    }
+    let specAnchorR = "";
+    try {
+      const tbSpecR = await files.read("LoopMail/ToBoss.md");
+      const kSpecR = Math.max(tbSpecR.lastIndexOf("产物规格表"), tbSpecR.lastIndexOf("Artifact spec table")); // mails prepend, so lastIndexOf = the bottom-most occurrence = this run's opening-mail spec table (family audit #1: a tail slice anchors to the PREVIOUS run's old mails from the second run on, and a spec change would never invalidate the cache)
+      specAnchorR = kSpecR >= 0 ? tbSpecR.slice(kSpecR, kSpecR + 2500) : "";
+    } catch {
+      specAnchorR = "";
+    }
+    let specH = 0;
+    for (let i = 0; i < specAnchorR.length; i++) specH = (specH * 31 + specAnchorR.charCodeAt(i)) | 0; // when no spec table is found the spec component is constant — the key degrades to artifact content only (honest known boundary)
+    const vKeyR = vPartsR.join("|") + "|spec:" + specH;
+    if (vKeyR === visualCacheKeyR) {
+      visualNoteR = visualCacheNoteR + " (visual verdict reused: artifact set unchanged, no new reviewer dispatched)";
+      if (visualCacheIssuesR.length > 0) verdict.issues = verdict.issues.concat(visualCacheIssuesR);
+      log("Visual review: artifact set unchanged — reusing the last verdict, no new reviewer (this kills the non-converging loop of field defect 7)");
+    } else {
     phase("Visual review of image artifacts");
     const vvR = await agent("Visual review-R" + round, persona(VISUAL_EN + PROFILE_LINE, STRONG)).ask<VisualVerdict>(
       "This round's task: " + cards.title + ". Spec: the artifact spec table in the LoopMail/ToBoss.md opening mail. Open and review each image (workspace-relative paths):\n" + imageFilesR.join("\n") +
-      "\nThree questions: does the data fill the domain it should; are axes, ticks, units and legend readable and consistent with the spec; can this image support the conclusion this round claims. Return VisualVerdict (name the file and what you saw).",
+      "\nissues carry spec violations and product defects only (wrong resolution/domain, wrong palette, rendering holes or broken images, large blanks or a handful of points, facts contradicting the claimed conclusion — each citing a spec row or reproducible evidence); presentation/information limits do not go into issues — put them in the summary under an 观感限制 prefix; note \"left for the boss to judge\" where the look is the boss's own eye. Return VisualVerdict (name the file and what you saw).",
     );
     visualNoteR = vvR.summary + ((vvR.issues || []).length > 0 ? " | issues: " + (vvR.issues || []).join("; ") : "");
+    visualCacheKeyR = vKeyR; visualCacheNoteR = visualNoteR;
+    visualCacheIssuesR = (vvR.issues || []).map((x) => "[visual] " + x);
     if ((vvR.issues || []).length > 0) {
-      verdict.issues = verdict.issues.concat((vvR.issues || []).map((x) => "[visual] " + x));
+      verdict.issues = verdict.issues.concat(visualCacheIssuesR);
       log("Visual review raised issues; merged into this round's fix list: " + visualNoteR.slice(0, 300));
+    }
     }
   }
   let claimMapOk = false;
@@ -711,10 +779,11 @@ for (let round = startRound; round <= rounds; round++) {
     if (badM[0] === "__unreadable__") log("claim-map substance check not run: docs/paper_draft.md is unreadable — recorded honestly");
     else if (badM.length > 0) {
       await tester.ask<string>(
-        "claim-map substance check failed (fake-map defense):\n" + badM.slice(0, 10).join("\n") + (badM.length > 10 ? "\n... (" + badM.length + " items total)" : "") + "\nFix each: add a map row for every manuscript number (number | archived artifact | re-runnable check — never invent an artifact path); point unreachable paths at the real archived location; for numbers that are not claims at all (version numbers, section numbers, table ids) add an exemption line \"<!-- not-a-claim: <number> -->\" at the end of the map — those numbers then leave the coverage sweep. git add -A && git commit, return one sentence.",
+        "claim-map substance check failed (fake-map defense):\n" + badM.slice(0, 10).join("\n") + (badM.length > 10 ? "\n... (" + badM.length + " items total)" : "") + "\nFix each: add a map row for every manuscript number (number | archived artifact | re-runnable check — never invent an artifact path); point unreachable paths at the real archived location; for numbers that are not claims at all (version numbers, section numbers, table ids) add an exemption line \"<!-- not-a-claim: <number> -->\" at the end of the map, citing each one's source (e.g. \"version on the cover page\") — those numbers then leave the coverage sweep; a claim number is never registered as exempt — the exemption is a silence channel, not a cover-up (family audit #3). git add -A && git commit, return one sentence.",
       );
       const stillM = await auditClaimMap();
       log(stillM[0] === "__unreadable__" ? "claim-map substance recheck hit an unreadable manuscript — recorded honestly" : stillM.length === 0 ? "claim-map substance check: passed after repair" : "claim-map substance check still failing for " + stillM.length + " item(s) — recorded honestly; the manuscript disclosure follows the map's gaps");
+      if (stillM[0] !== "__unreadable__" && stillM.length > 0) claimGapNote = "the claim-map substance check still fails for " + stillM.length + " item(s) — the report must honestly disclose these claim-vs-evidence gaps, never silently.\n";
     }
   }
   let canary = false;
@@ -734,8 +803,8 @@ for (let round = startRound; round <= rounds; round++) {
     let launchErr = "";
     try {
       const r = interpIsPy3
-        ? await world.run("python3", ["Agents/selfcheck.py"], { timeoutMs: 3600000 })
-        : await world.run("python", ["Agents/selfcheck.py"], { timeoutMs: 3600000 });
+        ? await world.run("python3", [repoRoot !== "" ? repoRoot + "/Agents/selfcheck.py" : "Agents/selfcheck.py"], { timeoutMs: 3600000 })
+        : await world.run("python", [repoRoot !== "" ? repoRoot + "/Agents/selfcheck.py" : "Agents/selfcheck.py"], { timeoutMs: 3600000 });
       exitCode = r.exitCode;
       fullSelfOut = r.stdout || "";
       output = (r.stderr || r.stdout || "(no output)").slice(0, 1500);
@@ -746,7 +815,7 @@ for (let round = startRound; round <= rounds; round++) {
       if (!interpIsPy3) {
         interpIsPy3 = true;
         try {
-          const r = await world.run("python3", ["Agents/selfcheck.py"], { timeoutMs: 3600000 });
+          const r = await world.run("python3", [repoRoot !== "" ? repoRoot + "/Agents/selfcheck.py" : "Agents/selfcheck.py"], { timeoutMs: 3600000 });
           exitCode = r.exitCode;
           fullSelfOut = r.stdout || "";
           output = (r.stderr || r.stdout || "(no output)").slice(0, 1500);
@@ -803,6 +872,10 @@ for (let round = startRound; round <= rounds; round++) {
   );
   if (fixes.length > 0) {
     fixDev = await algo.ask<DevReport>("Execute fixes and extra experiments: " + fixes.join("; ") + "\nReproduce each one on this round's code first: a stale entry (older line numbers, already fixed, not reproducible now) is discarded with a note — never code against it. Return DevReport.");
+    if (round1FullMissing && (fixDev.numbers || []).some((n) => /^\s*FULL/.test(n))) {
+      round1FullMissing = false;
+      log("The round-1 FULL end-to-end number was produced during the fix phase (fixDev) — the FULL-missing ban is lifted (family audit #7: dev union fixDev is the full verdict surface; an ask must not assert facts its own fixDev contradicts)");
+    }
     if ((fixDev.dangerRequests || []).length > 0) {
       dangerLog = (dangerLog === "none" ? "" : dangerLog + "; ") + await dangerFlow(fixDev.dangerRequests);
     }
@@ -888,6 +961,7 @@ for (let round = startRound; round <= rounds; round++) {
   let pushStateR = branchR === "" ? "push skipped: detached HEAD, the target branch is indeterminate (recorded honestly)" : "push skipped: " + push0.note;
   const headPush = await HEADR();
   if (push0.target !== "" && branchR !== "" && headPush !== "") {
+    if (await pushDiverged(push0.target, branchR)) log("Push pre-check: the remote branch has diverged from local HEAD (twin-commit risk from two runs on one repository, field defect 4) — the push will fail non-fast-forward and be recorded honestly; for genuinely parallel runs agree the integration strategy with the boss first, never force");
     try {
       const p = await G(["push", push0.target, "HEAD:" + branchR], 300000);
       if (p.exitCode !== 0) log("Round " + round + " backup push exit code " + p.exitCode + ": " + maskUrl((p.stderr || p.stdout || "")).slice(0, 200) + " — recorded honestly");
@@ -924,6 +998,7 @@ for (let round = startRound; round <= rounds; round++) {
 }
 
 phase("Preliminary evaluation report");
+
 let reconGap = ""; // Rns still missing dispositions after the repair (injected into the evaluation ask, same as the engineering loop's mapGap)
 // Reconciliation coverage check (run BEFORE the evaluation ask so the gap injection takes effect): every Rn from the opening mail must carry a disposition (delivered / partial / not delivered -> evidence) in the ledger's final chapter — an evaporated Rn is a missed requirement
 {
@@ -938,6 +1013,10 @@ let reconGap = ""; // Rns still missing dispositions after the repair (injected 
     toBossF = await files.read("LoopMail/ToBoss.md");
   } catch {
     toBossF = "";
+  }
+  if (toBossF === "") {
+    log("[Reconciliation warning] LoopMail/ToBoss.md reads empty — the line-by-line reconciliation idles entirely (wrong path basis or missing file; family audit #12: silently treating a failed read as none is the same family as field defect 2's lesson) — disclosed as check-not-run");
+    reconGap = "the reconciliation check could not run (LoopMail/ToBoss.md unreadable) — the report must explicitly disclose this, never silently";
   }
   const rnUnivF = Array.from(new Set(toBossF.match(/\bR\d+\b/g) || [])).sort();
   const rnGoneF = rnUnivF.filter((rn) => !(new RegExp("\\b" + rn + "\\b[^.]{0,60}(not delivered|partial|delivered)")).test(ledgerTailF));
@@ -971,6 +1050,7 @@ let evalResult = await chief.ask<EvalReport>(
   (startRound > 1 ? "[Evidence scope] This run resumed at round " + startRound + ": the reviews and round records above cover this run's rounds only — the report must state its evidence scope explicitly, never letting the boss believe it covers all rounds.\n" : "") +
   "If the round records show round 1 had no end-to-end number, the report must state it plainly: no FULL number in round 1, the manuscript must not claim validation.\n" +
   (closingBossNoteR !== "" ? "[Boss feedback (re-read at closing, LoopMail/FromBoss.md)] these are directives the boss wrote mid-run with no round left to apply them — dispose of each or list it under decisions for the boss, never silently:\n" + closingBossNoteR + "\n" : "") +
+  (claimGapNote !== "" ? "[Mechanical check failed] " + claimGapNote + " — the report must disclose honestly, never silently.\n" : "") +
   (reconGap !== "" ? "[Mechanical check failed] " + reconGap + " — the report must honestly disclose these requirements as not delivered, never silently.\n" : "") +
   (round1FullMissing ? "[Mechanical check] Round 1 had no FULL-stage end-to-end number — the report and the manuscript must explicitly say so.\n" : "") +
   "Write the Preliminary Evaluation Report: verdict (continue/pivot/stop), expected success with reasoning that cites the experiment-mortality trend and the reader's novelty check, plus an explicit note that it is a qualitative judgement expressed numerically rather than a calibrated probability, novelty grounded in the 3 closest works, impact, points to watch if continued (each annotated with the evidence scope of the claim it concerns — datasets and conditions), " +
@@ -1005,6 +1085,7 @@ if (askedQ > 0 && (!evalResult.questionAnswers || evalResult.questionAnswers.len
 let finalPushR = push0.target === "" ? "push skipped: " + push0.note : (branchR === "" ? "not pushed: detached HEAD, the target branch is indeterminate (recorded honestly)" : "not pushed");
 if (push0.target !== "" && branchR !== "") {
   const headFinalR = await HEADR();
+  if (await pushDiverged(push0.target, branchR)) log("Push pre-check: the remote branch has diverged from local HEAD (twin-commit risk, cross-loop audit F1) — the push will fail non-fast-forward and be recorded honestly; never force");
   try {
     const p = await G(["push", push0.target, "HEAD:" + branchR], 300000);
     if (p.exitCode === 0) {

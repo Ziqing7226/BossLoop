@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 鲁棒工程循环（v0.5.9）：把一句开发要求变成经过冷启动对抗验证的实现。总工建要求台账（老板原话逐字）并承诺 N 轮（老板可锁定）；每轮开发+文档单笔提交 → 冷启动门禁（diff 审查、鲁棒性测试、canary、零警告构建、上一轮 remote CI 结转）→ 先复现再返修（误诊须证据反驳）、amend 并入本轮提交（初级 3 次未解升级高级工程师，10 次未过打断上报）；全绿才推送约定 remote（默认 GitCoffer，append-only 永不 force）；账本断点续跑；破坏性操作申报-裁决-执行三段核验、绝不转交用户；模型分档 tiered/uniform。
+description: 鲁棒工程循环（v0.6.0）：把一句开发要求变成经过冷启动对抗验证的实现。总工建要求台账（老板原话逐字）并承诺 N 轮（老板可锁定）；每轮开发+文档单笔提交 → 冷启动门禁（diff 审查、鲁棒性测试、canary、零警告构建、上一轮 remote CI 结转）→ 先复现再返修（误诊须证据反驳）、amend 并入本轮提交（初级 3 次未解升级高级工程师，10 次未过打断上报）；全绿才推送约定 remote（默认 GitCoffer，append-only 永不 force）；账本断点续跑；破坏性操作申报-裁决-执行三段核验、绝不转交用户；模型分档 tiered/uniform。
 args:
   requirement:
     type: string
@@ -181,7 +181,7 @@ const CHIEF_ZH = [
   "任务卡凡涉及老板要求，必须逐字内嵌 Agents/requirements.md 的台账原句（带 Rn 编号），禁止凭记忆转述：压缩短语只能作标题，逐字原文随卡携带；转述与原文的实词必须逐个保真——名词（操作对象）、动词（操作）、量词、否定词、数字，任何一个变了即失真，把握不住就全文照抄。台账原话中的关键实词是协议词：任务卡、开发报告、测试名与断言注释、提交信息、文档一律沿用同词，不得同义替换。",
   "奥卡姆剃刀：你的自主决定天然倾向「加东西」（加模块、加检查、加配置）——每个增加复杂度的决定必须写明预期价值，否则默认不做；凡是增加复杂度的自主决定，不能只写账本，必须进《最终简报》的自主决定清单。",
   "误诊仲裁：算法工程师与测试工程师就某条问题争执时，你只依据证据仲裁；仍不能定 → 重大问题，打断上报老板。",
-  "接手先读账本（Agents/ledger.md）：断点续跑，不重做已完成轮；账本同时记录每轮 baseline 哈希与已推送 SHA；被中断或取消的片段恢复时先做闭合复查——丢弃范围内的每项在途工作要么核实仍在、要么在账本记明放弃，先和解再前进，绝不静默跳过。",
+  "接手先读账本（Agents/ledger.md）：断点续跑，不重做已完成轮；账本同时记录每轮 baseline 哈希与已推送 SHA；被中断或取消的片段恢复时先做闭合复查——丢弃范围内的每项在途工作要么核实仍在、要么在账本记明放弃，先和解再前进，绝不静默跳过；账本危险操作行标有「执行确认：存在未确认项」的条目，闭合复查时逐条核实效果是否落盘（写法漂移不算未执行，跨循环审计 F6：中间态的跨运行补救路径）。",
   "git 写操作权限：只执行问句明示的 git add/commit/amend；git push 由编排器统一执行并核验——你在任何时刻都不执行 push，也不执行 reset/rebase/tag 等其它写仓库的 git 操作。",
   "老板反馈（FromBoss.md）：编排器每轮发卡前会附上 LoopMail/FromBoss.md 的当前内容（老板运行中下达的指令，可能为空）——逐条落实到任务卡并把应用情况记入账本；它承载运行中指挥，不替代要求台账；与老板此前要求不一致时，以老板最新指令为准并如实记录。",
   "诚实第一：汇报只引用命令输出与退出码；说不知道；矛盾上报而不是绕过。",
@@ -212,7 +212,7 @@ const SENIOR_ZH = [
 ].join("\n");
 
 const VISUAL_ZH = [
-  "你是视觉审阅员：只看图，不看代码，也不相信任何自述。用工具打开指定图像，逐张回答三问：①数据是否铺满应定义域（有无大片空白、是否只有极少数据点）；②坐标轴、刻度、图例是否可读且与规格表一致；③这张图能否支撑本轮所声称的结论。",
+  "你是视觉审阅员：只看图，不看代码，也不相信任何自述。用工具打开指定图像，逐张核查。issues 只收「规格违反/产物缺陷」，每条必须引用规格表条目或可复现证据：分辨率/定义域错、色板错、渲染空洞或坏图、大片空白或极少数据点（可修的渲染缺陷）、与所声称结论矛盾的事实错误。「观感/信息量限制」不算 issue：规格未要求的元素缺席、首帧看不出算法差异（阴性如实记录本身就是证据）、信息量对结论支撑弱——这些写进 summary 并加「观感限制：」前缀如实呈现；观感好坏若属老板亲验范围，summary 注明「留老板亲验」——你的职责是如实呈现，不是代替老板裁决观感（实测缺陷 7：把产物固有信息量属性当门禁项＝不可收敛循环）。",
   "对照 Agents/requirements.md 的产物规格表判断「应该是什么样」，而不是凭好看与否。只读，绝不修改任何文件；打不开的图如实说明。",
   "全程中文。",
 ].join("\n");
@@ -253,9 +253,37 @@ const tiered = String(args.models ?? "tiered").toLowerCase() !== "uniform";
 const STRONG = "GLM-5.3" as const;
 const CHEAP = "GLM-5.3-Flash" as const;
 type ModelName = typeof STRONG | typeof CHEAP;
+let repoDiscipline = ""; // 仓库根纪律（实测缺陷 2：工作区根≠仓库根时 git 与文件读写系统性失效）——repoRoot 解析后填充，随 persona 注入所有角色
 const persona = (system: string, m: ModelName): { system: string; model?: ModelName } =>
-  tiered ? { system, model: m } : { system };
+  tiered ? { system: system + repoDiscipline, model: m } : { system: system + repoDiscipline };
 
+/** 命令归一与命中（实测缺陷 1：路径分隔符/引号/空白漂移把已执行毒化成永久红）——命中=含批准写法原文或其归一形；批准写法之外的「原申报」不参与命中（approve-with-change 只认安全写法，§4.6）。归一等价类是粗粒度（引号剥离可跨词边界、正反斜杠在 POSIX 转义场景语义不同），includes 为子串匹配——边界误命中方向 fail-open，由终裁的落盘核实兜底（终审 #5） */
+const normCmd = (s: string): string => s.replace(/[\/\\]+/g, "/").replace(/["']/g, "").replace(/\s+/g, " ").trim();
+const execHit = (report: string, form: string): boolean => report.includes(form) || normCmd(report).includes(normCmd(form));
+/** 内容哈希（审计 F9）：先按工作区帧、再按仓库根帧——产物路径来自两个帧（测试员申报=工作区帧、git 输出=仓库根帧），两帧都试，分根部署下必有一帧命中，绝不静默退化为纯路径键 */
+const hashObj = async (p: string): Promise<string> => {
+  try {
+    const w = await world.run("git", ["hash-object", p], { timeoutMs: 60000 });
+    if ((w.stdout || "").trim() !== "") return w.stdout.trim();
+  } catch {
+    /* 工作区帧失败：回落仓库根帧 */
+  }
+  const r = await G(["hash-object", p], 60000);
+  return (r.stdout || "").trim();
+};
+/** 推送分叉预检（实测缺陷 4：同仓库并行运行的孪生提交使推送非快进积压）——远端分支不是本地 HEAD 祖先即分叉；探测失败不阻塞（推送本身仍 fail-closed） */
+const pushDiverged = async (target: string, branch: string): Promise<boolean> => {
+  if (target === "" || branch === "") return false;
+  try {
+    const lr = await G(["ls-remote", target, branch], 60000);
+    const sha = ((lr.stdout || "").trim().split(/\s+/)[0]) || "";
+    if (sha === "") return false; // 远端无此分支：首次推送
+    const mb = await G(["merge-base", "--is-ancestor", sha, "HEAD"], 60000);
+    return mb.exitCode !== 0;
+  } catch {
+    return false;
+  }
+};
 /** 解析约定推送目标：返回 {target(名字或URL，空=跳过推送), note} */
 async function resolvePushTarget(): Promise<{ target: string; note: string }> {
   if (remoteArg.toLowerCase() === "none") return { target: "", note: "老板已设 remote=none：全程不推送" };
@@ -323,6 +351,7 @@ try {
 } catch {
   ledger = "";
 }
+log("启动路径自检：Agents/ledger.md 试读" + (ledger !== "" ? "命中（" + ledger.length + " 字符）" : "为空——首次运行属正常；若库中应有账本，说明运行根/仓库根的路径基准有误，须立即核查（实测缺陷 2 部署教训：路径基准错表现为假红而非显式报错）"));
 if (ledger === "") {
   try {
     const ag = await files.glob("Agents/*");
@@ -368,6 +397,8 @@ try {
 } catch {
   repoRoot = "";
 }
+if (repoRoot !== "") repoDiscipline = "\n【仓库根纪律】本会话的工作目录未必是仓库根：开发仓库根是 " + repoRoot + "。git 命令一律写成 git -C \"" + repoRoot + "\" <子命令>（add/commit/log/reflog/status 全部如此）；读写仓库内文件一律用绝对路径（" + repoRoot + "/ 前缀）；绝不读写工作目录下的同名散落副本；不确定时先 git -C \"" + repoRoot + "\" status 核实。";
+chief = agent("总工程师", persona(CHIEF_ZH + PROFILE_LINE, STRONG)); // pre-loop 实例重建：repoDiscipline 已填充——首建发生在解析前，其 persona 冻结无纪律（终审 #1）
 /** 编排器统一 git 入口：显式 -C 仓库根——工作区根≠仓库根时不再静默失效（实测缺陷） */
 const G = (gitArgs: string[], timeoutMs = 120000): Promise<WorldRunResult> =>
   world.run("git", repoRoot !== "" ? ["-C", repoRoot, ...gitArgs] : gitArgs, { timeoutMs });
@@ -404,7 +435,7 @@ try {
 const commit0 = await chief.ask<Commitment>(
   "老板的开发要求（原话逐字）：" + requirement + "\n" + (focus ? "老板本次关注点：" + focus + "\n" : "") +
   (bossDirectives0 ? "【老板反馈 LoopMail/FromBoss.md】（老板下达的指令，逐条落实）：\n" + bossDirectives0 + "\n" : "") +
-  (repoRoot ? "当前仓库根：" + repoRoot + "（与账本记录不符时如实注明）。\n" : "") +
+  (repoRoot ? "当前仓库根：" + repoRoot + "（与账本记录不符时如实注明；工作目录未必是仓库根——git 命令一律 git -C \"" + repoRoot + "\"，仓库内文件读写用绝对路径）。\n" : "") +
   (repoWarn !== "" ? "【环境警告】" + repoWarn + "——本轮照常推进，但推送/提交核验可能不可用；在账本记明。\n" : "") +
   (legacyLayout ? "【迁移】检测到旧版布局：把工作文件归位到新布局（目标位置已是新布局的项跳过）：docs/workflow/ 下的 ledger.md、requirements.md、requirement_map.md 与仓库根的 selfcheck.py 若存在则 git mv 进 Agents/，docs/boss_directives.md→LoopMail/FromBoss.md、docs/brief.md→LoopMail/ToBoss.md（git mv）；final_brief.md 历史简报并入 ToBoss 邮件表述后本体迁 Agents/；FromBoss.md/ToBoss.md 头注缺失时补一行 LoopMail 协议头注（FromBoss 正序追加/绝不删改老板写下的内容；ToBoss 新邮件插头部/倒序追加/旧邮件永不删改/四禁写作纪律），git add -A && git commit 后再续跑。\n" : "") +
   (ledger ? "已有账本（头部目录+末尾详情，续跑依据）：\n" + (ledger.length > 6000 ? ledger.slice(0, 1600) + "\n……（中间省略）……\n" + ledger.slice(-3200) : ledger) + "\n若显示本要求已完成 N 轮，resumeFrom = N（从第 N+1 轮续跑，不重做）；否则 0。\n" : "无账本：resumeFrom = 0。\n") +
@@ -431,6 +462,20 @@ if (legacyLayout) {
     migratedLedger = "";
   }
   if (migratedLedger === "") await chief.ask<string>("迁移复核未通过：Agents/ledger.md 读取为空——旧布局迁移（git mv 归位）可能未完成或未提交。请补全迁移并 git add -A && git commit，返回一句话；确无账本可迁的如实说明。");
+  try {
+    migratedLedger = await files.read("Agents/ledger.md");
+  } catch {
+    migratedLedger = "";
+  }
+  let mailsOk = true;
+  for (const f of ["LoopMail/ToBoss.md", "LoopMail/FromBoss.md"]) {
+    try {
+      if ((await files.read(f)).trim() === "") mailsOk = false;
+    } catch {
+      mailsOk = false;
+    }
+  }
+  log(migratedLedger !== "" && mailsOk ? "迁移复核：账本与 LoopMail 两文件均已落位" : "迁移复核仍有缺项（账本" + (migratedLedger !== "" ? "在" : "缺") + "、LoopMail 两文件" + (mailsOk ? "在" : "缺") + "）——如实记录，运行继续但迁移可能不完整（实测家族：半迁移静默进运行）");
 }
 if (commit0.blocked) {
   phase("重大问题打断");
@@ -520,6 +565,10 @@ let plan = String(commit0.roundsOutline || "");
 let finalVerdict: FinalReport | null = null;
 let interrupted = false;
 let ungatedHead = false; // 门禁未过即打断时 HEAD 含未过门禁的提交——最终简报不推送
+let dangerRedemptionUsed = false; // 赎回通道整个运行至多一次（实测缺陷 1：防滥用）
+let visualCacheKey = ""; // 视觉结论记忆化（实测缺陷 7：同一产物集合被反复全额重审构成不可收敛循环）——键含产物内容与规格版本
+let visualCacheOk = true;
+let visualCacheNote = "";
 let branch = "main";
 try {
   const b = await G(["rev-parse", "--abbrev-ref", "HEAD"], 60000);
@@ -557,8 +606,10 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       "已按 blocked 打断（第 " + round + " 轮开工前）。补全 LoopMail/ToBoss.md 头部的打断加急邮件，git add -A && git commit，返回一句话摘要。",
     );
     if (push0.target !== "" && branch !== "") {
-      // 中断报告提交由编排器推送（树中只有已过门禁的工作与本次文档提交）
-      try {
+      // 中断报告提交由编排器推送（树中只有已过门禁的工作与本次文档提交）；分叉预检（跨循环审计 F1）+ 续跑首轮不推送（F7：HEAD 可能含上轮未过门禁的遗留提交）
+      if (await pushDiverged(push0.target, branch)) log("推送预检：远端分支与本地 HEAD 分叉（同仓库并行运行的孪生提交风险）——推送将按非快进失败并如实记录；确需并行运行，先与老板确认整合策略，绝不 force");
+      if (startRound > 1 && round === startRound) log("续跑首轮即打断：HEAD 可能含上轮未过门禁的遗留提交——打断邮件不推送，如实记录（老板重跑时由编排器统一收口）");
+      else try {
         const pi = await G(["push", push0.target, "HEAD:" + branch], 300000);
         if (pi.exitCode !== 0) log("中断报告推送退出码 " + pi.exitCode + "——如实记录");
       } catch {
@@ -615,9 +666,9 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     const noRn = (cards.cards || []).filter((c) => !/\bR\d+\b/.test(c));
     let paraphrased = (cards.cards || []).filter((c) => /\bR\d+\b/.test(c) && !verbatimOk(c));
     if (noRn.length > 0) log("第 " + round + " 轮有 " + noRn.length + " 张卡无 Rn 标注——违反发卡纪律（每卡可追溯到要求条目），如实记录");
-    if (paraphrased.length > 0) {
+    if (noRn.length + paraphrased.length > 0) {
       cards = await chief.ask<RoundCards>(
-        "卡面-台账对拍未通过（转述失真防线，句级）：以下卡引用了 Rn，但没有完整内嵌台账中该 Rn 的登记行——卡面转述可能已改变实词（对象/操作/量词/否定词/数字）：\n" + paraphrased.map((c) => "- " + c.slice(0, 80)).join("\n") + "\n请重写这些卡：把 Agents/requirements.md 中该 Rn 的登记行逐字复制进卡面（含 Rn 前缀；压缩短语只能作标题），其余字段照旧返回（不得新增 blocked/done）；若是台账漏记了原话，先补台账再返回。返回 RoundCards。",
+        "卡面-台账对拍未通过（转述失真防线，句级）：" + (paraphrased.length > 0 ? "以下卡引用了 Rn，但没有完整内嵌台账中该 Rn 的登记行——卡面转述可能已改变实词（对象/操作/量词/否定词/数字）：\n" + paraphrased.map((c) => "- " + c.slice(0, 80)).join("\n") + "\n" : "") + (noRn.length > 0 ? "以下卡完全无 Rn 标注——无 Rn 即绕过逐字对拍（审计 F4），每卡必须可追溯到要求条目：\n" + noRn.map((c) => "- " + c.slice(0, 80)).join("\n") + "\n" : "") + "请重写上述卡：把 Agents/requirements.md 中该 Rn 的登记行逐字复制进卡面（含 Rn 前缀；压缩短语只能作标题），其余字段照旧返回（不得新增 blocked/done）；确属与要求条目无关的基础设施卡，改写为引用其服务的要求条目并说明关系，确实孤立的写明「无对应 Rn：理由」如实呈现；若是台账漏记了原话，先补台账再返回。返回 RoundCards。",
       );
       paraphrased = (cards.cards || []).filter((c) => /\bR\d+\b/.test(c) && !verbatimOk(c));
       log(paraphrased.length === 0 ? "卡面-台账对拍：重写后通过" : "卡面-台账对拍重写后仍缺 " + paraphrased.length + " 张——如实记录并继续，下游以台账原话为准绳");
@@ -649,14 +700,14 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     dangerLog = review.decisions.map((d) => d.command + " → " + d.decision + (d.safeForm ? "（改：" + d.safeForm + "）" : "") + "：" + d.reason).join("；");
     log("第 " + round + " 轮危险操作裁决：" + dangerLog.slice(0, 300));
     const ok = review.decisions.filter((d) => d.decision !== "reject");
-    approvedDanger = ok.map((d) => (d.decision === "approve-with-change" ? (d.safeForm || "").trim() : d.command));
-    for (const d of ok) dangerTrail.push({ declared: d.command, decision: d.decision, form: d.safeForm || d.command, executed: "待执行确认" });
+    approvedDanger = ok.map((d) => (d.decision === "approve-with-change" ? (d.safeForm || "").trim() : (d.command || "").trim())); // 两侧同 trim：登记 form 与白名单的等价性不得被空白漂移破坏（审计 F1——毒化死锁的复发点）
+    for (const d of ok) dangerTrail.push({ declared: d.command, decision: d.decision, form: (d.safeForm || d.command).trim(), executed: "待执行确认" });
     if (ok.length > 0) {
       phase("执行已批准的危险操作");
       const execReport = await algo.ask<string>(dangerExecAsk(ok));
       for (const e of dangerTrail) {
         if (e.executed !== "待执行确认" && !e.executed.startsWith("未确认：")) continue;
-        const hit = execReport.includes(e.form);
+        const hit = execHit(execReport, e.form);
         e.executed = hit ? e.form : "未确认：执行回报未含批准写法";
         if (!hit) log("危险操作执行确认缺失：" + e.declared + "——待复核（返修轮会再给一次逐字引用机会），计入门禁");
       }
@@ -698,11 +749,11 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     const tester = agent("测试工程师-R" + round + "-A" + attempt, persona(TEST_ZH + PROFILE_LINE, CHEAP)); // 一次性实例：上下文有界、证据随任务卡走（实测：持久实例在廉价档 65K 窗口上风暴）
     verdict = await tester.ask<TestVerdict>(
       (attempt === 1
-        ? "冷启动上岗。baseline 提交：" + (baseline || "（空树，本仓库首提交）") + "。本轮 diff 体量：" + sizeNote + "。先读 Agents/requirements.md 的四节（逐句清点/要求与验收标准/产物规格表/待答问题），再审查 " + diffHint + " 与代码库本身：diff 审查、鲁棒性测试、Agents/selfcheck.py（严格构建/全量测试+鲁棒性/本地 CI 等价 + canary 标记 + 从规格表派生的内容断言）、更新 Agents/requirement_map.md 验证列；这些测试设施的改动 git add -A && git commit --amend --no-edit 并入本轮提交（测试套件属于本轮交付）。"
+        ? "冷启动上岗。baseline 提交：" + (baseline || "（空树，本仓库首提交）") + "。本轮 diff 体量：" + sizeNote + "。先读 Agents/requirements.md 的四节（逐句清点/要求与验收标准/产物规格表/待答问题），再审查 " + diffHint + " 与代码库本身：diff 审查、鲁棒性测试、Agents/selfcheck.py（严格构建/全量测试+鲁棒性/本地 CI 等价 + canary 标记并运行时打印 CANARY: expected-FAIL observed-FAIL 行 + 从规格表派生的内容断言）、更新 Agents/requirement_map.md 验证列；这些测试设施的改动 git add -A && git commit --amend --no-edit 并入本轮提交（测试套件属于本轮交付）。"
         : (lastFix
             ? "算法工程师已返修（amend 并入本轮提交），其返修申报（只作对账线索，结论仍以你重跑的检查为准）：" + JSON.stringify(lastFix) + "\n"
-            : "上一轮未过的机械项（Agents/selfcheck.py/requirement_map.md）已发回你补齐，工程侧无返修。\n") +
-      "逐条复检：修复项重跑原始失败检查确认关闭；反驳项只依据证据仲裁——反驳成立则撤回问题，不成立则保留并说明。") +
+            : "上一轮门禁在机械项上未过，上一轮已按发回补齐流程处理过一轮（上一轮可能属瞬态失败或同形空转）。\n") +
+      "逐条复检：修复项重跑原始失败检查确认关闭；反驳项只依据证据仲裁——反驳成立则撤回问题，不成立则保留并说明。若你复检全绿且确无缺陷可指，如实返回 passed=true 并在 coverage 注明「复检全绿、无补齐项」——复检全绿本身就是放行依据，绝不因「没有修复可确认」而返回 passed=false，绝不虚构修复。") +
       ((cards.remoteCiIssues || []).length > 0 ? "\n另：上一轮 remote CI 必修项已由算法工程师处理：" + cards.remoteCiIssues.join("; ") : "") +
       (approvedDanger.length > 0
         ? "\n本轮经裁决批准的危险操作，只允许这些写法：" + approvedDanger.join("；")
@@ -726,8 +777,8 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     if (canary) {
       try {
         const r = interpIsPy3
-          ? await world.run("python3", ["Agents/selfcheck.py"], { timeoutMs: 3600000 })
-          : await world.run("python", ["Agents/selfcheck.py"], { timeoutMs: 3600000 });
+          ? await world.run("python3", [repoRoot !== "" ? repoRoot + "/Agents/selfcheck.py" : "Agents/selfcheck.py"], { timeoutMs: 3600000 })
+          : await world.run("python", [repoRoot !== "" ? repoRoot + "/Agents/selfcheck.py" : "Agents/selfcheck.py"], { timeoutMs: 3600000 });
         exitCode = r.exitCode;
         fullSelfOut = r.stdout || "";
         output = (r.stderr || r.stdout || "(no output)").slice(0, 1500);
@@ -738,7 +789,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
         if (!interpIsPy3) {
           interpIsPy3 = true;
           try {
-            const r = await world.run("python3", ["Agents/selfcheck.py"], { timeoutMs: 3600000 });
+            const r = await world.run("python3", [repoRoot !== "" ? repoRoot + "/Agents/selfcheck.py" : "Agents/selfcheck.py"], { timeoutMs: 3600000 });
             exitCode = r.exitCode;
             fullSelfOut = r.stdout || "";
             output = (r.stderr || r.stdout || "(no output)").slice(0, 1500);
@@ -755,17 +806,41 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     canaryRun = /CANARY:\s*expected-FAIL\W*observed-FAIL/i.test(fullSelfOut);
     if (canary && !canaryRun) log("门禁拦截：selfcheck 未报告 canary 执行结果（缺 CANARY: expected-FAIL observed-FAIL 行）——金丝雀必须真实运行并观察到失败");
     // 机械核查：每条已批准的危险操作必须申报、有裁决、按批准写法执行（三段对得上才算过）；执行写法必须与批准写法逐字一致，转述不算执行一致
-    let dangerConsistent = dangerTrail.every((e) => e.executed !== "待执行确认" && !e.executed.startsWith("未确认") && approvedDanger.includes(e.executed));
-    if (!dangerConsistent && dangerTrail.some((e) => e.executed.startsWith("未确认"))) {
-      // 粘滞解药（实测缺陷：一次未确认曾被当成终态，门禁空转 10 轮）：给执行者一次逐字引用机会，引用即闭环
+    const trailGreen = (): boolean => dangerTrail.every((e) => e.executed !== "待执行确认" && !e.executed.startsWith("未确认") && approvedDanger.includes(e.executed));
+    let dangerConsistent = trailGreen();
+    const pendTrail = dangerTrail.filter((e) => e.executed === "待执行确认" || e.executed.startsWith("未确认"));
+    if (!dangerConsistent && pendTrail.length > 0) {
+      // 粘滞解药（实测缺陷 1/5：写法漂移把已执行毒化成永久红；「待执行确认」态不触发任何补救＝第二粘滞）：复核附逐条原文，命中判定含归一形
       const reQuote = await algo.ask<string>(
-        "危险操作一致性复核：你此前申报执行的已批准危险操作中，有 " + dangerTrail.filter((e) => e.executed.startsWith("未确认")).length + " 条的执行回报未含逐字原文。先核实它们确已执行（git log/reflog），再在回报中逐字引用你实际执行的命令原文（照抄你当初执行的形式，不得转述——本提示不提供原文，凭你自己的执行记录引用）；确未执行的如实说明。返回一句话。",
+        "危险操作一致性复核：以下 " + pendTrail.length + " 条已批准危险操作的执行回报未含批准写法原文：\n" + pendTrail.map((e) => "- 批准写法：" + e.form + "／原申报：" + e.declared).join("\n") + "\n先核实它们确已执行（git log/reflog），再在回报中逐字引用你实际执行的命令原文（逐字照抄上列每条的「批准写法」，不得转述；引用原申报不算命中——§4.6 只认批准写法）；确未执行的：批准仍然有效，按上列批准写法补执行（先备份、失败即停——与首次执行同条件），并在回报中逐字引用实际执行的命令原文（审计 F3：诚实路径必须有活路）；确实无法补执行的如实说明。返回一句话。",
       );
       for (const e of dangerTrail) {
-        if (!e.executed.startsWith("未确认")) continue;
-        if (reQuote.includes(e.form)) e.executed = e.form;
+        if (e.executed !== "待执行确认" && !e.executed.startsWith("未确认")) continue;
+        if (execHit(reQuote, e.form)) e.executed = e.form;
       }
-      dangerConsistent = dangerTrail.every((e) => e.executed !== "待执行确认" && !e.executed.startsWith("未确认") && approvedDanger.includes(e.executed));
+      dangerConsistent = trailGreen();
+    }
+    if (!dangerConsistent && !dangerRedemptionUsed) {
+      // 赎回通道（实测缺陷 1：单模判定把写法漂移当成未执行，10 次复核空转烧尽）：独立强档实例只读核实终裁一次——追认即闭环，否决即如实计入门禁失败；配额在核实成功返回后消耗，复核已闭环的条目重过滤后不再送终裁（终审 #6）
+      const pend2 = dangerTrail.filter((e) => e.executed === "待执行确认" || e.executed.startsWith("未确认"));
+      log("危险操作一致性复核后仍不一致——启用独立终裁（只读核实，整个运行至多一次）");
+      const judgeAskT =
+        "独立终裁（只读核实，绝不修改任何文件）：以下危险操作登记的执行回报与批准写法不一致。逐条用 git log/reflog 与文件系统实测核实，把三种情形区分开——确已执行且实际执行与批准写法（或其归一等价形）一致且效果在盘＝true；执行过但跑的不是批准写法（或其归一等价形）＝false，绝不把不合规的执行洗白为批准写法；确实未执行＝false：\n" + pend2.map((e, i) => (i + 1) + ". 原申报：" + e.declared + "／批准写法：" + e.form + "／当前登记：" + e.executed).join("\n") + "\n返回 JSON：{\"confirmed\": [true/false, …]}（与上列条目一一对应）。";
+      let judgeT = await agent("危险操作终裁-R" + round, persona(ALGO_ZH + SENIOR_ZH + PROFILE_LINE, STRONG)).ask<{ confirmed: boolean[] }>(judgeAskT);
+      if (!Array.isArray(judgeT.confirmed) || judgeT.confirmed.length !== pend2.length) {
+        log("终裁返回畸形（confirmed 缺失或与条目数不匹配）——重问一次（畸形响应不消耗赎回配额，审计 F2）");
+        judgeT = await agent("危险操作终裁复问-R" + round, persona(ALGO_ZH + SENIOR_ZH + PROFILE_LINE, STRONG)).ask<{ confirmed: boolean[] }>(judgeAskT);
+      }
+      dangerRedemptionUsed = true;
+      if (!Array.isArray(judgeT.confirmed) || judgeT.confirmed.length !== pend2.length) {
+        log("终裁重问仍畸形——按全部否决如实处理（配额已消耗，审计 F2）");
+        judgeT = { confirmed: pend2.map(() => false) };
+      }
+      pend2.forEach((e, i) => {
+        if ((judgeT.confirmed || [])[i]) { e.executed = e.form; log("独立终裁追认（批准写法等价且效果在盘）：" + e.declared); }
+        else log("独立终裁否决——如实计入门禁失败：" + e.declared);
+      });
+      dangerConsistent = trailGreen();
     }
     if (!commitOk) log("门禁拦截：本轮提交未落地（commitOk=false）——按未过处理");
     if (verdict.passed && (verdict.findings || []).length > 0) log("门禁拦截：测试员 passed=true 但仍带 " + (verdict.findings || []).length + " 条 findings——按未过处理");
@@ -804,14 +879,27 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     let visualOk = imageFiles.length === 0;
     visualNote = imageFiles.length === 0 ? (imgDetectOk ? "本轮无图像产物：不适用" : "图像产物检测失败——按无图处理，如实记录") : "尚未审阅";
     if (mechGreen && imageFiles.length > 0) {
+      const vParts: string[] = [];
+      for (const pV of imageFiles.slice().sort()) {
+        try { const hV = await hashObj(pV); vParts.push(pV + ":" + (hV.slice(0, 12) || "?")); } catch { vParts.push(pV); } // 双帧哈希（审计 F9）
+      }
+      try { const hSpec = await hashObj("Agents/requirements.md"); vParts.push("spec:" + (hSpec.slice(0, 12) || "?")); } catch { /* 规格键缺失：仅按产物内容 */ }
+      const vKey = vParts.join("|");
+      if (vKey === visualCacheKey) {
+        visualOk = visualCacheOk;
+        visualNote = visualCacheNote + "（视觉结论复用：产物集合与规格未变，未重派审阅）";
+        log("视觉审阅：产物集合与规格未变——复用上次结论，不重派审阅员（实测缺陷 7 的不可收敛循环由此消除）");
+      } else {
       phase("视觉审阅图像产物");
       const vv = await agent("视觉审阅-R" + round + "-A" + attempt, persona(VISUAL_ZH + PROFILE_LINE, STRONG)).ask<VisualVerdict>(
-        "本轮任务：" + cards.title + "。规格见 Agents/requirements.md 的产物规格表。逐张打开并审阅以下图像（相对工作区路径）：\n" + imageFiles.join("\n") +
-        "\n三问：数据是否铺满应定义域（有无大片空白/是否只有极少数据点）；坐标轴、刻度、图例是否可读且与规格一致；这张图能否支撑本轮所声称的结论。返回 VisualVerdict（问题写清文件名与你看到的现象）。",
+        "本轮任务：" + cards.title + "。规格见 Agents/requirements.md 的产物规格表。逐张打开并审阅以下图像（仓库内相对路径——按仓库根纪律用绝对路径打开）：\n" + imageFiles.join("\n") +
+        "\nissues 只收规格违反/产物缺陷（分辨率或定义域错、色板错、渲染空洞或坏图、大片空白或极少数据点、与所声称结论矛盾的事实错误——每条引用规格表条目或可复现证据）；观感/信息量限制（规格未要求的元素缺席、首帧看不出差异、支撑弱）不进 issues，写进 summary 并加「观感限制：」前缀；观感属老板亲验范围的注明「留老板亲验」。返回 VisualVerdict（问题写清文件名与你看到的现象）。",
       );
       visualNote = vv.summary + ((vv.issues || []).length > 0 ? "｜问题：" + (vv.issues || []).join("；") : "");
       visualOk = (vv.issues || []).length === 0;
+      visualCacheKey = vKey; visualCacheOk = visualOk; visualCacheNote = visualNote;
       if (!visualOk) log("视觉审阅未通过：" + visualNote.slice(0, 300));
+      }
     }
     if (mechGreen && visualOk) {
       gate = "pass（第 " + attempt + " 次尝试" + (interpIsPy3 ? "，python3" : "") + (imageFiles.length > 0 ? "，含视觉审阅" : "") + "）";
@@ -825,7 +913,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       // 纯机械项失败（无问题清单）：Agents/selfcheck.py 与映射表是测试工程师的设施，发回其所有者补齐——不占工程师生级通道
       lastFix = null;
       await tester.ask<string>(
-        "机械门禁未达标（canary=" + (canary ? (canaryRun ? "有（已报告）" : "有（缺 CANARY 行）") : "无") + "；requirement_map=" + (mapOk ? "有效" : "缺失") + "；selfcheck exit=" + (canary ? exitCode : "未运行") + "），而你的 verdict 没有问题清单。Agents/selfcheck.py 与 requirement_map.md 归你所有：补齐或修复它们，改动 git add -A && git commit --amend --no-edit 并入本轮提交；若 selfcheck 暴露的是实现缺陷，在下一次 verdict 中作为问题提出（附复现证据）。返回一句话。",
+        "机械门禁未达标（verdict.passed=" + verdict.passed + "；commitOk=" + commitOk + "；危险操作三段一致=" + (dangerConsistent ? "是" : "否") + "；canary=" + (canary ? (canaryRun ? "有（已报告）" : "有（缺 CANARY 行）") : "无") + "；requirement_map=" + (mapOk ? "有效" : "缺失") + "；selfcheck exit=" + (canary ? exitCode : "未运行") + "），而你的 verdict 没有问题清单。Agents/selfcheck.py 与 requirement_map.md 归你所有：补齐或修复它们，改动 git add -A && git commit --amend --no-edit 并入本轮提交；若 selfcheck 暴露的是实现缺陷，在下一次 verdict 中作为问题提出（附复现证据）。若实测它们无缺陷，绝不虚构修复——直接返回「复检全绿、无补齐项」，下一轮复检全绿即放行（实测缺陷 6：要求确认不存在的修复＝让诚实代理卡死门禁）。返回一句话。",
       );
       headA = await HEAD0();
       continue;
@@ -838,7 +926,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     const fix = await fixer.ask<FixOutcome>(
       (juniorAsk ? "" : "【升级】初级工程师已 3 次迭代未解决以下问题。你是高级工程师（强模型档）：先定位根因，一次修对，同样 amend 并入本轮提交。\n") +
       "第 " + attempt + " 次门禁未过：" + (verdict.passed ? "（自检通过但 selfcheck/映射表未达标）" : JSON.stringify(verdict.findings)) +
-      "\n机械状态：canary=" + (canary ? (canaryRun ? "有（已报告）" : "有（缺 CANARY 行）") : "无") + "；requirement_map=" + (mapOk ? "有效" : "缺失") + "；危险操作三段一致=" + (dangerConsistent ? "是" : "否") + "；selfcheck exit=" + (canary ? exitCode : "未运行") +
+      "\n机械状态（全部判定项，缺项即同形空转的根因）：verdict.passed=" + verdict.passed + "；commitOk=" + commitOk + "；canary=" + (canary ? (canaryRun ? "有（已报告）" : "有（缺 CANARY 行）") : "无") + "；requirement_map=" + (mapOk ? "有效" : "缺失") + "；危险操作三段一致=" + (dangerConsistent ? "是" : "否") + "；selfcheck exit=" + (canary ? exitCode : "未运行") +
       (imageFiles.length > 0 ? "；图像产物：" + imageFiles.join("、") + "；视觉审阅=" + (visualOk ? "通过" : "未通过——" + visualNote) : "") +
       "\n输出摘录：\n" + output +
       "\n先逐条复现：确认→修复；误诊→证据反驳（FixOutcome.rebutted）；过期条目（引用旧版本行号、已被修复、在本轮代码上复现不了）直接丢弃并在反驳中注明「过期」，绝不据此改代码。然后 git add -A && git commit --amend --no-edit 并入本轮提交。绝不改写 baseline 之下的历史。",
@@ -848,15 +936,15 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       phase("危险操作审核");
       const dr = await adjudicateDanger(fix.dangerRequests, juniorAsk ? "算法工程师" : "高级工程师", juniorAsk ? "廉价模型档" : "强模型档", !juniorAsk);
       const ok2 = dr.decisions.filter((d) => d.decision !== "reject");
-      approvedDanger = approvedDanger.concat(ok2.map((d) => (d.decision === "approve-with-change" ? (d.safeForm || "").trim() : d.command)));
-      for (const d of ok2) dangerTrail.push({ declared: d.command, decision: d.decision, form: d.safeForm || d.command, executed: "待执行确认" });
+      approvedDanger = approvedDanger.concat(ok2.map((d) => (d.decision === "approve-with-change" ? (d.safeForm || "").trim() : (d.command || "").trim())));
+      for (const d of ok2) dangerTrail.push({ declared: d.command, decision: d.decision, form: (d.safeForm || d.command).trim(), executed: "待执行确认" });
       dangerLog = (dangerLog === "无" ? "" : dangerLog + "；") + dr.decisions.map((d) => d.command + " → " + d.decision + (d.safeForm ? "（改：" + d.safeForm + "）" : "") + "：" + d.reason).join("；");
       if (ok2.length > 0) {
         phase("执行已批准的危险操作");
         const execReport2 = await fixer.ask<string>(dangerExecAsk(ok2));
         for (const e of dangerTrail) {
           if (e.executed !== "待执行确认" && !e.executed.startsWith("未确认：")) continue;
-          const hit = execReport2.includes(e.form);
+          const hit = execHit(execReport2, e.form);
           e.executed = hit ? e.form : "未确认：执行回报未含批准写法";
           if (!hit) log("危险操作执行确认缺失：" + e.declared + "——待复核（返修轮会再给一次逐字引用机会），计入门禁");
         }
@@ -908,6 +996,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       /* ls-remote 不可达：推送结果本身会如实记录 */
     }
     // 推送由编排器直接执行并核验（git 为字面量命令、目标在参数中）：不依赖任何 agent 的转述，失败即如实记录
+    if (await pushDiverged(push0.target, branch)) log("推送预检：远端分支与本地 HEAD 分叉（同仓库并行运行的孪生提交风险，实测缺陷 4）——推送将按非快进失败并如实记录；确需并行运行，先与老板确认整合策略（编排器侧 rebase 重放），绝不 force");
     let pushExit = -1;
     for (let t = 0; t < 2 && pushExit !== 0; t++) {
       try {
@@ -937,7 +1026,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
 
   phase("总工记账");
   const archived = await chief.ask<string>(
-    "把第 " + round + " 轮记入 Agents/ledger.md（头部含仓库标识行" + (repoRoot ? "：" + repoRoot : "") + "与一行一轮的目录：本轮先更新目录行、再追加详情）：任务卡、开发摘要（" + (dev.summary || "").slice(0, 400) + "）、危险操作裁决（" + dangerLog + "）、测试判决（问题 " + findingsCount + " / 反驳 " + rebuttedCount + " / 升级 " + escalations + "）、门禁 " + gate + "、覆盖声明（" + (verdict.coverage || "").slice(0, 300) + "）、视觉审阅（" + visualNote.slice(0, 200) + "）、要求覆盖（" + (dev.requirementCoverage || []).join("；") + "）、baseline " + (baseline || "空树").slice(0, 7) + "、推送 " + pushState + "、遗留与否决（deferred/declined，各带理由，无则写“无”）、下一轮方向。然后 git add -A && git commit（账本小提交），返回一句话。",
+    "把第 " + round + " 轮记入 Agents/ledger.md（头部含仓库标识行" + (repoRoot ? "：" + repoRoot : "") + "与一行一轮的目录：本轮先更新目录行、再追加详情）：任务卡、开发摘要（" + (dev.summary || "").slice(0, 400) + "）、危险操作裁决（" + dangerLog + (dangerTrail.length > 0 ? "；执行确认：" + (dangerTrail.every((e) => e.executed === e.form) ? "全部与批准写法一致" : "存在未确认项——下轮闭合复查须逐条核实效果是否落盘") : "") + "）、测试判决（问题 " + findingsCount + " / 反驳 " + rebuttedCount + " / 升级 " + escalations + "）、门禁 " + gate + "、覆盖声明（" + (verdict.coverage || "").slice(0, 300) + "）、视觉审阅（" + visualNote.slice(0, 200) + "）、要求覆盖（" + (dev.requirementCoverage || []).join("；") + "）、baseline " + (baseline || "空树").slice(0, 7) + "、推送 " + pushState + "、遗留与否决（deferred/declined，各带理由，无则写“无”）、下一轮方向。然后 git add -A && git commit（账本小提交），返回一句话。",
   );
   let headLedger = await HEAD0();
   if (headLedger === "" || headLedger === headA) {
@@ -946,7 +1035,8 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     headLedger = await HEAD0();
   }
   if (push0.target !== "" && branch !== "" && headLedger !== "") {
-    // 账本提交同样由编排器直接推送并核验：全程无 agent 转述
+    // 账本提交同样由编排器直接推送并核验：全程无 agent 转述；分叉预检（跨循环审计 F1）
+    if (await pushDiverged(push0.target, branch)) log("推送预检：远端分支与本地 HEAD 分叉（同仓库并行运行的孪生提交风险）——推送将按非快进失败并如实记录；绝不 force");
     try {
       const pl = await G(["push", push0.target, "HEAD:" + branch], 300000);
       if (pl.exitCode !== 0) log("账本提交推送退出码 " + pl.exitCode + "：" + maskUrl((pl.stderr || "")).slice(0, 200) + "——如实记录");
@@ -996,6 +1086,7 @@ const interruptNote = finalVerdict
   : "";
 // 要求映射覆盖机械核查（"没有条目的要求不算完成"的机械版；仅未打断时运行）：requirements.md 的每个 Rn 必须在 requirement_map.md 留有对账条目（词边界匹配，防 R1 误匹配 R10）
 let mapGap = "";
+let reqGapNote = ""; // 收官 requirements.md 读空时的披露注入（审计 F7——实测缺陷 2 教训的原场景）
 if (!interrupted) {
   let mapTextF = "";
   try {
@@ -1008,6 +1099,10 @@ if (!interrupted) {
     reqTextF = await files.read("Agents/requirements.md");
   } catch {
     reqTextF = "";
+  }
+  if (reqTextF === "") {
+    log("【收官核查警告】Agents/requirements.md 读取为空——要求覆盖核查整体空转（路径基准错或文件缺失，实测缺陷 2 教训的原场景，审计 F7）——已注入最终简报披露，绝不静默放行");
+    reqGapNote = "【机械核查未运行】Agents/requirements.md 不可读——要求覆盖核查未能执行，如实向老板披露此异常。\n";
   }
   const rnAllF = Array.from(new Set(reqTextF.match(/\bR\d+\b/g) || [])).sort();
   const hasEntryF = (rn: string): boolean => new RegExp("\\b" + rn + "\\b").test(mapTextF);
@@ -1026,12 +1121,29 @@ if (!interrupted) {
     log(mapGap === "" ? "要求映射覆盖：补齐后通过" : "要求映射覆盖仍缺 " + stillF.length + " 条——已如实记录，将在最终简报问句中要求披露");
   }
 }
+const resumeNoteE = startRound > roundsTotal ? "【全完成续跑】账本显示全部轮次已在先前运行完成，本次运行未执行任何新轮次、直接从账本出简报——简报必须如实向老板说明此异常（跨循环审计 F3：承诺过的披露义务必须有可履行路径）。\n" : "";
 let reported = await chief.ask<FinalReport>(
     "老板要求原话（逐字）：" + requirement + (focus ? "；本次关注点：" + focus : "") + "\n" +
     (closingBossNote !== "" ? "【老板反馈（收尾时重读 LoopMail/FromBoss.md）】以下为老板运行中写入、尚无轮次可落实的指令——逐条处置或在邮件「待老板决策」节列明，绝不静默：\n" + closingBossNote + "\n" : "") +
-    (clampNote !== "" ? "【轮数钳制】" + clampNote + "——在《最终简报》的待老板决策节列明（确需更多轮，老板用 rounds 参数锁定后重跑）。\n" : "") + mapGap + interruptNote + (interrupted ? "" : roundsTotal + " 轮硬停（或提前完工）。") +
+    (clampNote !== "" ? "【轮数钳制】" + clampNote + "——在《最终简报》的待老板决策节列明（确需更多轮，老板用 rounds 参数锁定后重跑）。\n" : "") + mapGap + reqGapNote + interruptNote + (interrupted || startRound > roundsTotal ? "" : roundsTotal + " 轮硬停（或提前完工）。") + resumeNoteE +
     "以 Agents/requirements.md 与账本为唯一依据，把《最终简报》作为一封新邮件追加到 LoopMail/ToBoss.md 头部（2026-11-05 老板邮件化体系：ToBoss.md＝总工交付邮件正本，新邮件插头部、倒序追加、旧邮件永不删改；docs/＝正式内容如 REPORT.ipynb 与论文本体；正式文件在邮件中以相对链接作附件引用）。老板要的是简报，不是对账（2026-11-05 老板规则）：对账（要求逐条→结果→证据，requirementOutcomes 如实填写，没有条目的要求不算完成）是你的内部事务，只进 Agents/requirement_map.md 与台账（不动测试工程师的验证列），绝不以对账表形式出现在老板邮件正文。邮件写作纪律（2026-11-05 老板原话，硬性）：去冗余的艺术——最少的汇报、最快让老板把握主线和全貌；禁止堆砌黑话（行话首次出现用白话括注）；禁止与事实不符（数字与结论只引用命令输出与产物 manifest）；禁止堆砌代码段与路径指引（证据指针集中一节列，正文不堆路径）。邮件正文=让老板一眼判断产出是不是所要的东西，九节固定：① 一段话进展与结论（做了什么、结果如何、达到老板要求没有；summary 字段）；② 交付清单（deliverables：每个交付物一句话——是什么＋对应老板哪句要求（引用原话 ≤15 字）＋附件链接；历史 AI 文档中值得采纳且有意义的内容在此合并表述）；③ 最终状态（提交/推送/测试/已知局限）；④ 与老板要求相悖的偏离逐条说明（deviations）；⑤ 待老板决策清单（decisionList）；⑥ 待答问题逐条（questionAnswers：问题原文→直接答案→证据位置；问「存在哪」时连形态一起答——是 raw 还是派生格式、有没有写出器）；⑦ 自主决定清单（autonomousDecisions：决定→理由→若否决的后果→奥卡姆自评「增加复杂度还是删减」；凡增加复杂度的决定必须进这一节，不能只写账本）；⑧ 遗留与否决固定小节（deferred/declined，各带理由——记录在案的延后是决策而非遗漏，被否决的想法不得下轮重新提案；deferred/declined/processLessons 字段如实填写，无则空数组）；⑨ 流程教训（每条=规则+为什么+适用范围；老板采纳的教训持久化并随下次运行加载，被证伪的教训标记废弃、不与新教训并存；加载时先对照当前仓库核实仍适用）+一句建议。邮件是决策层文档：不写过程流水账（第几次门禁通过、反驳几次、返修几轮——那些在账本）、每节开头一句结论、同一条要求只说一次、以 ≤2 页为目标。收尾清理（2026-11-05 老板规则，硬性；先全仓盘点历史冗余——包括此前各轮与各次运行遗留的——再动手，不只整理本轮产物）：① 凡非最终产出需要的代码与文档（实验脚本、被替换的实现版本、草稿与中间报告等历史冗余，包括代码和文档）→ 直接 git mv 进 Agents/；② AI 生成且已成历史的文档 → 只把值得采纳且有意义的内容并入 ToBoss 最新邮件的交付清单表述，文档本体算作历史冗余 git mv 进 Agents/；③ docs/ 只保留正式内容（老板原话提及的交付物本体），仓库根与 docs/ 不堆工作文件；④ LoopMail/FromBoss.md（老板写入）原样保留、绝不改动老板写下的内容；⑤ LoopMail/ 下异于 ToBoss.md/FromBoss.md 的文件逐一判定归属——老板放置的文件名加前缀 FromBoss_ 并原样保留，agent 自己散落的按①②归位，拿不准的一律按老板放置处理；全程绝不删除文件。git add -A && git commit，返回 FinalReport。",
 );
+// 最终简报落盘核验（收尾链机械核验，与科研循环 evalOnDisk 同款，跨循环审计 F2）：正本邮件必须在 ToBoss.md 头部——缺则补写一次，仍缺响亮记录
+let briefOnDisk = "";
+try {
+  briefOnDisk = await files.read("LoopMail/ToBoss.md");
+} catch {
+  briefOnDisk = "";
+}
+if (!briefOnDisk.slice(0, 2000).includes("最终简报")) {
+  await chief.ask<string>("最终简报未落盘（LoopMail/ToBoss.md 头部未见《最终简报》邮件）：把最终简报作为新邮件插入 LoopMail/ToBoss.md 头部并 git add -A && git commit，返回一句话。");
+  try {
+    briefOnDisk = await files.read("LoopMail/ToBoss.md");
+  } catch {
+    briefOnDisk = "";
+  }
+  if (!briefOnDisk.slice(0, 2000).includes("最终简报")) log("最终简报补写后仍未落盘——如实记录");
+}
 // 疑问句防蒸发（机械）：老板原话含疑问而汇报没有答案即视为漏需求——补答一次，仍缺则如实记录
 const askedQ = ((requirement + " " + focus + " " + closingBossNote).match(/？|\?/g) || []).length;
 if (askedQ > 0 && (!reported.questionAnswers || reported.questionAnswers.length === 0)) {
@@ -1045,6 +1157,7 @@ let finalPush = push0.target === "" ? "跳过推送：" + push0.note : (branch =
 if (push0.target !== "" && branch !== "") {
   if (!ungatedHead) {
     const headFinal = await HEAD0();
+    if (await pushDiverged(push0.target, branch)) log("推送预检：远端分支与本地 HEAD 分叉（同仓库并行运行的孪生提交风险，跨循环审计 F1——收尾期正是并行冲突的高发窗）——推送将按非快进失败并如实记录；绝不 force");
     try {
       const pf = await G(["push", push0.target, "HEAD:" + branch], 300000);
       if (pf.exitCode === 0) {
