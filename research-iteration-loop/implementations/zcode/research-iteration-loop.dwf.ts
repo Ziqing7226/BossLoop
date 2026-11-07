@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 科研迭代循环（v0.5.8）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表 + 含 canary 的 selfcheck 机械门禁，测试基建归其所有）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
+description: 科研迭代循环（v0.5.9）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表 + 含 canary 的 selfcheck 机械门禁，测试基建归其所有）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
 args:
   idea:
     type: string
@@ -273,7 +273,7 @@ artifact.table("rounds", {
 });
 
 phase("总工程师调研立项");
-const chief = agent("总工程师", persona(CHIEF_ZH + PROFILE_LINE, STRONG)); // 强模型档：分析与规划
+let chief = agent("总工程师", persona(CHIEF_ZH + PROFILE_LINE, STRONG)); // 强模型档：分析与规划（pre-loop 实例：调研立项/迁移复核；进入轮循环后每轮重建，B#27）
 let ledger = "";
 try {
   ledger = await files.read("Agents/ledger.md");
@@ -460,10 +460,11 @@ if (Number.isFinite(rawResumeR) && rawResumeR > rounds) log("警告：账本/总
 const startRound = Number.isFinite(rawResumeR) && rawResumeR >= 0 ? Math.max(1, Math.min(rounds + 1, rawResumeR + 1)) : 1;
 if (startRound > 1) log("账本显示已完成 " + (startRound - 1) + " 轮，从第 " + startRound + " 轮续跑");
 
-const algo = agent("算法工程师", persona(ALGO_ZH + PROFILE_LINE, CHEAP)); // 廉价模型档
-const researcher = agent("研究员", persona(RESEARCHER_ZH + PROFILE_LINE, CHEAP)); // 廉价模型档
-const editor = agent("编辑", persona(EDITOR_ZH + PROFILE_LINE, STRONG)); // 强模型档
-const reader = agent("文献资深读者", persona(READER_ZH + PROFILE_LINE, STRONG)); // 强模型档
+let algo = agent("算法工程师", persona(ALGO_ZH + PROFILE_LINE, CHEAP)); // 廉价模型档
+let researcher = agent("研究员", persona(RESEARCHER_ZH + PROFILE_LINE, CHEAP)); // 廉价模型档
+let editor = agent("编辑", persona(EDITOR_ZH + PROFILE_LINE, STRONG)); // 强模型档
+let reader = agent("文献资深读者", persona(READER_ZH + PROFILE_LINE, STRONG)); // 强模型档
+// 以上四个角色与总工均为每轮重建（B#27）：轮循环顶部重新赋值，检查点是账本，不是任何人的会话记忆
 
 const rows: RoundRow[] = [];
 let plan = "第 " + startRound + " 轮：按调研结论执行（方案：" + survey.proposals.join("、") + "；竞品：" + survey.competitors.join("、") + "）";
@@ -508,6 +509,11 @@ async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
 
 for (let round = startRound; round <= rounds; round++) {
   const roundHead0 = await HEADR(); // 本轮起点 HEAD：图像检测 diff 源的基线（工程循环同款）
+  chief = agent("总工程师-R" + round, persona(CHIEF_ZH + PROFILE_LINE, STRONG)); // B#27：每轮全新实例——检查点是账本，不是任何人的会话记忆
+  algo = agent("算法工程师-R" + round, persona(ALGO_ZH + PROFILE_LINE, CHEAP));
+  researcher = agent("研究员-R" + round, persona(RESEARCHER_ZH + PROFILE_LINE, CHEAP));
+  editor = agent("编辑-R" + round, persona(EDITOR_ZH + PROFILE_LINE, STRONG));
+  reader = agent("文献资深读者-R" + round, persona(READER_ZH + PROFILE_LINE, STRONG));
   let dangerLog = "无"; // 本轮危险操作裁决（入账本）
   let bossNote = "";
   try {
@@ -869,7 +875,7 @@ for (let round = startRound; round <= rounds; round++) {
   phase("本轮存档");
   const head0 = await HEADR(); // 瞬态失败重试（B#25）——存档核验不再裸读
   const archived = await chief.ask<string>(
-    "把本轮记入 Agents/ledger.md（头部含仓库标识行" + (repoRoot ? "：" + repoRoot : "") + "与一行一轮的目录：本轮先更新目录行、再追加详情；审稿团 " + n + " 人中缺席 " + absentN + " 人）：任务/产出/存档前 HEAD " + (head0 || "空树").slice(0, 7) + "/危险操作裁决（" + dangerLog + "）/测试（覆盖声明：" + (verdict.coverage || "").slice(0, 300) + "；视觉审阅：" + visualNoteR.slice(0, 200) + "）/审稿/下轮方向。然后 git add -A && git commit（备份推送由编排器执行并核验，你不执行 push；向云端发布永远是老板的明确动作）。返回一句话。",
+    "把本轮记入 Agents/ledger.md（头部含仓库标识行" + (repoRoot ? "：" + repoRoot : "") + "与一行一轮的目录：本轮先更新目录行、再追加详情；审稿团 " + n + " 人中缺席 " + absentN + " 人）：任务/产出（" + (dev.summary || "").slice(0, 400) + "）/存档前 HEAD " + (head0 || "空树").slice(0, 7) + "/危险操作裁决（" + dangerLog + "）/测试（覆盖声明：" + (verdict.coverage || "").slice(0, 300) + "；视觉审阅：" + visualNoteR.slice(0, 200) + "）/审稿（" + digest.slice(0, 1200) + "）/下轮方向。然后 git add -A && git commit（备份推送由编排器执行并核验，你不执行 push；向云端发布永远是老板的明确动作）。返回一句话。",
   );
   const head1 = await HEADR(); // 瞬态失败重试（B#25）——存档核验不再裸读
   const commitOk = head1 !== "" && head1 !== head0;
@@ -960,6 +966,7 @@ try {
 if (closingBossNoteR !== "") log("收尾时重读 LoopMail/FromBoss.md：发现老板反馈 " + closingBossNoteR.length + " 字——注入评估问句逐条处置，绝不静默蒸发");
 const resumeNote = rows.length === 0 ? "账本显示全部轮次已完成，本次运行直接从账本与存档产物出评估报告。" : "";
 let evalResult = await chief.ask<EvalReport>(
+  "老板原话（idea，逐字）：" + idea + (focus ? "\n老板本次关注点：" + focus : "") + "\n" +
   resumeNote + rounds + " 轮已完成，硬停。全部审稿意见：\n" + plan.slice(0, 6000) + "\n" +
   "轮次记录（含每轮实验死亡率 experiments 字段）：" + JSON.stringify(rows) + "\n" +
   (startRound > 1 ? "【证据基座范围】本次运行从第 " + startRound + " 轮续跑：上述审稿意见与轮次记录只含本次运行的轮次——评估必须显式注明证据基座范围，绝不让老板误以为覆盖全部轮次。\n" : "") +
@@ -990,7 +997,7 @@ if (!evalOnDisk.slice(0, 2000).includes("初步评估报告")) {
 const askedQ = ((idea + " " + focus + " " + closingBossNoteR).match(/？|\?/g) || []).length;
 if (askedQ > 0 && (!evalResult.questionAnswers || evalResult.questionAnswers.length === 0)) {
   evalResult = await chief.ask<EvalReport>(
-    "老板原话含 " + askedQ + " 处疑问，但报告里 questionAnswers 为空——疑问句在登记环节蒸发属漏需求。逐条补答（问题原文→直接答案，含形态→证据位置；确实无法作答的写「无法作答：原因」），写回 LoopMail/ToBoss.md 最新邮件并 git add -A && git commit（报告提交存在且未推送时可 --amend 并入；绝不改写已推送历史），返回完整 EvalReport。",
+    "老板原话（idea，逐字）：" + idea + (focus ? "；本次关注点：" + focus : "") + "\n老板原话含 " + askedQ + " 处疑问，但报告里 questionAnswers 为空——疑问句在登记环节蒸发属漏需求。逐条补答（问题原文→直接答案，含形态→证据位置；确实无法作答的写「无法作答：原因」），写回 LoopMail/ToBoss.md 最新邮件并 git add -A && git commit（报告提交存在且未推送时可 --amend 并入；绝不改写已推送历史），返回完整 EvalReport。",
   );
   if (!evalResult.questionAnswers || evalResult.questionAnswers.length === 0) log("报告仍缺待答问题（已如实记录，老板原话含 " + askedQ + " 处疑问）");
 }

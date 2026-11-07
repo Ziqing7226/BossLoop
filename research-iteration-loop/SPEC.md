@@ -1,6 +1,6 @@
 # Research Iteration Loop
 
-**v0.5.8** · collection: `bossloop` · sibling: [Robust Engineering Loop](../robust-engineering-loop/SPEC.md)
+**v0.5.9** · collection: `bossloop` · sibling: [Robust Engineering Loop](../robust-engineering-loop/SPEC.md)
 
 > Start from a rough idea. Iterate it through bounded, adversarial cycles. Stop on schedule and report whether it deserves more of your life.
 
@@ -90,7 +90,7 @@ Project-specific constraints travel in a `profile` string injected into every ro
 
 ## 9. Model tiers
 
-Roles run on two model tiers by default (`models=tiered`; `uniform` = session model for all): the **strong tier** carries the Chief, Editor, reviewers and Reference Reader — analysis and judgement; the **cheap tier** carries the Algorithm Engineer, Test Engineer and Researcher — hands-on work. Reviewers sitting on a different tier than the builders also satisfy the blind-review decorrelation rule (§2) structurally. Tier assignment is engine config, not protocol — any strong/cheap pair works, and the cheap tier may be a locally deployed model (e.g. Qwen3.8) where the engine allows it. The cheap tier needs either a large context window or short-lived instances — no role's context grows without bound. Model names are the only plan-bound text, and they are referenced only when `models=tiered`: switching providers means editing the two constants — or setting `models=uniform`, which passes no model at all, inherits the session model, and starts on any plan.
+Roles run on two model tiers by default (`models=tiered`; `uniform` = session model for all): the **strong tier** carries the Chief, Editor, reviewers and Reference Reader — analysis and judgement; the **cheap tier** carries the Algorithm Engineer, Test Engineer and Researcher — hands-on work. Reviewers sitting on a different tier than the builders also satisfy the blind-review decorrelation rule (§2) structurally. Tier assignment is engine config, not protocol — any strong/cheap pair works, and the cheap tier may be a locally deployed model (e.g. Qwen3.8) where the engine allows it. The cheap tier needs either a large context window or short-lived instances — and no role's context grows without bound: every role, Chief included, is re-instantiated fresh at each round boundary and recovers its state from the ledger, the opening mail and the verbatim data the ask carries; the checkpoint is the ledger, never anyone's conversation memory. Model names are the only plan-bound text, and they are referenced only when `models=tiered`: switching providers means editing the two constants — or setting `models=uniform`, which passes no model at all, inherits the session model, and starts on any plan.
 
 ## 10. Configuration
 

@@ -1,6 +1,6 @@
 # Robust Engineering Loop
 
-**v0.5.8** · collection: `bossloop` · sibling: [Research Iteration Loop](../research-iteration-loop/SPEC.md)
+**v0.5.9** · collection: `bossloop` · sibling: [Research Iteration Loop](../research-iteration-loop/SPEC.md)
 
 > Give it a requirement. Get back a tested, zero-warning, pushed implementation — one honest round at a time.
 
@@ -131,7 +131,7 @@ Roles run on two model tiers by default (`models=tiered`; `uniform` puts every r
 
 **Junior→senior escalation:** a finding the junior cannot solve in **3 fix attempts** escalates to the Senior Engineer (strong model) with the failed attempts in context; attempts 4–10 of the gate loop run on the senior, under the same amend discipline. The executor never rules on its own declarations: escalation-phase destructive requests are adjudicated by the Chief. Escalations are counted per round in the ledger — a high escalation rate is a signal that the tiering or the task split is wrong, and the Chief acts on it.
 
-**Portability:** tier assignment is engine config, not protocol. Any strong/cheap pair works; the cheap tier may be a locally deployed model (e.g. Qwen3.8) where the engine allows it. The cheap tier needs either a large context window or short-lived instances: rework, re-verification and mechanical repairs run as one-shot instances with the evidence carried in the task card — no role's context grows with the attempt loop. Model names are the only plan-bound text, and they are referenced only when `models=tiered`: switching providers means editing the two constants — or setting `models=uniform`, which passes no model at all, inherits the session model, and starts on any plan.
+**Portability:** tier assignment is engine config, not protocol. Any strong/cheap pair works; the cheap tier may be a locally deployed model (e.g. Qwen3.8) where the engine allows it. The cheap tier needs either a large context window or short-lived instances: rework, re-verification and mechanical repairs run as one-shot instances with the evidence carried in the task card — and no role's context grows with the round loop either: the Chief, Algorithm Engineer and Senior Engineer are re-instantiated fresh at every round boundary and recover their state from the ledger, the requirements ledger and the verbatim data the ask carries; the checkpoint is the ledger, never anyone's conversation memory. Model names are the only plan-bound text, and they are referenced only when `models=tiered`: switching providers means editing the two constants — or setting `models=uniform`, which passes no model at all, inherits the session model, and starts on any plan.
 
 ## 12. Domain profiles
 

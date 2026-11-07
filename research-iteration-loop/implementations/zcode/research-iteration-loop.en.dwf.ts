@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Research Iteration Loop (v0.5.8), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3) from the latest reviews; the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map + a mechanical selfcheck gate with a canary, owning the test fixtures); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
+description: Research Iteration Loop (v0.5.9), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3) from the latest reviews; the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map + a mechanical selfcheck gate with a canary, owning the test fixtures); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
 args:
   idea:
     type: string
@@ -268,7 +268,7 @@ artifact.table("rounds", {
 });
 
 phase("Chief: survey & scope");
-const chief = agent("Chief Engineer", persona(CHIEF_EN + PROFILE_LINE, STRONG)); // strong tier: analysis and planning
+let chief = agent("Chief Engineer", persona(CHIEF_EN + PROFILE_LINE, STRONG)); // strong tier: analysis and planning (pre-loop instance: survey and scoping, migration recheck; re-instantiated fresh every round once the round loop starts, B#27)
 let ledger = "";
 try {
   ledger = await files.read("Agents/ledger.md");
@@ -459,10 +459,11 @@ if (Number.isFinite(rawResumeR) && rawResumeR > rounds) log("Warning: ledger/Chi
 const startRound = Number.isFinite(rawResumeR) && rawResumeR >= 0 ? Math.max(1, Math.min(rounds + 1, rawResumeR + 1)) : 1;
 if (startRound > 1) log("Ledger shows " + (startRound - 1) + " round(s) done; resuming at round " + startRound);
 
-const algo = agent("Algorithm Engineer", persona(ALGO_EN + PROFILE_LINE, CHEAP)); // cheap tier
-const researcher = agent("Researcher", persona(RESEARCHER_EN + PROFILE_LINE, CHEAP)); // cheap tier
-const editor = agent("Editor", persona(EDITOR_EN + PROFILE_LINE, STRONG)); // strong tier
-const reader = agent("Reference Reader", persona(READER_EN + PROFILE_LINE, STRONG)); // strong tier
+let algo = agent("Algorithm Engineer", persona(ALGO_EN + PROFILE_LINE, CHEAP)); // cheap tier
+let researcher = agent("Researcher", persona(RESEARCHER_EN + PROFILE_LINE, CHEAP)); // cheap tier
+let editor = agent("Editor", persona(EDITOR_EN + PROFILE_LINE, STRONG)); // strong tier
+let reader = agent("Reference Reader", persona(READER_EN + PROFILE_LINE, STRONG)); // strong tier
+// All four roles and the Chief are re-instantiated every round (B#27): reassigned at the top of the round loop — the checkpoint is the ledger, not anyone's conversation memory
 
 const rows: RoundRow[] = [];
 let plan = "Round " + startRound + ": follow the survey (proposals: " + survey.proposals.join(", ") + "; competitors: " + survey.competitors.join(", ") + ")";
@@ -507,6 +508,11 @@ async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
 
 for (let round = startRound; round <= rounds; round++) {
   const roundHead0 = await HEADR(); // the HEAD where this round starts: the baseline for the image detection's diff source (same as the engineering loop)
+  chief = agent("Chief Engineer-R" + round, persona(CHIEF_EN + PROFILE_LINE, STRONG)); // B#27: a fresh instance every round — the checkpoint is the ledger, not anyone's conversation memory
+  algo = agent("Algorithm Engineer-R" + round, persona(ALGO_EN + PROFILE_LINE, CHEAP));
+  researcher = agent("Researcher-R" + round, persona(RESEARCHER_EN + PROFILE_LINE, CHEAP));
+  editor = agent("Editor-R" + round, persona(EDITOR_EN + PROFILE_LINE, STRONG));
+  reader = agent("Reference Reader-R" + round, persona(READER_EN + PROFILE_LINE, STRONG));
   let dangerLog = "none"; // this round's destructive-operation rulings (into the ledger)
   let bossNote = "";
   try {
@@ -868,7 +874,7 @@ for (let round = startRound; round <= rounds; round++) {
   phase("Archive round");
   const head0 = await HEADR(); // retried on transient failure (B#25) — archive verification never bare-reads
   const archived = await chief.ask<string>(
-    "Record this round in Agents/ledger.md (head carries the repository identity line" + (repoRoot ? ": " + repoRoot : "") + " and a one-line-per-round index: update this round's index line first, then append the detail; review panel of " + n + " with " + absentN + " absent) — task/build/HEAD before archive " + (head0 || "empty tree").slice(0, 7) + "/destructive-operation ruling (" + dangerLog + ")/test (coverage statement: " + (verdict.coverage || "").slice(0, 300) + "; visual review: " + visualNoteR.slice(0, 200) + ")/reviews/next direction. Then git add -A && git commit (the backup push is executed and verified by the orchestrator — you never push; publishing to the cloud is always the boss's explicit action). Return one sentence.",
+    "Record this round in Agents/ledger.md (head carries the repository identity line" + (repoRoot ? ": " + repoRoot : "") + " and a one-line-per-round index: update this round's index line first, then append the detail; review panel of " + n + " with " + absentN + " absent) — task/build (" + (dev.summary || "").slice(0, 400) + ")/HEAD before archive " + (head0 || "empty tree").slice(0, 7) + "/destructive-operation ruling (" + dangerLog + ")/test (coverage statement: " + (verdict.coverage || "").slice(0, 300) + "; visual review: " + visualNoteR.slice(0, 200) + ")/reviews (" + digest.slice(0, 1200) + ")/next direction. Then git add -A && git commit (the backup push is executed and verified by the orchestrator — you never push; publishing to the cloud is always the boss's explicit action). Return one sentence.",
   );
   const head1 = await HEADR(); // retried on transient failure (B#25) — archive verification never bare-reads
   const commitOk = head1 !== "" && head1 !== head0;
@@ -959,6 +965,7 @@ try {
 if (closingBossNoteR !== "") log("Re-read LoopMail/FromBoss.md at closing: found " + closingBossNoteR.length + " chars of boss feedback — injected into the evaluation ask for item-by-item disposal, never silently dropped");
 const resumeNote = rows.length === 0 ? "The ledger shows all rounds already complete; produce the evaluation report directly from the ledger and archived artifacts. " : "";
 let evalResult = await chief.ask<EvalReport>(
+  "The boss's words verbatim (idea): " + idea + (focus ? "\nThis run's focus: " + focus : "") + "\n" +
   resumeNote + rounds + " rounds complete — hard stop. All reviews:\n" + plan.slice(0, 6000) + "\n" +
   "Round records: " + JSON.stringify(rows) + "\n" +
   (startRound > 1 ? "[Evidence scope] This run resumed at round " + startRound + ": the reviews and round records above cover this run's rounds only — the report must state its evidence scope explicitly, never letting the boss believe it covers all rounds.\n" : "") +
@@ -990,7 +997,7 @@ if (!evalOnDisk.slice(0, 2000).includes("Preliminary Evaluation Report")) {
 const askedQ = ((idea + " " + focus + " " + closingBossNoteR).match(/？|\?/g) || []).length;
 if (askedQ > 0 && (!evalResult.questionAnswers || evalResult.questionAnswers.length === 0)) {
   evalResult = await chief.ask<EvalReport>(
-    "The boss's words contain " + askedQ + " question mark(s) but questionAnswers is empty — a question evaporating at intake is a missed requirement. Answer each one (question text -> direct answer, including the form -> where the evidence is; write \"cannot answer: reason\" where you truly cannot), write it back to the latest mail in LoopMail/ToBoss.md and git add -A && git commit (amend into the report commit only when it exists and is unpushed; never rewrite pushed history), then return the full EvalReport.",
+    "The boss's words verbatim (idea): " + idea + (focus ? "; this run's focus: " + focus : "") + "\nThe boss's words contain " + askedQ + " question mark(s) but questionAnswers is empty — a question evaporating at intake is a missed requirement. Answer each one (question text -> direct answer, including the form -> where the evidence is; write \"cannot answer: reason\" where you truly cannot), write it back to the latest mail in LoopMail/ToBoss.md and git add -A && git commit (amend into the report commit only when it exists and is unpushed; never rewrite pushed history), then return the full EvalReport.",
   );
   if (!evalResult.questionAnswers || evalResult.questionAnswers.length === 0) log("Report still lacks answered questions (recorded honestly; the boss's words contain " + askedQ + " question mark(s))");
 }
