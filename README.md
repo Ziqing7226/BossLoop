@@ -4,7 +4,7 @@
 
 **Bounded AI-team loops that work for the boss — and report to you.**
 
-[![Version](https://img.shields.io/badge/version-v0.6.5-blue)](CITATION.cff)
+[![Version](https://img.shields.io/badge/version-v0.6.6-blue)](CITATION.cff)
 [![License](https://img.shields.io/badge/license-CC%20BY%204.0%20%2F%20Apache--2.0-green)](LICENSE)
 ![Validated on ZCode](https://img.shields.io/badge/validated%20on-ZCode-orange)
 [![Docs](https://img.shields.io/badge/docs-中文-red)](README.zh-CN.md)
@@ -61,13 +61,16 @@ Run from inside the repository to be worked on. Each loop keeps three classes of
 
 ## Acknowledgments
 
-The Research Iteration Loop distills lessons from these open-source research-agent systems — our thanks to their authors:
+The Research Iteration Loop distills lessons from these research-agent systems — our thanks to their authors:
 
 - [SakanaAI/ai-scientist](https://github.com/sakanaai/ai-scientist) & [AI-Scientist-v2](https://github.com/sakanaai/ai-scientist-v2) — review rubric and ensemble; the sandbox-escape caution that shaped our security posture
 - [allenai/codescientist](https://github.com/allenai/codescientist) — staged execution (pilot → full) and outcome counting
 - [llnl/open-ai-co-scientist](https://github.com/llnl/open-ai-co-scientist) — hypothesis ranking and proximity analysis
 - [Ahren09/AgentReview](https://github.com/Ahren09/AgentReview) — quantified reviewer biases that motivated the blind-review discipline
 - [gulucaptain/Best-Paper-Writing-Skill](https://github.com/gulucaptain/Best-Paper-Writing-Skill) — award-paper writing rules that govern the Researcher role
+- [ScientistTwo](https://scientist-two.github.io/) ([arXiv:2609.19644](https://arxiv.org/abs/2609.19644)) — the evidence-attribution discipline (discriminative evidence, an eval-surface fingerprint, failure triage, evidence-backed rebuttals) draws on its paper
+
+Its own Limitations section notes that it "does not yet consistently achieve the caliber of spotlight or oral presentations that introduce paradigm-shifting conceptual breakthroughs" — a reminder to hold moderate expectations of autonomous research loops, bossloop included.
 
 ## License & citation
 

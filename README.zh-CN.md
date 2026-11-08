@@ -4,7 +4,7 @@
 
 **为老板干活的 AI 团队循环，有界、对抗验证，并向你如实汇报。**
 
-[![Version](https://img.shields.io/badge/version-v0.6.5-blue)](CITATION.cff)
+[![Version](https://img.shields.io/badge/version-v0.6.6-blue)](CITATION.cff)
 [![License](https://img.shields.io/badge/license-CC%20BY%204.0%20%2F%20Apache--2.0-green)](LICENSE)
 ![已在 ZCode 验证](https://img.shields.io/badge/%E5%B7%B2%E5%9C%A8%20ZCode%20%E9%AA%8C%E8%AF%81-orange)
 [![English](https://img.shields.io/badge/docs-English-blue)](README.md)
@@ -61,13 +61,16 @@ cp robust-engineering-loop/implementations/zcode/robust-engineering-loop.dwf.ts 
 
 ## 致谢
 
-科研迭代循环提炼自以下开源科研智能体系统——感谢它们的作者：
+科研迭代循环提炼自以下科研智能体系统——感谢它们的作者：
 
 - [SakanaAI/ai-scientist](https://github.com/sakanaai/ai-scientist) 与 [AI-Scientist-v2](https://github.com/sakanaai/ai-scientist-v2)——评审 rubric 与 ensemble；沙箱逃逸警示塑造了我们的安全姿态
 - [allenai/codescientist](https://github.com/allenai/codescientist)——分级执行（pilot → full）与结论计数
 - [llnl/open-ai-co-scientist](https://github.com/llnl/open-ai-co-scientist)——假设排名与相似度分析
 - [Ahren09/AgentReview](https://github.com/Ahren09/AgentReview)——量化的审稿偏差，促成盲审纪律
 - [gulucaptain/Best-Paper-Writing-Skill](https://github.com/gulucaptain/Best-Paper-Writing-Skill)——约束研究员角色的获奖论文写作规则
+- [ScientistTwo](https://scientist-two.github.io/)（[arXiv:2609.19644](https://arxiv.org/abs/2609.19644)）——科研迭代循环的证据归因纪律（区分性证据、协议面指纹、失败三分类、以证据闭环的审稿回应）借鉴自其论文
+
+其论文 Limitations 一节自述它 "does not yet consistently achieve the caliber of spotlight or oral presentations that introduce paradigm-shifting conceptual breakthroughs"（尚未能稳定达到引入范式级概念突破的 spotlight 或 oral 水准）——对自主科研循环，包括 bossloop，都宜保持适度预期。
 
 ## 许可与引用
 

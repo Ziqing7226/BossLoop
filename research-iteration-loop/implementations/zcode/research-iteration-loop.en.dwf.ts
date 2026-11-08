@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Research Iteration Loop (v0.6.5), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3) from the latest reviews; the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map + a mechanical selfcheck gate with a canary, owning the test fixtures); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
+description: Research Iteration Loop (v0.6.6), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3; empirical review critiques are closed only with evidence); the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map — mechanism claims carry discriminative evidence + a mechanical selfcheck gate with a canary + an eval-surface fingerprint against silent drift, owning the test fixtures; failure triage decides the flow); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
 args:
   idea:
     type: string
@@ -71,8 +71,17 @@ interface TestVerdict {
   issues: string[];
   /** Coverage statement: areas reviewed deeply vs only skimmed (written before the verdict, reconciled later) */
   coverage: string;
+  /** Failure triage (mandatory when a failure exists): implementation-bug = the idea is sound, the code is wrong (enters the fix flow); idea-flawed = faithful implementation, the proposal does not work (re-scope, never a stop signal); misunderstanding = the goal or spec was misread (escalate as an open question; the boss answers via FromBoss or the next run's focus); empty when no failure */
+  failureClass?: "implementation-bug" | "idea-flawed" | "misunderstanding" | "";
   /** Artifact paths produced this round (images/figures included; list gitignored ones too so the visual review can find them); empty when none */
   artifacts?: string[];
+}
+
+interface ChiefFixes {
+  /** Fix / extra-experiment instructions (empty array when none); a divergence of understanding never goes in here — the engineer does not adjudicate understanding */
+  fixes: string[];
+  /** Escalated misunderstandings: questions awaiting the boss's answer (question as written + why it cannot be adjudicated in-loop + the default reading and its risk); empty array when none */
+  escalations?: string[];
 }
 
 interface VisualVerdict {
@@ -172,7 +181,7 @@ const CHIEF_EN = [
   "Occam's razor: autonomous decisions lean toward adding things (modules, proposals, metrics) — every complexity-increasing decision must state the value it buys, or it is not taken; such a decision never lives only in the ledger — it goes into the Preliminary Evaluation Report's autonomous-decision list.",
   "Three file classes (delivery discipline), bounded by location: docs/ holds formal content only — the deliverable bodies the boss's words name, the manuscript, reference originals; LoopMail/ is the boss–chief communication layer with exactly two legitimate files — ToBoss.md (the delivery-mail master file; the opening brief and the evaluation report are appended as mails, newest at the top; old mails are never modified; formal docs/ files are referenced by relative links as attachments) plus FromBoss.md (the boss's mid-run feedback, written by the boss, appended in order, never modified by the Chief); any other file appearing under LoopMail/ is judged first — files the boss placed get the FromBoss_ prefix and stay untouched (their content is never modified), stray agent-made products are put away per the delivery-tidying rules, and anything uncertain is treated as boss-placed; other boss-facing historical documents are merged into the ToBoss mail wording, then their bodies move to Agents/; everything under Agents/ is working scaffolding — the ledger, maps, Agents/selfcheck.py, test and debug scripts, code superseded on the way to the final deliverable, falsified history, agent-facing docs. Tidying means git mv-ing scaffolding into Agents/, never deleting a file — deletion is the boss's move; the boss reads everything outside Agents/; if the boss has to open Agents/, the loop has failed.",
   "The proposal portfolio is re-selected every round: at the start of each round pick 1-3 proposals from the latest reviews (add, drop or replace; fill up to 3 when choices exist, 1-2 otherwise, never 0) and the competitor set; every proposal selected this round must be fully validated - a minimal comparison passed off as validation is forbidden because it biases conclusions.",
-  "Round planning: dispose of every review issue - either turn it into a work card or rebut it on archived artifacts; never ignore one verbally.",
+  "Round planning: dispose of every review issue - either turn it into a work card or rebut it on archived artifacts; empirical critiques (those about numbers, experiments or evidence) are closed only by evidence — newly archived when none exists (a new card producing artifacts + map rows), otherwise by pointing at the exact archived artifact that settles the critique; rewording alone never closes one; never ignore an issue verbally.",
   "Novelty handling: if the reference reader reports the idea has already been done, do NOT stop - re-scope toward the unsolved gap inside that direction, re-select proposals, and run all remaining rounds.",
   "Survey (web + local paper library): papers you cannot access go to paperRequests for the boss to fetch — non-blocking; proceed with lower confidence, never stall.",
   "Search discipline (inline essentials from the collection repo's skills/paper-search.md): broad survey for speed — reviews as starter literature (title-search \"XX review\" or filter Document Type = Review), read abstract + introduction + conclusion only; deep survey for completeness — prioritize highly cited, high-IF, recent work; read reviews + classics + frontier. Never literal-translate search terms — per concept collect synonyms, broader/narrower terms, singular/plural, same-root derivations, joined by OR (the fuller the synonym set, the fewer papers missed); AND narrows, OR widens, NOT sparingly; truncation * stays shallow; quoted phrases (exact = precise but leaky, fuzzy = complete but noisy); proximity near/N in between. Snowball citations in all four directions: references backward to the foundations, citing papers forward to the follow-ups, co-cited/related records sideways — until no new names appear. Three-screen triage: facet filters (field/years/type/source category) → rank by citations → judge the journal (JCR quartile / core lists); Highly Cited and Hot Papers get read first. Beginners read reviews, then classics, then the frontier. Cite at the point of use; the model's literature memory is a legitimate search tool — reviews, classics and authors it recalls become immediate leads, each verified in a professional database before it enters the survey (metadata comes from the database record; unconfirmable leads are dropped and logged); verify AI-assisted ideas against the literature — never copy.",
@@ -205,9 +214,12 @@ const TEST_EN = [
   "Independence is absolute: read the implementation under test, never modify it — a verifier who fixes makes the verification self-serving. You only write the self-check and the map.",
   "Read the LoopMail/ToBoss.md opening mail first (sentence inventory / requirements and acceptance criteria / artifact spec table / open questions): verify against the spec table's pass criteria, not structure alone (a file exists, a plot is non-empty, colours follow the rule).",
   "Acceptance anchors to the boss's verbatim words in the opening mail's requirements section, never to any card's paraphrase; report retelling distortions (card/document content words disagreeing with the original words) as findings classified as retelling distortion.",
+  "You own the claim→evidence map (Agents/claim_map.md): every manuscript number ↔ an archived artifact + a re-runnable check; write the check before the claim. The file must carry a claim-map marker and be tabular.",
+  "Discriminative evidence: any claim carrying causal or mechanism language (\"X improves Y\", \"the gain is due to Z\") must have a map row backed by a check that separates the proposed mechanism from alternative explanations — does the gain survive removing or bypassing the mechanism, or an equivalent control; when such a check cannot be produced, mark the claim explicitly not-attributed — a bare number never substantiates a mechanism claim.",
+  "Eval-surface immutability: maintain one `EVALSURFACE: <file>=<hash>,…` line in Agents/claim_map.md (hashes via git hash-object, covering every evaluation-surface file — evaluation/comparison scripts, metric definitions, data splits; paths relative to the workspace root); any eval-surface change goes through explicit re-baselining — re-run the baseline under the new surface and record it in the ledger; numbers archived before the change are not comparable across rounds with numbers after it (the orchestrator re-hashes each declared file and compares the canonical form against its first-seen registration; drift and a lying fingerprint are injected into the evaluation report).",
   "Test expectations may only derive from the spec table or a registered requirement, never from the current implementation; every assertion's comment names its source. Writing a misreading into a must-pass test is the worst moat of all.",
   "Number-hallucination warning: a good-looking number is not a good outcome — scrutinize whether what the number means is really as simple as it appears; the theory behind it may itself be wrong, and the flattering number then reinforces that theoretical illusion. Understanding a number presupposes solid knowledge of the theory beneath it: for every headline number ask — what theory or mechanism does it rest on, and what would it still show if that theory were wrong?",
-  "You own the claim→evidence map (Agents/claim_map.md): every manuscript number ↔ an archived artifact + a re-runnable check; write the check before the claim. The file must carry a claim-map marker and be tabular.",
+  "Failure triage: whenever the verdict contains a failure, name its class — implementation-bug (the idea is sound, the code is wrong) / idea-flawed (faithful implementation, the proposal does not work) / misunderstanding (the goal or spec was misread); the class decides the flow: implementation-bug enters the fix flow, idea-flawed re-scopes the proposal (never a stop signal), misunderstanding escalates as an open question for the boss — never kill an idea by mistaking its bug for its failure, and never tune away an idea flaw as if it were a bug.",
   "You create/maintain Agents/selfcheck.py under Agents/ (test and debug scripts always live under Agents/ — only boss-facing files go in the repo root and docs/): it must contain at least one deliberately-broken canary case that must FAIL, marked `canary`; when run, the selfcheck must actually execute the canary, observe its failure, and print one machine-readable line at the end of its standard output: CANARY: expected-FAIL observed-FAIL (the orchestrator parses this line — missing or observed-PASS means the suite is invalid) — a suite that cannot go red proves nothing.",
   "Long-context discipline: when the diff or review surface is large, inventory the changes first, then deep-read the high-risk areas (logic changes, gate-relevant, danger-operation sites); the verdict's coverage field must state what was reviewed deeply and what was only skimmed — it is written before you know where the problems are, and any later problem in a skimmed area is reconciled against it.",
   "Every verdict carries evidence.",
@@ -218,7 +230,7 @@ const TEST_EN = [
 
 const RESEARCHER_EN = [
   "You are the Researcher: your single revision window per round (after engineering, before review) — revise docs/paper_draft.md truthfully; if it does not exist yet, create the first draft from the experimental results and the writing rules.",
-  "Only numbers present in the claim→evidence map; gaps stay explicit [TODO]. Follow award-paper writing rules: concrete openings, conditional gap statements, progressive components, ablations mapped to claims, a standalone Limitations section, no AI-style tells.",
+  "Only numbers present in the claim→evidence map; gaps stay explicit [TODO]. Causal/mechanism claims are written only when the map provides discriminative evidence — otherwise omit them or mark them explicitly not-attributed. Follow award-paper writing rules: concrete openings, conditional gap statements, progressive components, ablations mapped to claims, a standalone Limitations section, no AI-style tells.",
   "Writing discipline (inline essentials from the collection repo's skills/paper-writing.md; self-check against each when revising): clarity first (logic → structure → language), write to communicate not to impress; IMRAD skeleton (what question → introduction / how studied → methods / what found → results / what it means → discussion), logic shape broad→narrow→broad; conclusions stated three times (abstract, introduction, discussion) by design; title = the fewest words that describe the content exactly (no waste words like Studies on, no abbreviations); abstract = a miniature paper, ≤250 words, four elements (objectives/methods/results/conclusions), past tense, no citations, no table/figure references, neutral never witty; the introduction is the make-or-break section — problem and importance → brief literature pointing at the gap → objective → method → (venue permitting) principal results, never suspense; results carry representative data only (the fool collects facts, the wise man selects them), never repeating what a figure shows; discussion interprets, never recapitulates: implications and applications, conclusion + evidence per conclusion, strengths and limitations, exceptions exposed never covered, no cosmic conclusions; revise many times against the checklist (complete / accurate / sound / consistent / organized / clear / concise / correct / figures well designed / compliant), stop when exhausted.",
 ].join("\n");
 
@@ -576,6 +588,10 @@ async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
 }
 
 let claimGapNote = ""; // disclosure injection when the claim-map substance check does not clear (family audit #2: a promised disclosure must have a consumer)
+let evalSurfaceFirstR = ""; // first-seen eval-surface fingerprint (eval-surface immutability: the within-run cross-round comparison base, canonical form)
+let protocolDriftNote = ""; // disclosure injection when eval-surface drift is detected (same consumer pattern as claimGapNote)
+let evalSurfaceLieNote = ""; // disclosure injection when the fingerprint is lying (set once, not per round)
+let misunderstandingNote = ""; // misunderstandings escalated by the Chief (awaiting the boss's answer) — the report's boss-decision section must list each one
 for (let round = startRound; round <= rounds; round++) {
   const roundHead0 = await HEADR(); // the HEAD where this round starts: the baseline for the image detection's diff source (same as the engineering loop)
   chief = agent("Chief Engineer-R" + round, persona(CHIEF_EN + PROFILE_LINE, STRONG)); // B#27: a fresh instance every round — the checkpoint is the ledger, not anyone's conversation memory
@@ -687,8 +703,8 @@ for (let round = startRound; round <= rounds; round++) {
   let verdict = await tester.ask<TestVerdict>(
     "Review the build. The author's self-report follows (treat it as leads and coverage hints only — verify every number and claim against the claim map and archived artifacts; a self-report never earns a free pass): " + JSON.stringify(dev) + "\n" +
     "This round's diff = the previous archive commit..the current working tree (untracked files included). Read the LoopMail/ToBoss.md opening mail's artifact spec table first: verify against its pass criteria, not structure alone. " +
-    "Duties: code review / roundtrip (incl. adversarial inputs) / generalization / perturbation stability; update the claim→evidence map (Agents/claim_map.md); " +
-    "create or update Agents/selfcheck.py with at least one must-fail canary case; when run, the selfcheck must actually execute the canary, observe its failure, and print one machine-readable line at the end of its standard output: CANARY: expected-FAIL observed-FAIL (the orchestrator parses this line — missing or observed-PASS means the suite is invalid). Expectations derived from the spec table or a registered requirement (comment the source), never from the current implementation. For headline numbers that enter claims or go/no-go decisions and involve multi-step aggregation, recompute them via a second path from archived intermediates (a different grouping or formula — a second implementation is not required); archive the intermediates that make this a minutes-long check, not a rerun. A mismatch freezes the number pending audit — never wave it off as a rounding note. Single-source direct measurements are exempt (roundtrip and canary already cover them). When a number is retracted, sweep the whole repo for documents repeating it (ledger history, READMEs, figures) and list the corrections for this round. Return TestVerdict (the artifacts field lists this round's figures/tables, including gitignored ones).",
+    "Duties: code review / roundtrip (incl. adversarial inputs) / generalization / perturbation stability; update the claim→evidence map (Agents/claim_map.md): mechanism-claim rows carry discriminative evidence, plus the EVALSURFACE eval-surface fingerprint line (git hash-object); " +
+    "create or update Agents/selfcheck.py with at least one must-fail canary case; when run, the selfcheck must actually execute the canary, observe its failure, and print one machine-readable line at the end of its standard output: CANARY: expected-FAIL observed-FAIL (the orchestrator parses this line — missing or observed-PASS means the suite is invalid). Expectations derived from the spec table or a registered requirement (comment the source), never from the current implementation. For headline numbers that enter claims or go/no-go decisions and involve multi-step aggregation, recompute them via a second path from archived intermediates (a different grouping or formula — a second implementation is not required); archive the intermediates that make this a minutes-long check, not a rerun. A mismatch freezes the number pending audit — never wave it off as a rounding note. Single-source direct measurements are exempt (roundtrip and canary already cover them). When a number is retracted, sweep the whole repo for documents repeating it (ledger history, READMEs, figures) and list the corrections for this round. When a failure exists, failureClass is mandatory (implementation-bug / idea-flawed / misunderstanding; empty when none). Return TestVerdict (the artifacts field lists this round's figures/tables, including gitignored ones).",
   );
   // Image artifacts -> visual review (mechanically triggered); its issues join this round's fix list and ride the existing fix flow — no images, no cost
   const isImgR = (p: string): boolean => /\.(png|jpe?g|svg|webp|gif)$/i.test(p);
@@ -753,6 +769,15 @@ for (let round = startRound; round <= rounds; round++) {
       verdict.issues = verdict.issues.concat(visualCacheIssuesR);
       log("Visual review raised issues; merged into this round's fix list: " + visualNoteR.slice(0, 300));
     }
+    }
+  }
+  // Failure-triage mechanical re-ask (one repair): a verdict with failures but a missing/invalid failureClass is asked once more — "mandatory" must not rest on persona discipline alone
+  if ((verdict.issues || []).length > 0 && ["implementation-bug", "idea-flawed", "misunderstanding"].indexOf(verdict.failureClass || "") < 0) {
+    verdict = await tester.ask<TestVerdict>(
+      "The verdict contains failures but failureClass is missing or invalid (one of implementation-bug / idea-flawed / misunderstanding; empty only when there is genuinely no failure) — tag it per the failure triage and return the full TestVerdict, other fields unchanged.",
+    );
+    if ((verdict.issues || []).length > 0 && ["implementation-bug", "idea-flawed", "misunderstanding"].indexOf(verdict.failureClass || "") < 0) {
+      log("failureClass still missing after the re-ask — recorded honestly; failure triage degrades to prose");
     }
   }
   let claimMapOk = false;
@@ -824,6 +849,53 @@ for (let round = startRound; round <= rounds; round++) {
       const stillM = await auditClaimMap();
       log(stillM[0] === "__unreadable__" ? "claim-map substance recheck hit an unreadable manuscript — recorded honestly" : stillM.length === 0 ? "claim-map substance check: passed after repair" : "claim-map substance check still failing for " + stillM.length + " item(s) — recorded honestly; the manuscript disclosure follows the map's gaps");
       if (stillM[0] !== "__unreadable__" && stillM.length > 0) claimGapNote = "the claim-map substance check still fails for " + stillM.length + " item(s) — the report must honestly disclose these claim-vs-evidence gaps, never silently.\n";
+    }
+  }
+  // Eval-surface fingerprint check (eval-surface immutability): the EVALSURFACE line declares the eval-surface files and hashes — the orchestrator re-hashes each declared file (repo-root frame fallback when the direct frame fails) and compares the canonical form (template placeholders stripped, pairs sorted, lowercased) against the run's first-seen registration; drift and a lying fingerprint are both injected into the evaluation report, never silent
+  if (claimMapOk) {
+    let mapE = "";
+    try {
+      mapE = await readRepo("Agents/claim_map.md");
+    } catch {
+      mapE = "";
+    }
+    const lineE = (mapE.split("\n").find((l) => l.includes("EVALSURFACE:")) || "").trim();
+    if (lineE === "") {
+      log("Eval-surface fingerprint not registered (no EVALSURFACE line in claim_map.md) — recorded honestly: eval-surface changes cannot be detected mechanically");
+    } else {
+      const pairsE = lineE.slice(lineE.indexOf("EVALSURFACE:") + "EVALSURFACE:".length).split(",").map((s) => s.trim()).filter((s) => s.indexOf("=") > 0 && !s.includes("<")); // template placeholder pairs (<file>=<hash>) are stripped
+      if (pairsE.length === 0) {
+        log("The EVALSURFACE line carries no valid file=hash pair (possibly only the template placeholder was copied) — treated as unregistered, recorded honestly");
+      } else {
+        const canonE = pairsE.map((s) => { const iE = s.indexOf("="); return s.slice(0, iE).trim().toLowerCase() + "=" + s.slice(iE + 1).trim().toLowerCase(); }).sort().join(",");
+        const hashAt = async (p: string): Promise<string> => {
+          try {
+            const rE = await world.run("git", ["hash-object", p], { timeoutMs: 60000 });
+            return rE.exitCode === 0 ? (rE.stdout || "").trim() : "";
+          } catch {
+            return "";
+          }
+        };
+        let fakeE = false;
+        for (const pr of pairsE) {
+          const eqE = pr.indexOf("=");
+          const fE = pr.slice(0, eqE).trim();
+          const hE = pr.slice(eqE + 1).trim();
+          let hR = await hashAt(fE);
+          if (hR === "" && repoRoot !== "" && fE.indexOf("/") !== 0) hR = await hashAt(repoRoot + "/" + fE);
+          if ((hR || "?").toLowerCase() !== hE.toLowerCase()) fakeE = true;
+        }
+        if (fakeE) {
+          log("Eval-surface fingerprint is lying: the EVALSURFACE line's hashes disagree with the actual files (a file changed without the fingerprint being updated, a missing file, or a registration error) — recorded honestly");
+          if (evalSurfaceLieNote === "") evalSurfaceLieNote = "The eval-surface fingerprint is lying: the EVALSURFACE line's hashes disagree with the actual files (a file changed without the fingerprint being updated, a missing file, or a registration error) — the fingerprint cannot be trusted, eval-surface changes cannot be detected mechanically within this run; the report must disclose this anomaly honestly, never silently.\n";
+        }
+        if (evalSurfaceFirstR === "") {
+          evalSurfaceFirstR = canonE; // this run's first-seen registration (canonical form)
+        } else if (canonE !== evalSurfaceFirstR) {
+          protocolDriftNote = "The eval-surface fingerprint disagrees with this run's first-seen registration (the eval surface changed) — numbers archived before the change are not directly comparable with this round's numbers; the report must disclose the change and its re-baselining honestly, never silently.\n";
+          log("Eval-surface drift detected: the EVALSURFACE line disagrees with the run's first-seen registration — injected into the evaluation report");
+        }
+      }
     }
   }
   let canary = false;
@@ -907,9 +979,15 @@ for (let round = startRound; round <= rounds; round++) {
 
   phase("Fixes & extra experiments");
   let fixDev: DevReport = dev;
-  const fixes = await chief.ask<string[]>(
-    "Test verdict: " + JSON.stringify(verdict) + "\nGate: " + gate + "\nTurn test issues into fix / extra-experiment instructions (empty array if none).",
+  const disp = await chief.ask<ChiefFixes>(
+    "Test verdict: " + JSON.stringify(verdict) + "\nGate: " + gate + "\nDispose by the verdict's failure triage (failureClass): implementation-bug → fix / extra-experiment instructions (into fixes); idea-flawed → re-scope the proposal (never a stop signal — left to next round's portfolio re-selection from the reviews, not into fixes); misunderstanding → never into fixes (the engineer does not adjudicate understanding), put it into escalations (question as written + why it cannot be adjudicated in-loop + the default reading and its risk). An empty fixes array means no repair is needed.",
   );
+  const fixes = disp.fixes || [];
+  const escR = disp.escalations || [];
+  if (escR.length > 0) {
+    misunderstandingNote += "Misunderstandings escalated by the Chief (awaiting the boss's answer):\n" + escR.join("\n") + "\n";
+    log("Understanding divergences escalated: " + escR.length + " — injected into the evaluation-report disclosure");
+  }
   if (fixes.length > 0) {
     fixDev = await algo.ask<DevReport>("Execute fixes and extra experiments: " + fixes.join("; ") + "\nReproduce each one on this round's code first: a stale entry (older line numbers, already fixed, not reproducible now) is discarded with a note — never code against it. Return DevReport.");
     if (round1FullMissing && (fixDev.numbers || []).some((n) => /^\s*FULL/.test(n))) {
@@ -1099,6 +1177,9 @@ let evalResult = await chief.ask<EvalReport>(
   "If the round records show round 1 had no end-to-end number, the report must state it plainly: no FULL number in round 1, the manuscript must not claim validation.\n" +
   (closingBossNoteR !== "" ? "[Boss feedback (re-read at closing, LoopMail/FromBoss.md)] these are directives the boss wrote mid-run with no round left to apply them — dispose of each or list it under decisions for the boss, never silently:\n" + closingBossNoteR + "\n" : "") +
   (claimGapNote !== "" ? "[Mechanical check failed] " + claimGapNote + " — the report must disclose honestly, never silently.\n" : "") +
+  (protocolDriftNote !== "" ? "[Mechanical check] " + protocolDriftNote : "") +
+  (evalSurfaceLieNote !== "" ? "[Mechanical check] " + evalSurfaceLieNote : "") +
+  (misunderstandingNote !== "" ? "[Understanding divergences escalated] " + misunderstandingNote + " — the report's boss-decision section (advice to the boss) must list each of these questions, never silently.\n" : "") +
   (reconGap !== "" ? "[Mechanical check failed] " + reconGap + " — the report must honestly disclose these requirements as not delivered, never silently.\n" : "") +
   (round1FullMissing ? "[Mechanical check] Round 1 had no FULL-stage end-to-end number — the report and the manuscript must explicitly say so.\n" : "") +
   "Write the Preliminary Evaluation Report: verdict (continue/pivot/stop), expected success with reasoning that cites the experiment-mortality trend and the reader's novelty check, plus an explicit note that it is a qualitative judgement expressed numerically rather than a calibrated probability, novelty grounded in the 3 closest works, impact, points to watch if continued (each annotated with the evidence scope of the claim it concerns — datasets and conditions), " +

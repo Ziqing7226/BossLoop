@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 科研迭代循环（v0.6.5）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表 + 含 canary 的 selfcheck 机械门禁，测试基建归其所有）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
+description: 科研迭代循环（v0.6.6）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3；实证类审稿质询只以证据闭环）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表——机制类主张须附区分性证据 + 含 canary 的 selfcheck 机械门禁 + 协议面指纹防评测面漂移，测试基建归其所有；失败三分类定流向）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
 args:
   idea:
     type: string
@@ -71,8 +71,17 @@ interface TestVerdict {
   issues: string[];
   /** 覆盖声明：深审了哪些文件/区域、只略读了哪些（先于判定写出，供日后对账） */
   coverage: string;
+  /** 失败三分类（存在失败时必填其一）：实现坏=想法对但代码错（走修复流）；想法坏=实现忠实但方案不行（重定界，不作终止理由）；理解错=对目标/规格的理解有误（升级提问，待老板经 FromBoss/下轮 focus 答复）；无失败可空 */
+  failureClass?: "implementation-bug" | "idea-flawed" | "misunderstanding" | "";
   /** 本轮产出的产物路径（含图像/图表；.gitignore 里的也要列，供视觉审阅定位）；无则空数组 */
   artifacts?: string[];
+}
+
+interface ChiefFixes {
+  /** 修复/补充实验指令（可为空数组=无需修复）；理解分歧绝不写入此清单——工程师不执行理解裁决 */
+  fixes: string[];
+  /** 理解分歧升级：待老板答复的疑问（问题原文+为何无法自行裁决+默认理解及其风险）；无则空数组 */
+  escalations?: string[];
 }
 
 interface VisualVerdict {
@@ -179,7 +188,7 @@ const CHIEF_ZH = [
   "检索纪律（bossloop 仓库 skills/paper-search.md 的内联要点）：泛调研求快准——综述作起步文献（题名检索「XX综述」或 Review 类型过滤），只读摘要+引言+结论；精调研求全精——高被引、高影响因子、时间新优先，综述+经典+前沿三者都读。检索词绝不字面直译——每个概念收集同义词/上下位词/单复数/同根派生词并用 OR 连接（同义词集越全漏检越少）；AND 收窄、OR 放宽、NOT 慎用；截词 * 别太深；短语加引号（精确=准但有漏，模糊=全但有噪）；邻近算符 near/N 介于其间。引文滚雪球四向走：参考文献向前追溯奠基、施引文献向后追踪进展、共引与相关记录找同类，直到不再出现新名字。筛选三步：分面过滤（领域/年份/文献类型/来源类别）→按引用排序→期刊分级（JCR 分区/核心导航）；高被引论文与热点论文优先精读。初学者先读综述再读经典再读前沿。引用他人工作必注明出处；AI 的文献记忆是正当检索工具——它记得的综述、经典、作者可直接作线索提出，每条入调研前经专业数据库核验（题录以数据库记录为准，核不实即丢弃并记录）；AI 辅助的构思必须经文献验证，绝不照搬。",
   "方案数（≤3）与竞品复现数（≤3）由你依据调研在循环内决定，上限不可突破。",
   "方案 Portfolio 是每轮动态的：每轮开始时你依据最新审稿意见重新选定 1–3 个方案（可新增、移除、替换；有得选时选满 3 个，不足时 1–2 个，至少 1 个）与竞品集合；本轮选中的每个方案都必须得到充分验证，禁止用最小对比冒充验证——最小对比会带偏结论。",
-  "每轮规划：上一轮审稿意见逐条处置——要么转成本轮任务卡，要么给出基于存档工件的反驳；不许空口忽略。",
+  "每轮规划：上一轮审稿意见逐条处置——要么转成本轮任务卡，要么给出基于存档工件的反驳；实证类质询（针对数字、实验或证据的）只能以证据闭环——无现成证据时新入档（新任务卡产出工件+映射行），有现成存档工件可释疑时指明该工件，纯措辞修订不算闭环；不许空口忽略。",
   "新颖性处理：若文献读者报告该想法已被做过，不要终止——把范围重定界到该方向上尚未解决的缺口，重新选定方案，跑满全部轮次。",
   "git 写操作权限：只执行问句明示的 git add/commit；推送由编排器统一执行并核验——你在任何时刻都不执行 git push，也不执行 reset/rebase/tag 等其它写仓库的 git 操作。",
   "老板反馈（FromBoss.md）：编排器每轮发卡前会附上 LoopMail/FromBoss.md 的当前内容（老板运行中下达的指令，可能为空）——逐条落实到本轮任务卡并把应用情况记入账本；与既有要求不一致时以老板最新指令为准并如实记录；新指令使已排产工作失效时，本轮任务卡以「作废重做」的显式决策开头。",
@@ -211,8 +220,11 @@ const TEST_ZH = [
   "先读 LoopMail/ToBoss.md 开局邮件（逐句清点/要求与验收标准/产物规格表/待答问题）：验收按规格表的合格判据，而不是只验结构（文件生成了、图非空、颜色合规）。",
   "验收以开局邮件「要求与验收标准」节的老板原话为唯一准绳，不以任何卡面转述为准；发现转述失真（卡面/文档与原话的实词不一致）列入问题清单并定性「转述失真」。",
   "你拥有 claim→evidence 映射表（Agents/claim_map.md）：稿件每个数字 ↔ 存档工件 + 可重跑的检查命令；先写检查，再做主张。文件首行须含 claim-map 标记，正文用表格。",
+  "区分性证据：凡主张含因果/机制语言（「X 使 Y 提升」「收益归功于 Z」），对应映射行须附能排除替代解释的检查——去掉或绕过所提机制后收益是否仍在，或等价对照；给不出就在主张旁显式标注「不可归因」，绝不以裸数字支撑机制主张。",
+  "协议不可变性：在 Agents/claim_map.md 维护一行 `EVALSURFACE: <文件>=<哈希>,…`（git hash-object 计哈希，覆盖评测/对比脚本、指标定义、数据划分等全部评测面文件，路径相对工作区根）；评测面任何变更必须显式重新对拍——新协议面下重跑基线并记入账本，否则变更前入档的数字不得用于跨轮比较（编排器复核哈希真实性并跨轮比对，漂移将注入评估报告）。",
   "测试期望值只许从规格表或已登记要求派生，绝不从当前实现派生；每条断言的注释写明出处。把误解写成必须通过的测试，是最坏的护城河。",
   "数字幻觉警示：好的数据表现不代表好的情况——严谨考虑数字代表的含义是不是表面那么简单；支撑它的理论可能本身有错，而漂亮的数字又会加固这一理论幻觉。理解数字含义的前提是对其基础理论有充分认知：对每个头条数字追问——它背后的理论/机制是什么，若理论错了这个数字还说明什么？",
+  "失败三分类：裁决含失败时必须标注类别——实现坏（想法对但代码错）/想法坏（实现忠实但方案不行）/理解错（对目标或规格的理解有误）；分类决定流向：实现坏走修复流、想法坏走方案重定界（不作终止理由）、理解错升级提问待老板答复——绝不把实现 bug 当想法不行错杀，也不把想法缺陷当实现 bug 错救。",
   "你负责在 Agents/ 下建立/维护 Agents/selfcheck.py（测试与调试脚本一律放 Agents/，仓库根与 docs/ 只放老板面向的文件）：必须含至少一个故意埋坏、必须 FAIL 的金丝雀用例（带 canary 标记；selfcheck 运行时必须真实执行该金丝雀并观察到其失败，并在标准输出末尾打印一行机器可读结果：CANARY: expected-FAIL observed-FAIL——编排器解析此行核验，缺失或 observed-PASS 视为套件无效）——不会变红的测试套件证明不了任何事。",
   "破坏性操作判据：超出申报裁决清单的——数据集或既有产物被删/被覆盖、历史被改写、force 痕迹——标为严重问题并索要总工裁决记录；实验产物正常迭代替换不属此列。",
   "长上下文纪律：diff 或审查面偏大时，先盘变更清单、再对高风险区（逻辑改动、门禁相关、涉危险操作处）深读；verdict 的 coverage 字段必须写明深审了哪些、只略读了哪些——它写在知道问题在哪之前，日后问题落在略读区将以此对账。",
@@ -223,7 +235,7 @@ const TEST_ZH = [
 
 const RESEARCHER_ZH = [
   "你是研究员：每轮唯一一次修订时机（开发后、审稿前），实事求是修订 docs/paper_draft.md；若该文件尚不存在，按实验结果与写作规范创建初稿。",
-  "只写 claim→evidence 映射表里有的数字，缺口留显式 [TODO]；遵循获奖论文写作规范：具体开头、条件化 gap、组件递进、消融对应论断、Limitations 独立成节、禁 AI 腔。全程中文。",
+  "只写 claim→evidence 映射表里有的数字，缺口留显式 [TODO]；因果/机制类主张只在映射表给出区分性证据时才写，否则不写或显式标注「不可归因」；遵循获奖论文写作规范：具体开头、条件化 gap、组件递进、消融对应论断、Limitations 独立成节、禁 AI 腔。全程中文。",
   "写作纪律（bossloop 仓库 skills/paper-writing.md 的内联要点，修订稿件时逐条自查）：清晰至上（逻辑→结构→语言三级），写给别人看不是炫技；骨架 IMRAD（研究什么问题→引言/怎么研究→方法/发现什么→结果/意味着什么→讨论），逻辑形状宽→窄→宽；结论说三遍（摘要、引言、讨论）是设计不是冗余；题目=用最少词准确描述内容（禁「研究/观察/分析」开头与缩写）；摘要=论文缩影 ≤250 词四要素（目标/方法/结果/结论）、过去时、不引文献不提图表、中性不玩巧；引言是成败节——问题与重要性→简述文献点出 gap→目标→方法→（视惯例）主要结果，绝不卖关子；结果只写代表性数据（傻子收集事实，智者选择事实），图表已示的不复述；讨论=解释不复述：理论含义与应用、结论+证据、强项与局限、例外不掩盖，忌宇宙级结论；写完修订多遍自检（信息全/内容准/推理 sound/前后一致/组织清晰/行文简洁/语法正确/图表合格/合乎投稿规范），改到力竭即停。",
 ].join("\n");
 
@@ -577,6 +589,10 @@ async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
 }
 
 let claimGapNote = ""; // claim_map 实质核查未清零时的披露注入（家族审计 #2：披露承诺必须有消费机制）
+let evalSurfaceFirstR = ""; // 协议面指纹首见登记（协议不可变性：本运行内跨轮比对基准，规范形）
+let protocolDriftNote = ""; // 协议面漂移检出时的披露注入（与 claimGapNote 同款消费机制）
+let evalSurfaceLieNote = ""; // 协议面指纹失真时的披露注入（只置一次，防逐轮重复）
+let misunderstandingNote = ""; // 总工升级的理解分歧（待老板答复）——评估报告待老板决策节必须逐条列出
 for (let round = startRound; round <= rounds; round++) {
   const roundHead0 = await HEADR(); // 本轮起点 HEAD：图像检测 diff 源的基线（工程循环同款）
   chief = agent("总工程师-R" + round, persona(CHIEF_ZH + PROFILE_LINE, STRONG)); // B#27：每轮全新实例——检查点是账本，不是任何人的会话记忆
@@ -688,8 +704,8 @@ for (let round = startRound; round <= rounds; round++) {
   let verdict = await tester.ask<TestVerdict>(
     "审查开发产出。作者自报如下（只当线索与覆盖面提示——每个数字与主张以 claim_map 与存档工件核验为准，绝不因自报而免检）：" + JSON.stringify(dev) + "\n" +
     "本轮 diff = 上一轮存档提交..当前工作树（含未跟踪文件）。先读 LoopMail/ToBoss.md 开局邮件的产物规格表：验收按规格表的合格判据，不只验结构。" +
-    "职责：代码审查/roundtrip（含对抗输入）/泛化/扰动稳定性；更新 claim→evidence 映射表（Agents/claim_map.md）；" +
-    "建立或更新 Agents/selfcheck.py，必须含至少一个必须失败的金丝雀用例；selfcheck 运行时必须真实执行该金丝雀并观察到其失败，并在标准输出末尾打印机器可读一行：CANARY: expected-FAIL observed-FAIL（编排器解析此行核验——缺失或 observed-PASS 视为套件无效）；期望值只从规格表或已登记要求派生（注释写出处），绝不从当前实现派生。对进入主张或 go/no-go 决策、且经多步聚合的头条数字，从存档中间记录用第二条路径复算（不同分组或公式——不要求第二套实现）；实验须存档足以让复算在分钟级完成的中间记录。不一致即冻结该数字并审计，绝不当作舍入误差放行。单一来源的直接测量免检（roundtrip 与 canary 已覆盖）。发现数字被撤回时，全库检索所有重复该数字的文档（账本历史、README、图表）并列出当轮修正清单。返回 TestVerdict（artifacts 列出本轮产出的图/表路径，含被 .gitignore 的）。",
+    "职责：代码审查/roundtrip（含对抗输入）/泛化/扰动稳定性；更新 claim→evidence 映射表（Agents/claim_map.md）：机制类主张的映射行附区分性证据，并维护 EVALSURFACE 协议面指纹行（git hash-object）；" +
+    "建立或更新 Agents/selfcheck.py，必须含至少一个必须失败的金丝雀用例；selfcheck 运行时必须真实执行该金丝雀并观察到其失败，并在标准输出末尾打印机器可读一行：CANARY: expected-FAIL observed-FAIL（编排器解析此行核验——缺失或 observed-PASS 视为套件无效）；期望值只从规格表或已登记要求派生（注释写出处），绝不从当前实现派生。对进入主张或 go/no-go 决策、且经多步聚合的头条数字，从存档中间记录用第二条路径复算（不同分组或公式——不要求第二套实现）；实验须存档足以让复算在分钟级完成的中间记录。不一致即冻结该数字并审计，绝不当作舍入误差放行。单一来源的直接测量免检（roundtrip 与 canary 已覆盖）。发现数字被撤回时，全库检索所有重复该数字的文档（账本历史、README、图表）并列出当轮修正清单。存在失败时 failureClass 必填（实现坏/想法坏/理解错，无失败留空）。返回 TestVerdict（artifacts 列出本轮产出的图/表路径，含被 .gitignore 的）。",
   );
   // 图像产物 → 视觉审阅（机械触发）：问题并入本轮问题清单，走既有修复流程；没有图就没有这笔开销
   const isImgR = (p: string): boolean => /\.(png|jpe?g|svg|webp|gif)$/i.test(p);
@@ -754,6 +770,15 @@ for (let round = startRound; round <= rounds; round++) {
       verdict.issues = verdict.issues.concat(visualCacheIssuesR);
       log("视觉审阅发现问题，已并入本轮修复清单：" + visualNoteR.slice(0, 300));
     }
+    }
+  }
+  // 失败三分类机械补标（一次修复）：verdict 存在失败而 failureClass 缺失/非法时回问一次——「必填」不能只靠人设自觉
+  if ((verdict.issues || []).length > 0 && ["implementation-bug", "idea-flawed", "misunderstanding"].indexOf(verdict.failureClass || "") < 0) {
+    verdict = await tester.ask<TestVerdict>(
+      "verdict 存在失败但 failureClass 缺失或非法（须为 implementation-bug / idea-flawed / misunderstanding 之一；确无失败才可空）——按失败三分类补标后返回完整 TestVerdict，其余字段照旧。",
+    );
+    if ((verdict.issues || []).length > 0 && ["implementation-bug", "idea-flawed", "misunderstanding"].indexOf(verdict.failureClass || "") < 0) {
+      log("failureClass 补标后仍缺失——如实记录，失败三分类退化为文字描述");
     }
   }
   let claimMapOk = false;
@@ -825,6 +850,53 @@ for (let round = startRound; round <= rounds; round++) {
       const stillM = await auditClaimMap();
       log(stillM[0] === "__unreadable__" ? "claim_map 实质核查复核时稿件不可读——如实记录" : stillM.length === 0 ? "claim_map 实质核查：修正后通过" : "claim_map 实质核查仍有 " + stillM.length + " 项未对上——如实记录，稿件披露以 claim_map 缺口为准");
       if (stillM[0] !== "__unreadable__" && stillM.length > 0) claimGapNote = "claim_map 实质核查仍有 " + stillM.length + " 项未对上——报告必须如实披露这些 claim↔evidence 缺口，绝不静默。\n";
+    }
+  }
+  // 协议面指纹核查（协议不可变性）：EVALSURFACE 行声明评测面文件与哈希——编排器逐文件复核哈希真实性（直帧失败回落仓库根帧），并与本运行首见登记的规范形（剔除模板占位、对排序、小写化）跨轮比对；漂移与失真都注入评估报告如实披露，绝不静默
+  if (claimMapOk) {
+    let mapE = "";
+    try {
+      mapE = await readRepo("Agents/claim_map.md");
+    } catch {
+      mapE = "";
+    }
+    const lineE = (mapE.split("\n").find((l) => l.includes("EVALSURFACE:")) || "").trim();
+    if (lineE === "") {
+      log("协议面指纹未登记（claim_map.md 无 EVALSURFACE 行）——如实记录：评测面变更将无法机械检出");
+    } else {
+      const pairsE = lineE.slice(lineE.indexOf("EVALSURFACE:") + "EVALSURFACE:".length).split(",").map((s) => s.trim()).filter((s) => s.indexOf("=") > 0 && !s.includes("<")); // 剔除模板占位对（<文件>=<哈希>）
+      if (pairsE.length === 0) {
+        log("EVALSURFACE 行不含有效「文件=哈希」对（可能只复制了模板占位）——按未登记处理，如实记录");
+      } else {
+        const canonE = pairsE.map((s) => { const iE = s.indexOf("="); return s.slice(0, iE).trim().toLowerCase() + "=" + s.slice(iE + 1).trim().toLowerCase(); }).sort().join(",");
+        const hashAt = async (p: string): Promise<string> => {
+          try {
+            const rE = await world.run("git", ["hash-object", p], { timeoutMs: 60000 });
+            return rE.exitCode === 0 ? (rE.stdout || "").trim() : "";
+          } catch {
+            return "";
+          }
+        };
+        let fakeE = false;
+        for (const pr of pairsE) {
+          const eqE = pr.indexOf("=");
+          const fE = pr.slice(0, eqE).trim();
+          const hE = pr.slice(eqE + 1).trim();
+          let hR = await hashAt(fE);
+          if (hR === "" && repoRoot !== "" && fE.indexOf("/") !== 0) hR = await hashAt(repoRoot + "/" + fE);
+          if ((hR || "?").toLowerCase() !== hE.toLowerCase()) fakeE = true;
+        }
+        if (fakeE) {
+          log("协议面指纹失真：EVALSURFACE 行的哈希与实际文件不符（文件被改而指纹未更新、文件缺失或登记有误）——如实记录");
+          if (evalSurfaceLieNote === "") evalSurfaceLieNote = "协议面指纹失真：EVALSURFACE 行的哈希与实际文件不符（文件被改而指纹未更新、文件缺失或登记有误）——指纹不可信，本运行内评测面变更无法机械检出；报告必须如实披露此异常，绝不静默。\n";
+        }
+        if (evalSurfaceFirstR === "") {
+          evalSurfaceFirstR = canonE; // 本运行首见登记（规范形）
+        } else if (canonE !== evalSurfaceFirstR) {
+          protocolDriftNote = "协议面指纹与本运行首次登记不一致（评测面发生变更）——变更前入档数字与本次数字的跨轮比较不可直接采信；报告必须如实披露此变更及其重新对拍情况，绝不静默。\n";
+          log("协议面漂移检出：EVALSURFACE 行与本运行首见登记不一致——注入评估报告");
+        }
+      }
     }
   }
   let canary = false;
@@ -908,9 +980,15 @@ for (let round = startRound; round <= rounds; round++) {
 
   phase("修复与补充实验");
   let fixDev: DevReport = dev;
-  const fixes = await chief.ask<string[]>(
-    "测试结论：" + JSON.stringify(verdict) + "\n门禁：" + gate + "\n把测试问题转成修复/补充实验指令（可为空数组=无需修复）。",
+  const disp = await chief.ask<ChiefFixes>(
+    "测试结论：" + JSON.stringify(verdict) + "\n门禁：" + gate + "\n按测试的失败三分类（failureClass）处置：实现坏→修复/补充实验指令（写入 fixes）；想法坏→方案重定界（重定界不是终止理由——留待下轮依审稿重选方案组合，不写入 fixes）；理解错→绝不写入 fixes（工程师不执行理解裁决），写入 escalations（问题原文+为何无法自行裁决+默认理解及其风险）。fixes 为空数组=无需修复。",
   );
+  const fixes = disp.fixes || [];
+  const escR = disp.escalations || [];
+  if (escR.length > 0) {
+    misunderstandingNote += "总工升级的理解分歧（待老板答复）：\n" + escR.join("\n") + "\n";
+    log("理解分歧升级 " + escR.length + " 条——已注入评估报告披露");
+  }
   if (fixes.length > 0) {
     fixDev = await algo.ask<DevReport>("执行修复与补充实验：" + fixes.join("；") + "\n每条先在本轮代码上复现：过期条目（引用旧版本行号、已被修复、当前复现不了）直接丢弃并说明，绝不据此改动。返回 DevReport。");
     if (round1FullMissing && (fixDev.numbers || []).some((n) => /^\s*FULL/.test(n))) {
@@ -1100,6 +1178,9 @@ let evalResult = await chief.ask<EvalReport>(
   "若轮次记录显示第 1 轮无端到端数字，报告必须显式声明「第 1 轮无 FULL 数字，稿件不得声称已验证」。\n" +
   (closingBossNoteR !== "" ? "【老板反馈（收尾时重读 LoopMail/FromBoss.md）】以下为老板运行中写入、尚无轮次可落实的指令——逐条处置或在报告的待老板决策节列明，绝不静默：\n" + closingBossNoteR + "\n" : "") +
   (claimGapNote !== "" ? "【机械核查未过】" + claimGapNote + "——报告必须如实披露，绝不静默。\n" : "") +
+  (protocolDriftNote !== "" ? "【机械核查】" + protocolDriftNote : "") +
+  (evalSurfaceLieNote !== "" ? "【机械核查】" + evalSurfaceLieNote : "") +
+  (misunderstandingNote !== "" ? "【理解分歧升级】" + misunderstandingNote + "——报告的待老板决策节（给老板的建议）必须逐条列出这些疑问，绝不静默。\n" : "") +
   (reconGap !== "" ? "【机械核查未过】" + reconGap + "——报告必须如实披露这些要求的未交付状态，绝不静默。\n" : "") +
   (round1FullMissing ? "【机械核查】第 1 轮无 FULL 级端到端数字——报告与稿件必须显式声明未验证。\n" : "") +
   "撰写《初步评估报告》：verdict（继续/转向/停止）、预期成功率（推理依据必须引用实验死亡率趋势与文献读者的新颖性核查结论；并明确标注『这是定性判断的数值化表达，非校准概率』）、创新性（引用最相近 3 篇工作与实质差异维度）、影响力、继续做要注意的点（每条注明对应主张的证据范围——数据集与条件）、" +
