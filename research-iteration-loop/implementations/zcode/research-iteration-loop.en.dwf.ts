@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Research Iteration Loop (v0.6.1), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3) from the latest reviews; the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map + a mechanical selfcheck gate with a canary, owning the test fixtures); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
+description: Research Iteration Loop (v0.6.2), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3) from the latest reviews; the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map + a mechanical selfcheck gate with a canary, owning the test fixtures); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
 args:
   idea:
     type: string
@@ -495,7 +495,7 @@ const checkIntakeR = async (): Promise<void> => {
 await checkIntakeR();
 if (intakeMissingR.length > 0) {
   await chief.ask<string>(
-    "Intake completeness check failed: " + intakeMissingR.join("; ") + ". Complete the LoopMail/ToBoss.md opening mail (section headings fixed as \"Sentence inventory\" / \"Requirements and acceptance criteria\" / \"Artifact spec table\" / \"Open questions\", the inventory covering every sentence of the boss's words) and " + GC + " add -A && " + GC + " commit; return one sentence.",
+    "Intake completeness check failed: " + intakeMissingR.join("; ") + ". Complete the LoopMail/ToBoss.md opening mail (section headings fixed as \"Sentence inventory\" / \"Requirements and acceptance criteria\" / \"Artifact spec table\" / \"Open questions\", the inventory covering every sentence of the boss's words; sections or lines added by this repair carry a \"(backfilled)\" marker) and " + GC + " add -A && " + GC + " commit; return one sentence.",
   );
   await checkIntakeR();
   log(intakeMissingR.length === 0 ? "Intake completeness: passed after repair" : "Intake completeness still missing: " + intakeMissingR.join("; ") + " — recorded honestly, continuing");
@@ -617,17 +617,21 @@ for (let round = startRound; round <= rounds; round++) {
     log("Retelling-distortion defense not run: LoopMail/ToBoss.md is unreadable — recorded honestly (all other defenses unchanged)");
   } else {
     const linesByRn = new Map<string, string[]>();
-    for (const rawLine of reqRawC.split("\n")) {
-      if (!/^\s*(?:#{1,6}\s*|[-*+]\s*|\d{1,3}[.、)]\s*|[*_]{0,2})*R\d+\b/.test(rawLine)) continue; // only lines that open with the Rn count as registered lines — index lines and cross-reference lines never pass (heading, list or emphasis decoration is fine)
-      const rns = Array.from(new Set(rawLine.match(/\bR\d+\b/g) || []));
-      if (rns.length === 0) continue;
-      const lineN = rawLine.replace(/\s+/g, "");
-      for (const rn of rns) {
-        const parts = linesByRn.get(rn) || [];
-        if (parts.indexOf(lineN) < 0) parts.push(lineN);
-        linesByRn.set(rn, parts);
+    const parseReq = (raw: string): void => {
+      linesByRn.clear();
+      for (const rawLine of raw.split("\n")) {
+        if (!/^\s*(?:#{1,6}\s*|[-*+]\s*|\d{1,3}[.、)]\s*|[*_]{0,2})*R\d+\b/.test(rawLine)) continue; // only lines that open with the Rn count as registered lines — index lines and cross-reference lines never pass (heading, list or emphasis decoration is fine)
+        const rns = Array.from(new Set(rawLine.match(/\bR\d+\b/g) || []));
+        if (rns.length === 0) continue;
+        const lineN = rawLine.replace(/\s+/g, "");
+        for (const rn of rns) {
+          const parts = linesByRn.get(rn) || [];
+          if (parts.indexOf(lineN) < 0) parts.push(lineN);
+          linesByRn.set(rn, parts);
+        }
       }
-    }
+    };
+    parseReq(reqRawC);
     const verbatimOk = (card: string): boolean => {
       const c = card.replace(/\s+/g, "");
       const cited = Array.from(new Set(card.match(/\bR\d+\b/g) || []));
@@ -642,8 +646,16 @@ for (let round = startRound; round <= rounds; round++) {
     if (noRn.length > 0) log("Round " + round + " has " + noRn.length + " card(s) without an Rn reference — a violation of the carding discipline (every card traces to a requirement entry); recorded honestly");
     if (paraphrased.length > 0) {
       cards = await chief.ask<WorkCards>(
-        "Card-to-opening-mail check failed (retelling-distortion defense, line-level): these cards cite an Rn but do not fully contain that Rn's registered line from the opening mail — the card's paraphrase may have changed content words (object/operation/quantifier/negation/numbers):\n" + paraphrased.map((c) => "- " + c.slice(0, 80)).join("\n") + "\nRewrite these cards: copy the registered line for the cited Rn from LoopMail/ToBoss.md verbatim into the card (with its Rn prefix; a compressed phrase only as the title) and return every other field unchanged (keep the title and proposals unchanged); if the opening mail itself is missing the original words, complete the mail first. Return WorkCards.",
+        "Card-to-opening-mail check failed (retelling-distortion defense, line-level): these cards cite an Rn but do not fully contain that Rn's registered line from the opening mail — the card's paraphrase may have changed content words (object/operation/quantifier/negation/numbers):\n" + paraphrased.map((c) => "- " + c.slice(0, 80)).join("\n") + "\nRewrite these cards: copy the registered line for the cited Rn from LoopMail/ToBoss.md verbatim into the card (with its Rn prefix; a compressed phrase only as the title) and return every other field unchanged (keep the title and proposals unchanged); if the opening mail itself is missing the original words, complete the mail first, marking each backfilled registered line with \"(backfilled)\" at its end so a backfill stays distinguishable from an original registration. Return WorkCards.",
       );
+      // the rewrite path may backfill registrations — re-read and rebuild the snapshot so honestly backfilled lines can pass this round's recheck (a remediation path must converge, review #4)
+      let reqRaw2 = "";
+      try {
+        reqRaw2 = await readRepo("LoopMail/ToBoss.md");
+      } catch {
+        reqRaw2 = "";
+      }
+      if (reqRaw2 !== "") parseReq(reqRaw2);
       paraphrased = (cards.cards || []).filter((c) => /\bR\d+\b/.test(c) && !verbatimOk(c));
       log(paraphrased.length === 0 ? "Card-to-opening-mail check: passed after rewrite" : "Card-to-opening-mail check still failing for " + paraphrased.length + " card(s) — recorded honestly, continuing; downstream anchors to the opening mail's words");
     }
@@ -743,6 +755,7 @@ for (let round = startRound; round <= rounds; round++) {
     }
   }
   let claimMapOk = false;
+  let exemptCountR = -1; // usage of the claim_map exemption channel, -1 = the substance check did not complete (disclosed into the ledger — an exemption silences honestly, but its usage must stay visible; an unaudited count is never stated as fact)
   try {
     const map = await readRepo("Agents/claim_map.md");
     claimMapOk = map.includes("claim-map") && map.split("\n").filter((l) => l.trim().startsWith("|")).length >= 2;
@@ -780,6 +793,7 @@ for (let round = startRound; round <= rounds; round++) {
       const linesM = mapM.split("\n");
       const covered = linesM.filter((l) => !/^\s*<!--[^>]*(?:非主张数字|not-a-claim)/.test(l)).join("\n").replace(/\s+/g, "");
       const exemptToksM = Array.from(new Set(linesM.filter((l) => /^\s*<!--[^>]*(?:非主张数字|not-a-claim)/.test(l)).join("\n").match(/\d+\.\d+/g) || []));
+      exemptCountR = exemptToksM.length;
       for (const tok of Array.from(new Set(paperM.match(/\d+\.\d+/g) || []))) {
         if (exemptToksM.indexOf(tok) >= 0) continue; // numbers registered on an exemption line leave the coverage sweep — the exemption lets an honest map pass, not fail forever
         if (covered.indexOf(tok) < 0) badM.push("manuscript number " + tok + " has no map row (a claim-without-evidence gap)");
@@ -973,7 +987,7 @@ for (let round = startRound; round <= rounds; round++) {
   phase("Archive round");
   const head0 = await HEADR(); // retried on transient failure (B#25) — archive verification never bare-reads
   const archived = await chief.ask<string>(
-    "Record this round in Agents/ledger.md (head carries the repository identity line" + (repoRoot ? ": " + repoRoot : "") + " and a one-line-per-round index: update this round's index line first, then append the detail; review panel of " + n + " with " + absentN + " absent) — task/build (" + (dev.summary || "").slice(0, 400) + ")/HEAD before archive " + (head0 || "empty tree").slice(0, 7) + "/destructive-operation ruling (" + dangerLog + ")/test (coverage statement: " + (verdict.coverage || "").slice(0, 300) + "; visual review: " + visualNoteR.slice(0, 200) + ")/reviews (" + digest.slice(0, 1200) + ")/next direction. Then " + GC + " add -A && " + GC + " commit (the backup push is executed and verified by the orchestrator — you never push; publishing to the cloud is always the boss's explicit action). Return one sentence.",
+    "Record this round in Agents/ledger.md (head carries the repository identity line" + (repoRoot ? ": " + repoRoot : "") + " and a one-line-per-round index: update this round's index line first, then append the detail; review panel of " + n + " with " + absentN + " absent) — task/build (" + (dev.summary || "").slice(0, 400) + ")/HEAD before archive " + (head0 !== "" ? head0.slice(0, 7) : "empty tree / unreadable") + "/destructive-operation ruling (" + dangerLog + ")/test (coverage statement: " + (verdict.coverage || "").slice(0, 300) + "; visual review: " + visualNoteR.slice(0, 200) + "; claim_map exemptions " + (exemptCountR >= 0 ? "counted: " + exemptCountR : "not audited — the substance check did not complete") + ")/reviews (" + digest.slice(0, 1200) + ")/next direction. Then " + GC + " add -A && " + GC + " commit (the backup push is executed and verified by the orchestrator — you never push; publishing to the cloud is always the boss's explicit action). Return one sentence.",
   );
   const head1 = await HEADR(); // retried on transient failure (B#25) — archive verification never bare-reads
   let commitOk = head1 !== "" && head1 !== head0;
@@ -1114,6 +1128,11 @@ if (askedQ > 0 && (!evalResult.questionAnswers || evalResult.questionAnswers.len
   );
   if (!evalResult.questionAnswers || evalResult.questionAnswers.length === 0) log("Report still lacks answered questions (recorded honestly; the boss's words contain " + askedQ + " question mark(s))");
 }
+try {
+  evalOnDisk = await readRepo("LoopMail/ToBoss.md"); // the QA path may also write ToBoss — re-read so the report body reflects the final landing state (review #2)
+} catch {
+  evalOnDisk = "";
+}
 // The evaluation-report commit is pushed and verified by the orchestrator (same as the engineering loop)
 let finalPushR = push0.target === "" ? "push skipped: " + push0.note : (branchR === "" ? "not pushed: detached HEAD, the target branch is indeterminate (recorded honestly)" : "not pushed");
 if (push0.target !== "" && branchR !== "") {
@@ -1140,7 +1159,7 @@ if (push0.target !== "" && branchR !== "") {
 const md = [
   "# Preliminary Evaluation Report",
   "",
-  "Master copy: the latest mail in LoopMail/ToBoss.md (this card is the run's delivery copy).",
+  (evalOnDisk.slice(0, 2000).includes("Preliminary Evaluation Report") ? "Master copy: the latest mail in LoopMail/ToBoss.md (this card is the run's delivery copy)" : "⚠ the master copy never landed (repair failed) — this card is the only delivered wording"),
   "",
   "Idea: " + idea,
   "",

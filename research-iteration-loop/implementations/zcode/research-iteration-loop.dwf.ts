@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 科研迭代循环（v0.6.1）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表 + 含 canary 的 selfcheck 机械门禁，测试基建归其所有）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
+description: 科研迭代循环（v0.6.2）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表 + 含 canary 的 selfcheck 机械门禁，测试基建归其所有）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
 args:
   idea:
     type: string
@@ -496,7 +496,7 @@ const checkIntakeR = async (): Promise<void> => {
 await checkIntakeR();
 if (intakeMissingR.length > 0) {
   await chief.ask<string>(
-    "入账完整性核查未通过：" + intakeMissingR.join("；") + "。请补全 LoopMail/ToBoss.md 开局邮件（四节标题固定为「逐句清点」「要求与验收标准」「产物规格表」「待答问题」，逐句清点覆盖老板原话每一句）并 " + GC + " add -A && " + GC + " commit，返回一句话。",
+    "入账完整性核查未通过：" + intakeMissingR.join("；") + "。请补全 LoopMail/ToBoss.md 开局邮件（四节标题固定为「逐句清点」「要求与验收标准」「产物规格表」「待答问题」，逐句清点覆盖老板原话每一句；本轮补记的节或行须标注「（补记）」）并 " + GC + " add -A && " + GC + " commit，返回一句话。",
   );
   await checkIntakeR();
   log(intakeMissingR.length === 0 ? "入账完整性：补齐后通过" : "入账完整性仍缺：" + intakeMissingR.join("；") + "——如实记录并继续");
@@ -618,17 +618,21 @@ for (let round = startRound; round <= rounds; round++) {
     log("转述失真防线未运行：LoopMail/ToBoss.md 不可读——如实记录（其余防线不变）");
   } else {
     const linesByRn = new Map<string, string[]>();
-    for (const rawLine of reqRawC.split("\n")) {
-      if (!/^\s*(?:#{1,6}\s*|[-*+]\s*|\d{1,3}[.、)]\s*|[*_]{0,2})*R\d+\b/.test(rawLine)) continue; // 登记行只认以 Rn 开头的行——目录行/交叉引用行不得当通行证（标题/列表/强调装饰不碍）
-      const rns = Array.from(new Set(rawLine.match(/\bR\d+\b/g) || []));
-      if (rns.length === 0) continue;
-      const lineN = rawLine.replace(/\s+/g, "");
-      for (const rn of rns) {
-        const parts = linesByRn.get(rn) || [];
-        if (parts.indexOf(lineN) < 0) parts.push(lineN);
-        linesByRn.set(rn, parts);
+    const parseReq = (raw: string): void => {
+      linesByRn.clear();
+      for (const rawLine of raw.split("\n")) {
+        if (!/^\s*(?:#{1,6}\s*|[-*+]\s*|\d{1,3}[.、)]\s*|[*_]{0,2})*R\d+\b/.test(rawLine)) continue; // 登记行只认以 Rn 开头的行——目录行/交叉引用行不得当通行证（标题/列表/强调装饰不碍）
+        const rns = Array.from(new Set(rawLine.match(/\bR\d+\b/g) || []));
+        if (rns.length === 0) continue;
+        const lineN = rawLine.replace(/\s+/g, "");
+        for (const rn of rns) {
+          const parts = linesByRn.get(rn) || [];
+          if (parts.indexOf(lineN) < 0) parts.push(lineN);
+          linesByRn.set(rn, parts);
+        }
       }
-    }
+    };
+    parseReq(reqRawC);
     const verbatimOk = (card: string): boolean => {
       const c = card.replace(/\s+/g, "");
       const cited = Array.from(new Set(card.match(/\bR\d+\b/g) || []));
@@ -643,8 +647,16 @@ for (let round = startRound; round <= rounds; round++) {
     if (noRn.length > 0) log("第 " + round + " 轮有 " + noRn.length + " 张卡无 Rn 标注——违反发卡纪律（每卡可追溯到要求条目），如实记录");
     if (paraphrased.length > 0) {
       cards = await chief.ask<WorkCards>(
-        "卡面-开局邮件对拍未通过（转述失真防线，句级）：以下卡引用了 Rn，但没有完整内嵌开局邮件中该 Rn 的登记行——卡面转述可能已改变实词（对象/操作/量词/否定词/数字）：\n" + paraphrased.map((c) => "- " + c.slice(0, 80)).join("\n") + "\n请重写这些卡：把 LoopMail/ToBoss.md 中该 Rn 的登记行逐字复制进卡面（含 Rn 前缀；压缩短语只能作标题），其余字段照旧返回（标题与 proposals 不变）；若是开局邮件漏记了原话，先补邮件再返回。返回 WorkCards。",
+        "卡面-开局邮件对拍未通过（转述失真防线，句级）：以下卡引用了 Rn，但没有完整内嵌开局邮件中该 Rn 的登记行——卡面转述可能已改变实词（对象/操作/量词/否定词/数字）：\n" + paraphrased.map((c) => "- " + c.slice(0, 80)).join("\n") + "\n请重写这些卡：把 LoopMail/ToBoss.md 中该 Rn 的登记行逐字复制进卡面（含 Rn 前缀；压缩短语只能作标题），其余字段照旧返回（标题与 proposals 不变）；若是开局邮件漏记了原话，先补邮件再返回，补记的登记行行尾标注「（补记）」——补记与原始登记必须可区分。返回 WorkCards。",
       );
+      // 重写路径可能补登记——重读并重建快照，使如实补记的行能通过本轮回检（补救路径必须可收敛，终审 #4）
+      let reqRaw2 = "";
+      try {
+        reqRaw2 = await readRepo("LoopMail/ToBoss.md");
+      } catch {
+        reqRaw2 = "";
+      }
+      if (reqRaw2 !== "") parseReq(reqRaw2);
       paraphrased = (cards.cards || []).filter((c) => /\bR\d+\b/.test(c) && !verbatimOk(c));
       log(paraphrased.length === 0 ? "卡面-开局邮件对拍：重写后通过" : "卡面-开局邮件对拍重写后仍缺 " + paraphrased.length + " 张——如实记录并继续，下游以开局邮件原话为准绳");
     }
@@ -744,6 +756,7 @@ for (let round = startRound; round <= rounds; round++) {
     }
   }
   let claimMapOk = false;
+  let exemptCountR = -1; // claim_map 豁免通道使用量，-1=实质核查未完成（披露进账本——豁免是收声通道，使用量必须可见；未核查不以事实口吻报数）
   try {
     const map = await readRepo("Agents/claim_map.md");
     claimMapOk = map.includes("claim-map") && map.split("\n").filter((l) => l.trim().startsWith("|")).length >= 2;
@@ -781,6 +794,7 @@ for (let round = startRound; round <= rounds; round++) {
       const linesM = mapM.split("\n");
       const covered = linesM.filter((l) => !/^\s*<!--[^>]*(?:非主张数字|not-a-claim)/.test(l)).join("\n").replace(/\s+/g, "");
       const exemptToksM = Array.from(new Set(linesM.filter((l) => /^\s*<!--[^>]*(?:非主张数字|not-a-claim)/.test(l)).join("\n").match(/\d+\.\d+/g) || []));
+      exemptCountR = exemptToksM.length;
       for (const tok of Array.from(new Set(paperM.match(/\d+\.\d+/g) || []))) {
         if (exemptToksM.indexOf(tok) >= 0) continue; // 豁免行登记的数字退出覆盖扫描——豁免是让诚实映射表收声，不是让它永不通过
         if (covered.indexOf(tok) < 0) badM.push("稿件数字 " + tok + " 无映射行覆盖（claim↔evidence 缺口）");
@@ -974,7 +988,7 @@ for (let round = startRound; round <= rounds; round++) {
   phase("本轮存档");
   const head0 = await HEADR(); // 瞬态失败重试（B#25）——存档核验不再裸读
   const archived = await chief.ask<string>(
-    "把本轮记入 Agents/ledger.md（头部含仓库标识行" + (repoRoot ? "：" + repoRoot : "") + "与一行一轮的目录：本轮先更新目录行、再追加详情；审稿团 " + n + " 人中缺席 " + absentN + " 人）：任务/产出（" + (dev.summary || "").slice(0, 400) + "）/存档前 HEAD " + (head0 || "空树").slice(0, 7) + "/危险操作裁决（" + dangerLog + "）/测试（覆盖声明：" + (verdict.coverage || "").slice(0, 300) + "；视觉审阅：" + visualNoteR.slice(0, 200) + "）/审稿（" + digest.slice(0, 1200) + "）/下轮方向。然后 " + GC + " add -A && " + GC + " commit（备份推送由编排器执行并核验，你不执行 push；向云端发布永远是老板的明确动作）。返回一句话。",
+    "把本轮记入 Agents/ledger.md（头部含仓库标识行" + (repoRoot ? "：" + repoRoot : "") + "与一行一轮的目录：本轮先更新目录行、再追加详情；审稿团 " + n + " 人中缺席 " + absentN + " 人）：任务/产出（" + (dev.summary || "").slice(0, 400) + "）/存档前 HEAD " + (head0 !== "" ? head0.slice(0, 7) : "空树或读取失败") + "/危险操作裁决（" + dangerLog + "）/测试（覆盖声明：" + (verdict.coverage || "").slice(0, 300) + "；视觉审阅：" + visualNoteR.slice(0, 200) + "；claim_map 豁免 " + (exemptCountR >= 0 ? "登记 " + exemptCountR + " 个数字" : "计数未核查——实质核查未完成") + "）/审稿（" + digest.slice(0, 1200) + "）/下轮方向。然后 " + GC + " add -A && " + GC + " commit（备份推送由编排器执行并核验，你不执行 push；向云端发布永远是老板的明确动作）。返回一句话。",
   );
   const head1 = await HEADR(); // 瞬态失败重试（B#25）——存档核验不再裸读
   let commitOk = head1 !== "" && head1 !== head0;
@@ -1114,6 +1128,11 @@ if (askedQ > 0 && (!evalResult.questionAnswers || evalResult.questionAnswers.len
   );
   if (!evalResult.questionAnswers || evalResult.questionAnswers.length === 0) log("报告仍缺待答问题（已如实记录，老板原话含 " + askedQ + " 处疑问）");
 }
+try {
+  evalOnDisk = await readRepo("LoopMail/ToBoss.md"); // 补答路径也可能写 ToBoss——重读一次，报告正本行反映最终落盘态（终审 #2）
+} catch {
+  evalOnDisk = "";
+}
 // 评估报告提交由编排器推送并核验（与工程循环同款）
 let finalPushR = push0.target === "" ? "跳过推送：" + push0.note : (branchR === "" ? "未推送：detached HEAD，分支不确定（如实记录）" : "未推送");
 if (push0.target !== "" && branchR !== "") {
@@ -1140,7 +1159,7 @@ if (push0.target !== "" && branchR !== "") {
 const md = [
   "# 初步评估报告",
   "",
-  "正本：LoopMail/ToBoss.md 最新邮件（本件为随运行的投递副本）",
+  (evalOnDisk.slice(0, 2000).includes("初步评估报告") ? "正本：LoopMail/ToBoss.md 最新邮件（本件为随运行的投递副本）" : "⚠ 正本未落盘（补写失败）——本件为唯一交付表述"),
   "",
   "idea：" + idea,
   "",

@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 鲁棒工程循环（v0.6.1）：把一句开发要求变成经过冷启动对抗验证的实现。总工建要求台账（老板原话逐字）并承诺 N 轮（老板可锁定）；每轮开发+文档单笔提交 → 冷启动门禁（diff 审查、鲁棒性测试、canary、零警告构建、上一轮 remote CI 结转）→ 先复现再返修（误诊须证据反驳）、amend 并入本轮提交（初级 3 次未解升级高级工程师，10 次未过打断上报）；全绿才推送约定 remote（默认 GitCoffer，append-only 永不 force）；账本断点续跑；破坏性操作申报-裁决-执行三段核验、绝不转交用户；模型分档 tiered/uniform。
+description: 鲁棒工程循环（v0.6.2）：把一句开发要求变成经过冷启动对抗验证的实现。总工建要求台账（老板原话逐字）并承诺 N 轮（老板可锁定）；每轮开发+文档单笔提交 → 冷启动门禁（diff 审查、鲁棒性测试、canary、零警告构建、上一轮 remote CI 结转）→ 先复现再返修（误诊须证据反驳）、amend 并入本轮提交（初级 3 次未解升级高级工程师，10 次未过打断上报）；全绿才推送约定 remote（默认 GitCoffer，append-only 永不 force）；账本断点续跑；破坏性操作申报-裁决-执行三段核验、绝不转交用户；模型分档 tiered/uniform。
 args:
   requirement:
     type: string
@@ -580,7 +580,7 @@ const checkIntake = async (): Promise<void> => {
 await checkIntake();
 if (intakeMissing.length > 0) {
   await chief.ask<string>(
-    "入账完整性核查未通过：" + intakeMissing.join("；") + "。请补全并 " + GC + " add -A && " + GC + " commit（节标题固定为「逐句清点」「要求与验收标准」「产物规格表」「待答问题」，ToBoss.md 开局邮件三块：交付什么/怎么算合格/不确定处 ≤3），返回一句话。",
+    "入账完整性核查未通过：" + intakeMissing.join("；") + "。请补全并 " + GC + " add -A && " + GC + " commit（节标题固定为「逐句清点」「要求与验收标准」「产物规格表」「待答问题」，ToBoss.md 开局邮件三块：交付什么/怎么算合格/不确定处 ≤3；本轮补记的节或行须标注「（补记）」），返回一句话。",
   );
   await checkIntake();
   log(intakeMissing.length === 0 ? "入账完整性：补齐后通过" : "入账完整性仍缺：" + intakeMissing.join("；") + "——如实记录并继续");
@@ -670,17 +670,21 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     log("转述失真防线未运行：Agents/requirements.md 不可读——如实记录（其余防线不变）");
   } else {
     const linesByRn = new Map<string, string[]>();
-    for (const rawLine of reqRawC.split("\n")) {
-      if (!/^\s*(?:#{1,6}\s*|[-*+]\s*|\d{1,3}[.、)]\s*|[*_]{0,2})*R\d+\b/.test(rawLine)) continue; // 登记行只认以 Rn 开头的行——目录行/交叉引用行不得当通行证（标题/列表/强调装饰不碍）
-      const rns = Array.from(new Set(rawLine.match(/\bR\d+\b/g) || []));
-      if (rns.length === 0) continue;
-      const lineN = rawLine.replace(/\s+/g, "");
-      for (const rn of rns) {
-        const parts = linesByRn.get(rn) || [];
-        if (parts.indexOf(lineN) < 0) parts.push(lineN);
-        linesByRn.set(rn, parts);
+    const parseReq = (raw: string): void => {
+      linesByRn.clear();
+      for (const rawLine of raw.split("\n")) {
+        if (!/^\s*(?:#{1,6}\s*|[-*+]\s*|\d{1,3}[.、)]\s*|[*_]{0,2})*R\d+\b/.test(rawLine)) continue; // 登记行只认以 Rn 开头的行——目录行/交叉引用行不得当通行证（标题/列表/强调装饰不碍）
+        const rns = Array.from(new Set(rawLine.match(/\bR\d+\b/g) || []));
+        if (rns.length === 0) continue;
+        const lineN = rawLine.replace(/\s+/g, "");
+        for (const rn of rns) {
+          const parts = linesByRn.get(rn) || [];
+          if (parts.indexOf(lineN) < 0) parts.push(lineN);
+          linesByRn.set(rn, parts);
+        }
       }
-    }
+    };
+    parseReq(reqRawC);
     const verbatimOk = (card: string): boolean => {
       const c = card.replace(/\s+/g, "");
       const cited = Array.from(new Set(card.match(/\bR\d+\b/g) || []));
@@ -695,8 +699,16 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     if (noRn.length > 0) log("第 " + round + " 轮有 " + noRn.length + " 张卡无 Rn 标注——违反发卡纪律（每卡可追溯到要求条目），如实记录");
     if (noRn.length + paraphrased.length > 0) {
       cards = await chief.ask<RoundCards>(
-        "卡面-台账对拍未通过（转述失真防线，句级）：" + (paraphrased.length > 0 ? "以下卡引用了 Rn，但没有完整内嵌台账中该 Rn 的登记行——卡面转述可能已改变实词（对象/操作/量词/否定词/数字）：\n" + paraphrased.map((c) => "- " + c.slice(0, 80)).join("\n") + "\n" : "") + (noRn.length > 0 ? "以下卡完全无 Rn 标注——无 Rn 即绕过逐字对拍（审计 F4），每卡必须可追溯到要求条目：\n" + noRn.map((c) => "- " + c.slice(0, 80)).join("\n") + "\n" : "") + "请重写上述卡：把 Agents/requirements.md 中该 Rn 的登记行逐字复制进卡面（含 Rn 前缀；压缩短语只能作标题），其余字段照旧返回（不得新增 blocked/done）；确属与要求条目无关的基础设施卡，改写为引用其服务的要求条目并说明关系，确实孤立的写明「无对应 Rn：理由」如实呈现；若是台账漏记了原话，先补台账再返回。返回 RoundCards。",
+        "卡面-台账对拍未通过（转述失真防线，句级）：" + (paraphrased.length > 0 ? "以下卡引用了 Rn，但没有完整内嵌台账中该 Rn 的登记行——卡面转述可能已改变实词（对象/操作/量词/否定词/数字）：\n" + paraphrased.map((c) => "- " + c.slice(0, 80)).join("\n") + "\n" : "") + (noRn.length > 0 ? "以下卡完全无 Rn 标注——无 Rn 即绕过逐字对拍（审计 F4），每卡必须可追溯到要求条目：\n" + noRn.map((c) => "- " + c.slice(0, 80)).join("\n") + "\n" : "") + "请重写上述卡：把 Agents/requirements.md 中该 Rn 的登记行逐字复制进卡面（含 Rn 前缀；压缩短语只能作标题），其余字段照旧返回（不得新增 blocked/done）；确属与要求条目无关的基础设施卡，改写为引用其服务的要求条目并说明关系，确实孤立的写明「无对应 Rn：理由」如实呈现；若是台账漏记了原话，先补台账再返回，补记的登记行行尾标注「（补记）」——补记与原始登记必须可区分。返回 RoundCards。",
       );
+      // 重写路径可能补登记——重读并重建快照，使如实补记的行能通过本轮回检（补救路径必须可收敛，终审 #4）
+      let reqRaw2 = "";
+      try {
+        reqRaw2 = await readRepo("Agents/requirements.md");
+      } catch {
+        reqRaw2 = "";
+      }
+      if (reqRaw2 !== "") parseReq(reqRaw2);
       paraphrased = (cards.cards || []).filter((c) => /\bR\d+\b/.test(c) && !verbatimOk(c));
       log(paraphrased.length === 0 ? "卡面-台账对拍：重写后通过" : "卡面-台账对拍重写后仍缺 " + paraphrased.length + " 张——如实记录并继续，下游以台账原话为准绳");
     }
@@ -715,7 +727,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     headA = await HEAD0();
   }
   const commitOk = headA !== "" && headA !== baseline;
-  log("第 " + round + " 轮提交 " + (commitOk ? "已落地（" + headA.slice(0, 7) + "，baseline " + (baseline || "空树").slice(0, 7) + "）" : "仍未落地——如实记录，测试将面对未提交改动"));
+  log("第 " + round + " 轮提交 " + (commitOk ? "已落地（" + headA.slice(0, 7) + "，baseline " + (baseline !== "" ? baseline.slice(0, 7) : "空树或读取失败") + "）" : "仍未落地——如实记录，测试将面对未提交改动"));
 
   // 破坏性操作：初级工程师只申报不执行，由强模型档裁决执行 / 改写法 / 跳过（不下放给老板）
   let dangerLog = "无";
@@ -776,7 +788,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     const tester = agent("测试工程师-R" + round + "-A" + attempt, persona(TEST_ZH + PROFILE_LINE, CHEAP)); // 一次性实例：上下文有界、证据随任务卡走（实测：持久实例在廉价档 65K 窗口上风暴）
     verdict = await tester.ask<TestVerdict>(
       (attempt === 1
-        ? "冷启动上岗。baseline 提交：" + (baseline || "（空树，本仓库首提交）") + "。本轮 diff 体量：" + sizeNote + "。先读 Agents/requirements.md 的四节（逐句清点/要求与验收标准/产物规格表/待答问题），再审查 " + diffHint + " 与代码库本身：diff 审查、鲁棒性测试、Agents/selfcheck.py（严格构建/全量测试+鲁棒性/本地 CI 等价 + canary 标记并运行时打印 CANARY: expected-FAIL observed-FAIL 行 + 从规格表派生的内容断言）、更新 Agents/requirement_map.md 验证列；这些测试设施的改动 " + GC + " add -A && " + GC + " commit --amend --no-edit 并入本轮提交（测试套件属于本轮交付）。"
+        ? "冷启动上岗。baseline 提交：" + (baseline || "（空树=本仓库首提交，或 HEAD 读取失败）") + "。本轮 diff 体量：" + sizeNote + "。先读 Agents/requirements.md 的四节（逐句清点/要求与验收标准/产物规格表/待答问题），再审查 " + diffHint + " 与代码库本身：diff 审查、鲁棒性测试、Agents/selfcheck.py（严格构建/全量测试+鲁棒性/本地 CI 等价 + canary 标记并运行时打印 CANARY: expected-FAIL observed-FAIL 行 + 从规格表派生的内容断言）、更新 Agents/requirement_map.md 验证列；这些测试设施的改动 " + GC + " add -A && " + GC + " commit --amend --no-edit 并入本轮提交（测试套件属于本轮交付）。"
         : (lastFix
             ? "算法工程师已返修（amend 并入本轮提交），其返修申报（只作对账线索，结论仍以你重跑的检查为准）：" + JSON.stringify(lastFix) + "\n"
             : "上一轮门禁在机械项上未过，上一轮已按发回补齐流程处理过一轮（上一轮可能属瞬态失败或同形空转）。\n") +
@@ -1017,7 +1029,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       const pre = await G(["ls-remote", push0.target, "refs/heads/" + branch]);
       const preHead = ((pre.stdout || "").split("\t")[0] || "").trim();
       if (preHead !== "" && preHead !== baseline && preHead !== lastPushed) {
-        log("推送前核对：远端 HEAD=" + preHead.slice(0, 7) + "，本轮 baseline=" + (baseline || "空树").slice(0, 7) + (startRound > 1 ? "（续跑常态：远端应为账本记录的上一轮推送 SHA，已核对）" : "——疑似存在会话内推送，如实记录"));
+        log("推送前核对：远端 HEAD=" + preHead.slice(0, 7) + "，本轮 baseline=" + (baseline !== "" ? baseline.slice(0, 7) : "空树或读取失败") + (startRound > 1 ? "（续跑常态：远端应为账本记录的上一轮推送 SHA，已核对）" : "——疑似存在会话内推送，如实记录"));
       }
     } catch {
       /* ls-remote 不可达：推送结果本身会如实记录 */
@@ -1053,7 +1065,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
 
   phase("总工记账");
   const archived = await chief.ask<string>(
-    "把第 " + round + " 轮记入 Agents/ledger.md（头部含仓库标识行" + (repoRoot ? "：" + repoRoot : "") + "与一行一轮的目录：本轮先更新目录行、再追加详情）：任务卡、开发摘要（" + (dev.summary || "").slice(0, 400) + "）、危险操作裁决（" + dangerLog + (dangerTrail.length > 0 ? "；执行确认：" + (dangerTrail.every((e) => e.executed === e.form) ? "全部与批准写法一致" : "存在未确认项——下轮闭合复查须逐条核实效果是否落盘") : "") + "）、测试判决（问题 " + findingsCount + " / 反驳 " + rebuttedCount + " / 升级 " + escalations + "）、门禁 " + gate + "、覆盖声明（" + (verdict.coverage || "").slice(0, 300) + "）、视觉审阅（" + visualNote.slice(0, 200) + "）、要求覆盖（" + (dev.requirementCoverage || []).join("；") + "）、baseline " + (baseline || "空树").slice(0, 7) + "、推送 " + pushState + "、遗留与否决（deferred/declined，各带理由，无则写“无”）、下一轮方向。然后 " + GC + " add -A && " + GC + " commit（账本小提交），返回一句话。",
+    "把第 " + round + " 轮记入 Agents/ledger.md（头部含仓库标识行" + (repoRoot ? "：" + repoRoot : "") + "与一行一轮的目录：本轮先更新目录行、再追加详情）：任务卡、开发摘要（" + (dev.summary || "").slice(0, 400) + "）、危险操作裁决（" + dangerLog + (dangerTrail.length > 0 ? "；执行确认：" + (dangerTrail.every((e) => e.executed === e.form) ? "全部与批准写法一致" : "存在未确认项——下轮闭合复查须逐条核实效果是否落盘") : "") + "）、测试判决（问题 " + findingsCount + " / 反驳 " + rebuttedCount + " / 升级 " + escalations + "）、门禁 " + gate + "、覆盖声明（" + (verdict.coverage || "").slice(0, 300) + "）、视觉审阅（" + visualNote.slice(0, 200) + "）、要求覆盖（" + (dev.requirementCoverage || []).join("；") + "）、baseline " + (baseline !== "" ? baseline.slice(0, 7) : "空树或读取失败") + "、推送 " + pushState + "、遗留与否决（deferred/declined，各带理由，无则写“无”）、下一轮方向。然后 " + GC + " add -A && " + GC + " commit（账本小提交），返回一句话。",
   );
   let headLedger = await HEAD0();
   if (headLedger === "" || headLedger === headA) {

@@ -1,6 +1,6 @@
 # Robust Engineering Loop
 
-**v0.6.1** · collection: `bossloop` · sibling: [Research Iteration Loop](../research-iteration-loop/SPEC.md)
+**v0.6.2** · collection: `bossloop` · sibling: [Research Iteration Loop](../research-iteration-loop/SPEC.md)
 
 > Give it a requirement. Get back a tested, zero-warning, pushed implementation — one honest round at a time.
 
@@ -103,7 +103,7 @@ Each round is **one round commit** (development + docs + test-suite updates, ame
 
 ## 9. Unattended runs and recovery
 
-- **Run-root discipline (field-tested):** the session's working directory is not always the repository root, and an orchestrator that fixes only its own git calls is half-fixed. Every persona carries the repository-root discipline (every git command as `git -C <root>`, in-repo files by absolute path, never same-named stray copies under the working directory), the selfcheck spawns by absolute path, and startup probe-reads a known repository file loudly — a wrong path basis must show itself at startup, not as mechanical false reds hours later. A `catch -> false/""` on an expected file is never fully silent at the gate's criteria.
+- **Run-root discipline (field-tested):** the session's working directory is not always the repository root, and an orchestrator that fixes only its own git calls is half-fixed. Every persona carries the repository-root discipline (every git command as `git -C <root>`, in-repo files by absolute path, never same-named stray copies under the working directory), the selfcheck spawns by absolute path, and startup probe-reads a known repository file loudly — a wrong path basis must show itself at startup, not as mechanical false reds hours later. A `catch -> false/""` on an expected file is never fully silent at the gate's criteria. The orchestrator's own reads resolve direct-frame first with the repo-root frame as fallback (`readRepo`/`globRepo`): when the run root holds a same-named stray copy the direct frame wins — a knowingly accepted tension with the personas' no-stray-copies discipline (the discipline binds the agents; the orchestrator's read layer treats the direct frame as the reliable form when run root = repo root); both frames failing keeps the original empty semantics.
 - **One repository, one run:** two runs advancing one repository produce twin commits (same changes, different SHAs) and non-fast-forward push backlogs. The orchestrator pre-checks every push point (round, ledger, interrupt, final) for divergence (remote branch not an ancestor of local HEAD) and says so loudly; the cure is an orchestrator-side rebase replay agreed with the boss — never a force push. An interrupt on a resume's first round does not push: the HEAD may carry the previous run's un-gated work.
 - **Closing verification (field audit):** the final brief's arrival at the top of LoopMail/ToBoss.md is verified mechanically — one repair ask, then an honest log; a fully-completed resume (the ledger shows all rounds done, this run executed none) injects that fact into the final brief and suppresses the hard-stop phrasing; the ledger's dangerous-operation line carries execution-confirmation status so a cross-run closure review can find "executed but unconfirmed" entries; the legacy-layout migration recheck reports its result loudly (ledger plus both LoopMail files) instead of letting a half-migration enter the run silently.
 

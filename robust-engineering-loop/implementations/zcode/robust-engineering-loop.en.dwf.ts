@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Robust Engineering Loop (v0.6.1), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
+description: Robust Engineering Loop (v0.6.2), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
 args:
   requirement:
     type: string
@@ -576,7 +576,7 @@ const checkIntake = async (): Promise<void> => {
 await checkIntake();
 if (intakeMissing.length > 0) {
   await chief.ask<string>(
-    "Intake completeness check failed: " + intakeMissing.join("; ") + ". Complete them and " + GC + " add -A && " + GC + " commit (section headings fixed as \"Sentence inventory\" / \"Requirements and acceptance criteria\" / \"Artifact spec table\" / \"Open questions\"; ToBoss.md opening mail in three parts: what you deliver / how each item passes / at most 3 unsure points), return one sentence.",
+    "Intake completeness check failed: " + intakeMissing.join("; ") + ". Complete them and " + GC + " add -A && " + GC + " commit (section headings fixed as \"Sentence inventory\" / \"Requirements and acceptance criteria\" / \"Artifact spec table\" / \"Open questions\"; ToBoss.md opening mail in three parts: what you deliver / how each item passes / at most 3 unsure points; sections or lines added by this repair carry a \"(backfilled)\" marker), return one sentence.",
   );
   await checkIntake();
   log(intakeMissing.length === 0 ? "Intake completeness: passed after repair" : "Intake completeness still missing: " + intakeMissing.join("; ") + " — recorded honestly, continuing");
@@ -666,17 +666,21 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     log("Retelling-distortion defense not run: Agents/requirements.md is unreadable — recorded honestly (all other defenses unchanged)");
   } else {
     const linesByRn = new Map<string, string[]>();
-    for (const rawLine of reqRawC.split("\n")) {
-      if (!/^\s*(?:#{1,6}\s*|[-*+]\s*|\d{1,3}[.、)]\s*|[*_]{0,2})*R\d+\b/.test(rawLine)) continue; // only lines that open with the Rn count as registered lines — index lines and cross-reference lines never pass (heading, list or emphasis decoration is fine)
-      const rns = Array.from(new Set(rawLine.match(/\bR\d+\b/g) || []));
-      if (rns.length === 0) continue;
-      const lineN = rawLine.replace(/\s+/g, "");
-      for (const rn of rns) {
-        const parts = linesByRn.get(rn) || [];
-        if (parts.indexOf(lineN) < 0) parts.push(lineN);
-        linesByRn.set(rn, parts);
+    const parseReq = (raw: string): void => {
+      linesByRn.clear();
+      for (const rawLine of raw.split("\n")) {
+        if (!/^\s*(?:#{1,6}\s*|[-*+]\s*|\d{1,3}[.、)]\s*|[*_]{0,2})*R\d+\b/.test(rawLine)) continue; // only lines that open with the Rn count as registered lines — index lines and cross-reference lines never pass (heading, list or emphasis decoration is fine)
+        const rns = Array.from(new Set(rawLine.match(/\bR\d+\b/g) || []));
+        if (rns.length === 0) continue;
+        const lineN = rawLine.replace(/\s+/g, "");
+        for (const rn of rns) {
+          const parts = linesByRn.get(rn) || [];
+          if (parts.indexOf(lineN) < 0) parts.push(lineN);
+          linesByRn.set(rn, parts);
+        }
       }
-    }
+    };
+    parseReq(reqRawC);
     const verbatimOk = (card: string): boolean => {
       const c = card.replace(/\s+/g, "");
       const cited = Array.from(new Set(card.match(/\bR\d+\b/g) || []));
@@ -691,8 +695,16 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     if (noRn.length > 0) log("Round " + round + " has " + noRn.length + " card(s) without an Rn reference — a violation of the carding discipline (every card traces to a requirement entry); recorded honestly");
     if (noRn.length + paraphrased.length > 0) {
       cards = await chief.ask<RoundCards>(
-        "Card-to-ledger check failed (retelling-distortion defense, line-level): " + (paraphrased.length > 0 ? "these cards cite an Rn but do not fully contain that Rn's registered line from the ledger — the card's paraphrase may have changed content words (object/operation/quantifier/negation/numbers):\n" + paraphrased.map((c) => "- " + c.slice(0, 80)).join("\n") + "\n" : "") + (noRn.length > 0 ? "these cards carry no Rn at all — without an Rn they bypass the verbatim check (audit F4); every card must trace to a requirement entry:\n" + noRn.map((c) => "- " + c.slice(0, 80)).join("\n") + "\n" : "") + "Rewrite the cards above: copy the registered line for the cited Rn from Agents/requirements.md verbatim into the card (with its Rn prefix; a compressed phrase only as the title) and return every other field unchanged (do not add blocked/done); a genuine infrastructure card unrelated to any requirement is rewritten to reference the requirement it serves, and a truly standalone one states \"no corresponding Rn: reason\" honestly; if the ledger itself is missing the original words, complete the ledger first. Return RoundCards.",
+        "Card-to-ledger check failed (retelling-distortion defense, line-level): " + (paraphrased.length > 0 ? "these cards cite an Rn but do not fully contain that Rn's registered line from the ledger — the card's paraphrase may have changed content words (object/operation/quantifier/negation/numbers):\n" + paraphrased.map((c) => "- " + c.slice(0, 80)).join("\n") + "\n" : "") + (noRn.length > 0 ? "these cards carry no Rn at all — without an Rn they bypass the verbatim check (audit F4); every card must trace to a requirement entry:\n" + noRn.map((c) => "- " + c.slice(0, 80)).join("\n") + "\n" : "") + "Rewrite the cards above: copy the registered line for the cited Rn from Agents/requirements.md verbatim into the card (with its Rn prefix; a compressed phrase only as the title) and return every other field unchanged (do not add blocked/done); a genuine infrastructure card unrelated to any requirement is rewritten to reference the requirement it serves, and a truly standalone one states \"no corresponding Rn: reason\" honestly; if the ledger itself is missing the original words, complete the ledger first, marking each backfilled registered line with \"(backfilled)\" at its end so a backfill stays distinguishable from an original registration. Return RoundCards.",
       );
+      // the rewrite path may backfill registrations — re-read and rebuild the snapshot so honestly backfilled lines can pass this round's recheck (a remediation path must converge, review #4)
+      let reqRaw2 = "";
+      try {
+        reqRaw2 = await readRepo("Agents/requirements.md");
+      } catch {
+        reqRaw2 = "";
+      }
+      if (reqRaw2 !== "") parseReq(reqRaw2);
       paraphrased = (cards.cards || []).filter((c) => /\bR\d+\b/.test(c) && !verbatimOk(c));
       log(paraphrased.length === 0 ? "Card-to-ledger check: passed after rewrite" : "Card-to-ledger check still failing for " + paraphrased.length + " card(s) — recorded honestly, continuing; downstream anchors to the ledger's words");
     }
@@ -711,7 +723,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     headA = await HEAD0();
   }
   const commitOk = headA !== "" && headA !== baseline;
-  log("Round " + round + " commit " + (commitOk ? "landed (" + headA.slice(0, 7) + ", baseline " + (baseline || "empty tree").slice(0, 7) + ")" : "still missing — recorded honestly; the tester faces uncommitted changes"));
+  log("Round " + round + " commit " + (commitOk ? "landed (" + headA.slice(0, 7) + ", baseline " + (baseline !== "" ? baseline.slice(0, 7) : "empty tree / unreadable") + ")" : "still missing — recorded honestly; the tester faces uncommitted changes"));
 
   // Destructive operations: the junior declares, the strong tier rules execute / safe form / skip
   let dangerLog = "none";
@@ -772,7 +784,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     const tester = agent("Test Engineer-R" + round + "-A" + attempt, persona(TEST_EN + PROFILE_LINE, CHEAP)); // one-shot instance: bounded context, evidence travels in the task card
     verdict = await tester.ask<TestVerdict>(
       (attempt === 1
-        ? "Cold start. Baseline commit: " + (baseline || "(empty tree — this repo's first commit)") + ". Diff size this round: " + sizeNote + ". First read the four sections of Agents/requirements.md (sentence inventory / requirements and acceptance criteria / artifact spec table / open questions), then review " + diffHint + " and the repository itself: diff review, robustness tests, Agents/selfcheck.py (strict build / full tests + robustness / local CI equivalent + canary marker and the runtime CANARY: expected-FAIL observed-FAIL line + content assertions derived from the spec table), and update the verification column of Agents/requirement_map.md; amend the test-fixture changes (Agents/selfcheck.py, robustness cases, requirement_map.md) into the round commit with " + GC + " add -A && " + GC + " commit --amend --no-edit — the test suite is part of this round's delivery."
+        ? "Cold start. Baseline commit: " + (baseline || "(empty tree = this repo's first commit, or the HEAD read failed)") + ". Diff size this round: " + sizeNote + ". First read the four sections of Agents/requirements.md (sentence inventory / requirements and acceptance criteria / artifact spec table / open questions), then review " + diffHint + " and the repository itself: diff review, robustness tests, Agents/selfcheck.py (strict build / full tests + robustness / local CI equivalent + canary marker and the runtime CANARY: expected-FAIL observed-FAIL line + content assertions derived from the spec table), and update the verification column of Agents/requirement_map.md; amend the test-fixture changes (Agents/selfcheck.py, robustness cases, requirement_map.md) into the round commit with " + GC + " add -A && " + GC + " commit --amend --no-edit — the test suite is part of this round's delivery."
         : (lastFix
             ? "The engineer has reworked (amended into the round commit); their fix report (a reconciliation lead only — your verdict rests on the checks you re-run): " + JSON.stringify(lastFix) + "\n"
             : "The last gate failed on mechanical items; last round already went through one send-back-and-fix pass (that failure may have been transient or a same-form idle loop).\n") +
@@ -1013,7 +1025,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       const pre = await G(["ls-remote", push0.target, "refs/heads/" + branch]);
       const preHead = ((pre.stdout || "").split("\t")[0] || "").trim();
       if (preHead !== "" && preHead !== baseline && preHead !== lastPushed) {
-        log("Pre-push check: remote HEAD=" + preHead.slice(0, 7) + ", this round's baseline=" + (baseline || "empty tree").slice(0, 7) + (startRound > 1 ? " (normal on a resume: the remote should hold the ledger's last pushed SHA — checked)" : " — a session-internal push is suspected; recorded honestly"));
+        log("Pre-push check: remote HEAD=" + preHead.slice(0, 7) + ", this round's baseline=" + (baseline !== "" ? baseline.slice(0, 7) : "empty tree / unreadable") + (startRound > 1 ? " (normal on a resume: the remote should hold the ledger's last pushed SHA — checked)" : " — a session-internal push is suspected; recorded honestly"));
       }
     } catch {
       /* ls-remote unreachable: the push outcome itself is recorded honestly */
@@ -1049,7 +1061,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
 
   phase("Chief archives the ledger");
   const archived = await chief.ask<string>(
-    "Record round " + round + " in Agents/ledger.md (head carries the repository identity line" + (repoRoot ? ": " + repoRoot : "") + " and the one-line-per-round index: update this round's index line first, then append the detail): cards, dev summary (" + (dev.summary || "").slice(0, 400) + "), destructive-operation ruling (" + dangerLog + (dangerTrail.length > 0 ? "; execution confirmation: " + (dangerTrail.every((e) => e.executed === e.form) ? "all match the approved forms" : "some unconfirmed — the next closure review must verify each one's on-disk effect") : "") + "), test verdict (findings " + findingsCount + " / rebuttals " + rebuttedCount + " / escalated " + escalations + "), coverage statement (" + (verdict.coverage || "").slice(0, 300) + "), visual review (" + visualNote.slice(0, 200) + "), gate " + gate + ", baseline " + (baseline || "empty tree").slice(0, 7) + ", push " + pushState + ", deferred/declined sections (with reasons, “none” when empty), requirement coverage (" + (dev.requirementCoverage || []).join("; ") + "), next direction. Then " + GC + " add -A && " + GC + " commit (the small ledger commit); return one sentence.",
+    "Record round " + round + " in Agents/ledger.md (head carries the repository identity line" + (repoRoot ? ": " + repoRoot : "") + " and the one-line-per-round index: update this round's index line first, then append the detail): cards, dev summary (" + (dev.summary || "").slice(0, 400) + "), destructive-operation ruling (" + dangerLog + (dangerTrail.length > 0 ? "; execution confirmation: " + (dangerTrail.every((e) => e.executed === e.form) ? "all match the approved forms" : "some unconfirmed — the next closure review must verify each one's on-disk effect") : "") + "), test verdict (findings " + findingsCount + " / rebuttals " + rebuttedCount + " / escalated " + escalations + "), coverage statement (" + (verdict.coverage || "").slice(0, 300) + "), visual review (" + visualNote.slice(0, 200) + "), gate " + gate + ", baseline " + (baseline !== "" ? baseline.slice(0, 7) : "empty tree / unreadable") + ", push " + pushState + ", deferred/declined sections (with reasons, “none” when empty), requirement coverage (" + (dev.requirementCoverage || []).join("; ") + "), next direction. Then " + GC + " add -A && " + GC + " commit (the small ledger commit); return one sentence.",
   );
   let headLedger = await HEAD0();
   if (headLedger === "" || headLedger === headA) {

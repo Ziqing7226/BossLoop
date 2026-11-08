@@ -1,6 +1,6 @@
 # Research Iteration Loop
 
-**v0.6.1** · collection: `bossloop` · sibling: [Robust Engineering Loop](../robust-engineering-loop/SPEC.md)
+**v0.6.2** · collection: `bossloop` · sibling: [Robust Engineering Loop](../robust-engineering-loop/SPEC.md)
 
 > Start from a rough idea. Iterate it through bounded, adversarial cycles. Stop on schedule and report whether it deserves more of your life.
 
@@ -77,7 +77,7 @@ Subprocess per batch/scene; write results to disk immediately and exit to free m
 
 ## 7. Unattended runs and recovery
 
-- **Run-root discipline (field-tested):** the session's working directory is not always the repository root. Every persona carries the repository-root discipline (`git -C <root>` for every git command, absolute paths for in-repo files), the selfcheck spawns by absolute path, and startup probe-reads a known repository file loudly. One repository, one run: concurrent runs produce twin commits and non-fast-forward pushes — the orchestrator pre-checks each round push for divergence and says so loudly, never force.
+- **Run-root discipline (field-tested):** the session's working directory is not always the repository root. Every persona carries the repository-root discipline (`git -C <root>` for every git command, absolute paths for in-repo files), the selfcheck spawns by absolute path, and startup probe-reads a known repository file loudly. One repository, one run: concurrent runs produce twin commits and non-fast-forward pushes — the orchestrator pre-checks each round push for divergence and says so loudly, never force. The orchestrator's own file reads resolve direct-frame first with the repo-root frame as fallback (`readRepo`/`globRepo`) — a knowingly accepted tension with the personas' no-stray-copies discipline; both frames failing keeps the original empty semantics.
 
 - The **ledger is the checkpoint**. Every round appends its task, artifacts, gate status, reviews and next direction; the ledger keeps a one-line-per-round index at its head plus a repository-identity line (repo root), the detail below it — a resume in a different working directory is flagged loudly.
 - A run interrupted by a crash, a dropped model stream or a quota stop is **resumed, not restarted**: same run if the engine supports it, otherwise a fresh run reads the ledger and continues at round N+1 (the Chief reports `resumeFrom`). A resumed fragment first gets a **closure review**: every piece of in-flight work from the interrupted run is verified and folded into the round, or written off in the ledger with its reason — never silently skipped.
