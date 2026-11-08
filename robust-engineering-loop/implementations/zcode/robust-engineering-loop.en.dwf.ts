@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Robust Engineering Loop (v0.6.2), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
+description: Robust Engineering Loop (v0.6.3), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
 args:
   requirement:
     type: string
@@ -231,7 +231,7 @@ const TEST_EN = [
   "Independence is absolute: never edit the implementation under test. You only write Agents/selfcheck.py, the robustness cases, and the verification column of Agents/requirement_map.md (requirement <-> implementation location <-> re-runnable command, tabular with a requirement-map marker).",
   "Artifact freshness and reference anchoring: the artifacts the checks ran against must be built from HEAD — where the build layout exposes them, verify freshness (no source newer than its artifact; Agents/selfcheck.py may carry the check), and a green from a stale binary is void; when a reference implementation exists (upstream/prior art), check suspect behavior against its behavior layer first — an unexplained divergence is a finding; every finding states its layer/component with discriminating evidence.",
   "Every verification command runs in a pinned environment: output locale pinned, system-level configuration isolated (credential helpers and global git config bypassed, not trusted), credential state reset between scenarios, no persistence assumed for temp directories; the per-conclusion verification-layering statement follows the coverage requirement of each verdict.",
-  "Every finding carries reproduction evidence (command + output); after a fix, re-run the original failing check to confirm closure; arbitrate rebuttals on evidence only; mark blocker honestly when the build system cannot even run or the requirement contradicts itself.",
+  "Every finding carries reproduction evidence (command + output); after a fix, re-run the original failing check to confirm closure; arbitrate rebuttals on evidence only; mark blocker honestly when the build system cannot even run or the requirement contradicts itself. Severity-grading discipline (field efficiency audit): minor is reserved for wording, ledger phrasing and logging-completeness classes — anything touching correctness, data fidelity, timestamp semantics, boss-verbatim compliance or safety is major or blocker, never minor; every minor states its criterion in the evidence (why it touches none of those) — the Chief spot-checks and the closing gate re-grades, a mis-graded finding is treated as major.",
 ].join("\n");
 
 const requirement = String(args.requirement ?? "");
@@ -604,6 +604,10 @@ if (branch === "HEAD") {
   log("Warning: the repository is in a detached-HEAD state and the target branch is indeterminate — every push this round is skipped and recorded honestly (rerun after the branch is confirmed)");
 }
 
+const knownMinors: string[] = []; // unresolved minors on account (severity triage: a minor never blocks its own round; the closing round must clear them — grading is a deferral, never an exemption, field efficiency audit)
+let prevTreeHash = ""; // HEAD tree hash at the previous attempt's verdict (captured after the tester's amend; the fixer's amend changes the tree, which disables delta on the next attempt — the fail-safe direction; the delta-recheck key: an unchanged tree means the same diff — no full re-read)
+let prevFindingsNote = "none"; // the last attempt's findings list (injected into the delta recheck ask)
+let roundMinors = 0; // minors placed on account this round (into the ledger)
 for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   const baseline = await HEAD0();
   chief = agent("Chief Engineer-R" + round, persona(CHIEF_EN + PROFILE_LINE, STRONG)); // B#27: a fresh instance every round — the checkpoint is the ledger, not anyone's conversation memory
@@ -618,6 +622,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   phase("Chief issues cards");
   let cards = await chief.ask<RoundCards>(
     "Round " + round + "/" + roundsTotal + ". Requirements live in Agents/requirements.md; planning basis:\n" + String(plan).slice(0, 4000) + "\n" +
+    (knownMinors.length > 0 ? "[known minors on account] " + knownMinors.length + " unresolved minor(s) (never gate-blocking; the closing round must clear them) — this round's cards must dispose of each (fix) or state why it stays: " + knownMinors.join("; ") + "\n" : "") +
     (lastPushed ? "Last round pushed " + lastPushed.slice(0, 7) + ": first check its remote CI status on (" + (maskUrl(push0.target) || "not configured") + ") via gh run list/view; if uncheckable, say so honestly; failures go into remoteCiIssues as mandatory fix items.\n" : "") +
     (round === startRound && startRound > 1 ? "[Resume round 1] If the last run was interrupted with a red gate, HEAD may carry an un-gated commit — pushing this round would carry it onto the remote: first check the last ledger round's gate and push records, and dispose of un-gated leftovers explicitly in this round's cards (fix or roll back).\n" : "") +
     (bossNote ? "[Boss feedback (read this round, LoopMail/FromBoss.md)] apply each item, log application in the ledger:\n" + bossNote + "\n" : "") +
@@ -782,13 +787,16 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
 
   for (let attempt = 1; attempt <= 10; attempt++) {
     const tester = agent("Test Engineer-R" + round + "-A" + attempt, persona(TEST_EN + PROFILE_LINE, CHEAP)); // one-shot instance: bounded context, evidence travels in the task card
+    const treePre = ((await G(["rev-parse", "HEAD^{tree}"], 60000)).stdout || "").trim();
+    const deltaMode = attempt >= 2 && prevTreeHash !== "" && treePre === prevTreeHash; // unchanged tree = same diff: verify closure only, no full re-read (field efficiency audit: zero-findings × fresh eyes is a structurally multi-round loop)
     verdict = await tester.ask<TestVerdict>(
       (attempt === 1
-        ? "Cold start. Baseline commit: " + (baseline || "(empty tree = this repo's first commit, or the HEAD read failed)") + ". Diff size this round: " + sizeNote + ". First read the four sections of Agents/requirements.md (sentence inventory / requirements and acceptance criteria / artifact spec table / open questions), then review " + diffHint + " and the repository itself: diff review, robustness tests, Agents/selfcheck.py (strict build / full tests + robustness / local CI equivalent + canary marker and the runtime CANARY: expected-FAIL observed-FAIL line + content assertions derived from the spec table), and update the verification column of Agents/requirement_map.md; amend the test-fixture changes (Agents/selfcheck.py, robustness cases, requirement_map.md) into the round commit with " + GC + " add -A && " + GC + " commit --amend --no-edit — the test suite is part of this round's delivery."
+        ? "Cold start. Baseline commit: " + (baseline || "(empty tree = this repo's first commit, or the HEAD read failed)") + ". Diff size this round: " + sizeNote + ". First read the four sections of Agents/requirements.md (sentence inventory / requirements and acceptance criteria / artifact spec table / open questions), then review " + diffHint + " and the repository itself: diff review, robustness tests, Agents/selfcheck.py (strict build / full tests + robustness / local CI equivalent + canary marker and the runtime CANARY: expected-FAIL observed-FAIL line + content assertions derived from the spec table), and update the verification column of Agents/requirement_map.md; amend the test-fixture changes (Agents/selfcheck.py, robustness cases, requirement_map.md) into the round commit with " + GC + " add -A && " + GC + " commit --amend --no-edit — the test suite is part of this round's delivery." + (round === roundsTotal && knownMinors.length > 0 ? "\nClosing-round clearance check: the ledger carries " + knownMinors.length + " unresolved known minors — verify and dispose of each (already fixed → skip; still present → file it honestly as major/blocker; the closing round passes only at zero findings): " + knownMinors.join("; ") : "")
         : (lastFix
             ? "The engineer has reworked (amended into the round commit); their fix report (a reconciliation lead only — your verdict rests on the checks you re-run): " + JSON.stringify(lastFix) + "\n"
             : "The last gate failed on mechanical items; last round already went through one send-back-and-fix pass (that failure may have been transient or a same-form idle loop).\n") +
-      "Re-verify one by one: re-run the original failing check for each fix to confirm closure; arbitrate each rebuttal on evidence only — withdraw the finding if the rebuttal stands, keep it with an explanation if not. If your recheck comes back fully green and you can genuinely name no defect, return passed=true honestly with coverage noting \"recheck green, nothing to complete\" — a green recheck is itself the pass basis; never return passed=false merely because no fix can be confirmed, and never invent fixes.") +
+      (deltaMode ? "Delta recheck (HEAD tree hash identical to the last attempt: " + treePre.slice(0, 12) + ", diff unchanged) — the same diff already had one full cold-start review last attempt; this attempt waives the full re-read (the deep-read duty is not owed twice on the same tree) and verifies the previous findings' closure/rebuttal status one by one (last attempt's list: " + prevFindingsNote + "); do not reopen a fresh nit hunt (new findings must still be reported honestly, but your duty here is closure verification); selfcheck and the canary still run for real.\n" : "") +
+      "Re-verify one by one: re-run the original failing check for each fix to confirm closure; arbitrate each rebuttal on evidence only — withdraw the finding if the rebuttal stands, keep it with an explanation if not. If your recheck comes back fully green and you can genuinely name no defect, return passed=true honestly with coverage noting \"recheck green, nothing to complete\" — a green recheck is itself the pass basis; never return passed=false merely because no fix can be confirmed, and never invent fixes.") + (round === roundsTotal && knownMinors.length > 0 ? "\nClosing-round clearance check (continued): the ledger carries " + knownMinors.length + " unresolved known minors — verify and dispose of each (already fixed → skip; still present → file it honestly as major/blocker; the closing round passes only at zero findings): " + knownMinors.join("; ") : "") +
       ((cards.remoteCiIssues || []).length > 0 ? "\nAlso: the mandatory remote-CI items were handled by the engineer: " + cards.remoteCiIssues.join("; ") : "") +
       (approvedDanger.length > 0
         ? "\nDestructive operations approved by ruling this round — only these forms are allowed: " + approvedDanger.join("; ")
@@ -796,6 +804,73 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       " Return TestVerdict (every finding needs reproduction evidence). The verdict must carry a coverage statement: which files/areas you reviewed deeply (logic changes, gate-relevant, danger-operation sites) and which you only skimmed (skims only outside this round's diff; deep-read files carry line anchors file:line), plus the means of verification for each conclusion (a real-device test, a CI run, or a specialist cold review standing in where no device exists — worded as such, never as hands-on) — it is written before you know where the problems are; any later problem in a skimmed or substituted area is reconciled against it. List this round's delivered artifact paths in the artifacts field (images included; list gitignored artifacts too).",
     );
     findingsCount = (verdict.findings || []).length;
+    const closingRound = round === roundsTotal; // grading is a deferral, never an exemption: the closing round's fast lane is off — zero findings of any severity
+    const minors = closingRound ? [] : (verdict.findings || []).filter((f) => f.severity === "minor");
+    const blockers = (verdict.findings || []).filter((f) => minors.indexOf(f) < 0); // a missing severity grades as major (fail-safe)
+    roundMinors = minors.length;
+    for (let i = knownMinors.length - 1; i >= 0; i--) if (knownMinors[i].startsWith("R" + round + ": ")) knownMinors.splice(i, 1); // this round's re-report replaces the account (a withdrawn minor leaves it)
+    for (const m of minors) knownMinors.push("R" + round + ": " + (m.id || "?") + " " + (m.evidence || "").slice(0, 120));
+    if (closingRound) knownMinors.length = 0; // closing sweep: the account clears after the closing verdict — every listed item was handed to the closing tester for disposition, and anything still present re-files as major/blocker (stickiness eliminated)
+    prevTreeHash = ((await G(["rev-parse", "HEAD^{tree}"], 60000)).stdout || "").trim(); // the tree after the tester's amend — the next attempt's delta-recheck key
+    prevFindingsNote = blockers.length === 0 && minors.length === 0 ? "none (zero findings last attempt)" : JSON.stringify(verdict.findings).slice(0, 4000);
+    // Image-artifact detection (mechanical) + visual review off the critical path (field efficiency audit P1): detection depends only on the verdict and git, the visual reviewer only on artifacts and the spec — both start before the selfcheck and run concurrently with it; verdicts merge at the gate with a merge-point verification (writes can happen inside the window: a strict build regenerating artifacts, a dangerous operation re-executed per its approved form — any set or content change voids the in-flight verdict and re-dispatches; the detection helper serves both call sites)
+    const isImg = (p: string): boolean => /\.(png|jpe?g|svg|webp|gif)$/i.test(p);
+    const detectImages = async (): Promise<string[]> => {
+      const found: string[] = (verdict.artifacts || []).filter((p) => isImg(p));
+      imgDetectOk = true;
+      try {
+        const st2 = await G(["status", "--porcelain"], 60000);
+        for (const line of (st2.stdout || "").split("\n")) {
+          const t2 = line.trim();
+          if (t2.length < 4) continue;
+          const p2raw = t2.slice(3).trim();
+          const p2unq = p2raw.startsWith("\"") && p2raw.endsWith("\"") && p2raw.length > 1 ? p2raw.slice(1, -1) : p2raw; // porcelain quotes paths with spaces — strip before matching (B#18)
+          const p2parts = p2unq.split(" -> "); // rename entries "R  old -> new": take the new path (B#18)
+          const p2 = (p2parts[p2parts.length - 1] || p2unq).trim();
+          if (isImg(p2) && found.indexOf(p2) < 0) found.push(p2);
+        }
+        if (baseline) {
+          const df2 = await G(["diff", "--name-only", baseline + "..HEAD"], 60000);
+          for (const p3 of (df2.stdout || "").split("\n").map((s) => s.trim())) {
+            if (p3 !== "" && isImg(p3) && found.indexOf(p3) < 0) found.push(p3);
+          }
+        }
+        const ig2 = await G(["ls-files", "--others", "--ignored", "--exclude-standard", "--", "*.png", "*.jpg", "*.jpeg", "*.svg", "*.webp", "*.gif"], 60000); // pathspec limits the scan to image files: a full ignored enumeration is costly on large repos (P1)
+        for (const p4 of (ig2.stdout || "").split("\n").map((s) => s.trim())) {
+          // a gitignored deliverable figure can only live in a boss-facing location (repo root or docs/) — dependency dirs and Agents/ do not count as delivery (B#18)
+          if (p4 !== "" && isImg(p4) && found.indexOf(p4) < 0 && (p4.indexOf("/") < 0 || p4.indexOf("docs/") === 0)) found.push(p4);
+        }
+      } catch {
+        imgDetectOk = false; // B#18: a failed detection must be disclosed, never silently treated as no images
+      }
+      return found;
+    };
+    imageFiles = await detectImages();
+    let visualOk = imageFiles.length === 0;
+    visualNote = imageFiles.length === 0 ? (imgDetectOk ? "no image artifacts this round: not applicable" : "image-artifact detection failed — treated as no images, recorded honestly") : "not reviewed yet";
+    let visualP: Node<VisualVerdict> | null = null;
+    let vKey = "";
+    const hashArtifacts = async (list: string[]): Promise<string> => {
+      const vParts: string[] = [];
+      for (const pV of list.slice().sort()) {
+        try { const hV = await hashObj(pV); vParts.push(pV + ":" + (hV.slice(0, 12) || "?")); } catch { vParts.push(pV); } // dual-frame hash (audit F9)
+      }
+      try { const hSpec = await hashObj("Agents/requirements.md"); vParts.push("spec:" + (hSpec.slice(0, 12) || "?")); } catch { /* spec key unavailable: artifacts only */ }
+      return vParts.join("|");
+    };
+    if (imageFiles.length > 0) {
+      vKey = await hashArtifacts(imageFiles);
+      if (vKey === visualCacheKey) {
+        visualOk = visualCacheOk;
+        visualNote = visualCacheNote + " (visual verdict reused: artifact set and spec unchanged, no new reviewer dispatched)";
+        log("Visual review: artifact set and spec unchanged — reusing the last verdict, no new reviewer (this kills the non-converging loop of field defect 7)");
+      } else {
+        visualP = agent("Visual review-R" + round + "-A" + attempt, persona(VISUAL_EN + PROFILE_LINE, STRONG)).ask<VisualVerdict>(
+          "This round's task: " + cards.title + ". Spec: the artifact spec table in Agents/requirements.md. Open and review each image (repo-relative paths — open them by absolute path per the repository-root discipline):\n" + imageFiles.join("\n") +
+          "\nissues carry spec violations and product defects only (wrong resolution/domain, wrong palette, rendering holes or broken images, large blanks or a handful of points, facts contradicting the claimed conclusion — each citing a spec row or reproducible evidence); presentation/information limits (elements the spec never asked for, a first frame that cannot show the difference, weak support) do not go into issues — put them in the summary under an 观感限制 prefix; note \"left for the boss to judge\" where the look is the boss's own eye. Return VisualVerdict (name the file and what you saw).",
+        ); // not awaited: runs concurrently with the selfcheck; the verdict merges at the gate and is memoized — a mechanical-failure round pays for the review once
+      }
+    }
     try {
       canary = (await files.grep("canary", "Agents/selfcheck.py")).length > 0;
     } catch {
@@ -878,77 +953,50 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       dangerConsistent = trailGreen();
     }
     if (!commitOk) log("Gate block: this round's commit never landed (commitOk=false) — treated as red");
-    if (verdict.passed && (verdict.findings || []).length > 0) log("Gate block: tester passed=true but still carries " + (verdict.findings || []).length + " findings — treated as red");
-    const mechGreen = verdict.passed && exitCode === 0 && canary && canaryRun && mapOk && dangerConsistent && commitOk && (verdict.findings || []).length === 0;
-    // Image-artifact detection (mechanical): artifacts the tester declares ∪ images added/modified by the diff ∪ untracked images — if there are images, a human-grade eye must look
-    const isImg = (p: string): boolean => /\.(png|jpe?g|svg|webp|gif)$/i.test(p);
-    imageFiles = (verdict.artifacts || []).filter((p) => isImg(p));
-    imgDetectOk = true;
-    if (mechGreen && imageFiles.length === 0) {
-      try {
-        const st2 = await G(["status", "--porcelain"], 60000);
-        for (const line of (st2.stdout || "").split("\n")) {
-          const t2 = line.trim();
-          if (t2.length < 4) continue;
-          const p2raw = t2.slice(3).trim();
-          const p2unq = p2raw.startsWith("\"") && p2raw.endsWith("\"") && p2raw.length > 1 ? p2raw.slice(1, -1) : p2raw; // porcelain quotes paths with spaces — strip before matching (B#18)
-          const p2parts = p2unq.split(" -> "); // rename entries "R  old -> new": take the new path (B#18)
-          const p2 = (p2parts[p2parts.length - 1] || p2unq).trim();
-          if (isImg(p2) && imageFiles.indexOf(p2) < 0) imageFiles.push(p2);
-        }
-        if (baseline) {
-          const df2 = await G(["diff", "--name-only", baseline + "..HEAD"], 60000);
-          for (const p3 of (df2.stdout || "").split("\n").map((s) => s.trim())) {
-            if (p3 !== "" && isImg(p3) && imageFiles.indexOf(p3) < 0) imageFiles.push(p3);
-          }
-        }
-        const ig2 = await G(["ls-files", "--others", "--ignored", "--exclude-standard", "--", "*.png", "*.jpg", "*.jpeg", "*.svg", "*.webp", "*.gif"], 60000); // pathspec limits the scan to image files: a full ignored enumeration is costly on large repos (P1)
-        for (const p4 of (ig2.stdout || "").split("\n").map((s) => s.trim())) {
-          // a gitignored deliverable figure can only live in a boss-facing location (repo root or docs/) — dependency dirs and Agents/ do not count as delivery (B#18)
-          if (p4 !== "" && isImg(p4) && imageFiles.indexOf(p4) < 0 && (p4.indexOf("/") < 0 || p4.indexOf("docs/") === 0)) imageFiles.push(p4);
-        }
-      } catch {
-        imgDetectOk = false; // B#18: a failed detection must be disclosed, never silently treated as no images
-      }
-    }
-    let visualOk = imageFiles.length === 0;
-    visualNote = imageFiles.length === 0 ? (imgDetectOk ? "no image artifacts this round: not applicable" : "image-artifact detection failed — treated as no images, recorded honestly") : "not reviewed yet";
-    if (mechGreen && imageFiles.length > 0) {
-      const vParts: string[] = [];
-      for (const pV of imageFiles.slice().sort()) {
-        try { const hV = await hashObj(pV); vParts.push(pV + ":" + (hV.slice(0, 12) || "?")); } catch { vParts.push(pV); } // dual-frame hash (audit F9)
-      }
-      try { const hSpec = await hashObj("Agents/requirements.md"); vParts.push("spec:" + (hSpec.slice(0, 12) || "?")); } catch { /* spec key unavailable: artifacts only */ }
-      const vKey = vParts.join("|");
-      if (vKey === visualCacheKey) {
-        visualOk = visualCacheOk;
-        visualNote = visualCacheNote + " (visual verdict reused: artifact set and spec unchanged, no new reviewer dispatched)";
-        log("Visual review: artifact set and spec unchanged — reusing the last verdict, no new reviewer (this kills the non-converging loop of field defect 7)");
+    if (verdict.passed && blockers.length > 0) log("Gate block: tester passed=true but still carries " + blockers.length + " blocker/major findings — treated as red");
+    const mechGreen = verdict.passed && exitCode === 0 && canary && canaryRun && mapOk && dangerConsistent && commitOk && blockers.length === 0;
+    if (mechGreen && minors.length > 0) log("Round " + round + " gate: " + minors.length + " minor(s) on account as known minors (not blocking this round; the closing round must clear them) — the list goes into the ledger");
+    if (visualP !== null) {
+      phase("Visual review of image artifacts"); // merge point: consume and memoize, with a merge-point verification — the artifact set or content may have changed during the review (build regeneration / dangerous-operation re-execution writes); any change voids the in-flight verdict and re-dispatches
+      let vv = await visualP;
+      const imgNow = await detectImages();
+      if (imgDetectOk && imgNow.length === 0) {
+        log("Visual merge-point verification: the artifact set is now empty (artifacts removed during the review) — the in-flight verdict is void, treated as no images");
+        visualOk = true;
+        visualNote = "no image artifacts this round: not applicable";
+        visualCacheKey = ""; visualCacheOk = true; visualCacheNote = visualNote;
+      } else if (imgDetectOk && (imgNow.slice().sort().join("\n") !== imageFiles.slice().sort().join("\n") || (await hashArtifacts(imgNow)) !== vKey)) {
+        log("Visual merge-point verification: the artifact set or content changed during the review (strict build regenerating artifacts / a dangerous operation re-executed per its approved form writing the tree) — the in-flight verdict is void, re-dispatched against the current content");
+        imageFiles = imgNow;
+        vKey = await hashArtifacts(imgNow);
+        vv = await agent("Visual review re-dispatch-R" + round + "-A" + attempt, persona(VISUAL_EN + PROFILE_LINE, STRONG)).ask<VisualVerdict>(
+          "This round's task: " + cards.title + ". Spec: the artifact spec table in Agents/requirements.md. Open and review each image (repo-relative paths — open them by absolute path per the repository-root discipline):\n" + imageFiles.join("\n") +
+          "\nissues carry spec violations and product defects only (wrong resolution/domain, wrong palette, rendering holes or broken images, large blanks or a handful of points, facts contradicting the claimed conclusion — each citing a spec row or reproducible evidence); presentation/information limits (elements the spec never asked for, a first frame that cannot show the difference, weak support) do not go into issues — put them in the summary under an 观感限制 prefix; note \"left for the boss to judge\" where the look is the boss's own eye. Return VisualVerdict (name the file and what you saw).",
+        );
+        visualNote = vv.summary + ((vv.issues || []).length > 0 ? " | issues: " + (vv.issues || []).join("; ") : "");
+        visualOk = (vv.issues || []).length === 0;
+        visualCacheKey = vKey; visualCacheOk = visualOk; visualCacheNote = visualNote;
       } else {
-      phase("Visual review of image artifacts");
-      const vv = await agent("Visual review-R" + round + "-A" + attempt, persona(VISUAL_EN + PROFILE_LINE, STRONG)).ask<VisualVerdict>(
-        "This round's task: " + cards.title + ". Spec: the artifact spec table in Agents/requirements.md. Open and review each image (repo-relative paths — open them by absolute path per the repository-root discipline):\n" + imageFiles.join("\n") +
-        "\nissues carry spec violations and product defects only (wrong resolution/domain, wrong palette, rendering holes or broken images, large blanks or a handful of points, facts contradicting the claimed conclusion — each citing a spec row or reproducible evidence); presentation/information limits (elements the spec never asked for, a first frame that cannot show the difference, weak support) do not go into issues — put them in the summary under an 观感限制 prefix; note \"left for the boss to judge\" where the look is the boss's own eye. Return VisualVerdict (name the file and what you saw).",
-      );
-      visualNote = vv.summary + ((vv.issues || []).length > 0 ? " | issues: " + (vv.issues || []).join("; ") : "");
-      visualOk = (vv.issues || []).length === 0;
-      visualCacheKey = vKey; visualCacheOk = visualOk; visualCacheNote = visualNote;
-      if (!visualOk) log("Visual review not passed: " + visualNote.slice(0, 300));
+        if (!imgDetectOk) log("Visual merge-point detection failed — the in-flight verdict is adopted against the dispatch-time set, cache not updated (recorded honestly)");
+        visualNote = vv.summary + ((vv.issues || []).length > 0 ? " | issues: " + (vv.issues || []).join("; ") : "");
+        visualOk = (vv.issues || []).length === 0;
+        if (imgDetectOk) { visualCacheKey = vKey; visualCacheOk = visualOk; visualCacheNote = visualNote; }
       }
+      if (!visualOk) log("Visual review not passed: " + visualNote.slice(0, 300));
     }
     if (mechGreen && visualOk) {
       gate = "pass (attempt " + attempt + (interpIsPy3 ? ", python3" : "") + (imageFiles.length > 0 ? ", incl. visual review" : "") + ")";
       break;
     }
     if (attempt === 10) {
-      gate = (!commitOk ? "commit not landed; " : "") + (verdict.passed ? ((verdict.findings || []).length > 0 ? "passed with findings; " : "") : "test verdict not passed; ") + (canary ? "" : "no canary; ") + ((canary && !canaryRun) ? "canary result not reported; " : "") + (mapOk ? "" : "requirement map missing; ") + (dangerConsistent ? "" : "dangerous-operation declared/ruled/executed mismatch; ") + (visualOk ? "" : "visual review not passed; ") + (exitCode === 0 ? "" : "selfcheck exit " + exitCode);
+      gate = (!commitOk ? "commit not landed; " : "") + (verdict.passed ? (blockers.length > 0 ? "passed with blocker/major findings; " : "") : "test verdict not passed; ") + (canary ? "" : "no canary; ") + ((canary && !canaryRun) ? "canary result not reported; " : "") + (mapOk ? "" : "requirement map missing; ") + (dangerConsistent ? "" : "dangerous-operation declared/ruled/executed mismatch; ") + (visualOk ? "" : "visual review not passed; ") + (exitCode === 0 ? "" : "selfcheck exit " + exitCode);
       break;
     }
-    if ((verdict.findings || []).length === 0) {
+    if (blockers.length === 0) { // minors on account never enter the rework channel (closing round: minors=[], every finding reworks)
       // Purely mechanical failure (no findings): Agents/selfcheck.py and the map are the tester's own fixtures — send them back to their owner, not through the engineer escalation path
       lastFix = null;
       await tester.ask<string>(
-        "The mechanical gate is not satisfied (verdict.passed=" + verdict.passed + "; commitOk=" + commitOk + "; danger declared/ruled/executed aligned=" + (dangerConsistent ? "yes" : "no") + "; canary=" + (canary ? (canaryRun ? "present (reported)" : "present, no CANARY line") : "missing") + "; requirement_map=" + (mapOk ? "valid" : "missing") + "; selfcheck exit=" + (canary ? exitCode : "not run") + ") while your verdict carries no findings. Agents/selfcheck.py and requirement_map.md are yours: fix or complete them and amend the changes into the round commit (" + GC + " add -A && " + GC + " commit --amend --no-edit); if selfcheck exposes an implementation defect, file it as a finding (with reproduction evidence) in your next verdict. If they are in fact defect-free, never invent fixes — return \"recheck green, nothing to complete\" directly; the next fully green recheck passes (field defect 6: asking to confirm a fix that never happened wedges an honest agent). Return one sentence.",
+        "The mechanical gate is not satisfied (verdict.passed=" + verdict.passed + "; commitOk=" + commitOk + "; danger declared/ruled/executed aligned=" + (dangerConsistent ? "yes" : "no") + "; canary=" + (canary ? (canaryRun ? "present (reported)" : "present, no CANARY line") : "missing") + "; requirement_map=" + (mapOk ? "valid" : "missing") + "; selfcheck exit=" + (canary ? exitCode : "not run") + ") while your verdict carries no blocker/major findings (minors are on account as known minors). Agents/selfcheck.py and requirement_map.md are yours: fix or complete them and amend the changes into the round commit (" + GC + " add -A && " + GC + " commit --amend --no-edit); if selfcheck exposes an implementation defect, file it as a finding (with reproduction evidence) in your next verdict. If they are in fact defect-free, never invent fixes — return \"recheck green, nothing to complete\" directly; the next fully green recheck passes (field defect 6: asking to confirm a fix that never happened wedges an honest agent). Return one sentence.",
       );
       headA = await HEAD0();
       continue;
@@ -960,7 +1008,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       : agent("Senior-rework-R" + round + "-A" + attempt, persona(ALGO_EN + SENIOR_EN + PROFILE_LINE, STRONG)); // one-shot instances: evidence travels in the task card, context stays bounded
     const fix = await fixer.ask<FixOutcome>(
       (juniorAsk ? "" : "[Escalation] The junior engineer could not solve the following in 3 attempts. You are the Senior Engineer (strong tier): find the root cause and fix it in one pass; amend into the same round commit.\n") +
-      "Gate attempt " + attempt + " failed: " + (verdict.passed ? "(self-report green but selfcheck/map not satisfied)" : JSON.stringify(verdict.findings)) +
+      "Gate attempt " + attempt + " failed: " + (verdict.passed ? "(self-report green but selfcheck/map not satisfied)" : JSON.stringify(blockers)) + (minors.length > 0 ? "\n(" + minors.length + " minor(s) are on account as known minors — outside this rework's scope; cleared together at the closing round)" : "") +
       "\nMechanical state (every verdict; a missing item is what makes same-form idle loops): verdict.passed=" + verdict.passed + "; commitOk=" + commitOk + "; canary=" + (canary ? (canaryRun ? "present (reported)" : "present, no CANARY line") : "missing") + "; requirement_map=" + (mapOk ? "valid" : "missing") + "; danger declared/ruled/executed aligned=" + (dangerConsistent ? "yes" : "no") + "; selfcheck exit=" + (canary ? exitCode : "not run") +
       (imageFiles.length > 0 ? "; image artifacts: " + imageFiles.join(", ") + "; visual review=" + (visualOk ? "passed" : "failed — " + visualNote) : "") +
       "\nOutput excerpt:\n" + output +
@@ -1061,7 +1109,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
 
   phase("Chief archives the ledger");
   const archived = await chief.ask<string>(
-    "Record round " + round + " in Agents/ledger.md (head carries the repository identity line" + (repoRoot ? ": " + repoRoot : "") + " and the one-line-per-round index: update this round's index line first, then append the detail): cards, dev summary (" + (dev.summary || "").slice(0, 400) + "), destructive-operation ruling (" + dangerLog + (dangerTrail.length > 0 ? "; execution confirmation: " + (dangerTrail.every((e) => e.executed === e.form) ? "all match the approved forms" : "some unconfirmed — the next closure review must verify each one's on-disk effect") : "") + "), test verdict (findings " + findingsCount + " / rebuttals " + rebuttedCount + " / escalated " + escalations + "), coverage statement (" + (verdict.coverage || "").slice(0, 300) + "), visual review (" + visualNote.slice(0, 200) + "), gate " + gate + ", baseline " + (baseline !== "" ? baseline.slice(0, 7) : "empty tree / unreadable") + ", push " + pushState + ", deferred/declined sections (with reasons, “none” when empty), requirement coverage (" + (dev.requirementCoverage || []).join("; ") + "), next direction. Then " + GC + " add -A && " + GC + " commit (the small ledger commit); return one sentence.",
+    "Record round " + round + " in Agents/ledger.md (head carries the repository identity line" + (repoRoot ? ": " + repoRoot : "") + " and the one-line-per-round index: update this round's index line first, then append the detail): cards, dev summary (" + (dev.summary || "").slice(0, 400) + "), destructive-operation ruling (" + dangerLog + (dangerTrail.length > 0 ? "; execution confirmation: " + (dangerTrail.every((e) => e.executed === e.form) ? "all match the approved forms" : "some unconfirmed — the next closure review must verify each one's on-disk effect") : "") + "), test verdict (findings " + findingsCount + " / rebuttals " + rebuttedCount + " / escalated " + escalations + ", minors on account " + roundMinors + "), coverage statement (" + (verdict.coverage || "").slice(0, 300) + "), visual review (" + visualNote.slice(0, 200) + "), gate " + gate + ", baseline " + (baseline !== "" ? baseline.slice(0, 7) : "empty tree / unreadable") + ", push " + pushState + ", deferred/declined sections (with reasons, “none” when empty), requirement coverage (" + (dev.requirementCoverage || []).join("; ") + "), next direction. Then " + GC + " add -A && " + GC + " commit (the small ledger commit); return one sentence.",
   );
   let headLedger = await HEAD0();
   if (headLedger === "" || headLedger === headA) {
