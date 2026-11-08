@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Robust Engineering Loop (v0.6.3), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; 10 red gate re-checks interrupt to the boss); only a fully green gate is pushed to the agreed remote (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
+description: Robust Engineering Loop (v0.6.4), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (3 unsolved attempts escalate to the Senior Engineer; the Senior gets one delivery, an unsolved blocker is then skip-adjudicated by the Chief — recorded in the ledger and disclosed in ToBoss — and the run interrupts only when no bypass honors the boss's words' gist and the problem blocks the whole workflow; a round is pushed only fully green or after an adjudicated skip); a round is pushed to the agreed remote only fully green or after an adjudicated skip (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
 args:
   requirement:
     type: string
@@ -608,6 +608,9 @@ const knownMinors: string[] = []; // unresolved minors on account (severity tria
 let prevTreeHash = ""; // HEAD tree hash at the previous attempt's verdict (captured after the tester's amend; the fixer's amend changes the tree, which disables delta on the next attempt — the fail-safe direction; the delta-recheck key: an unchanged tree means the same diff — no full re-read)
 let prevFindingsNote = "none"; // the last attempt's findings list (injected into the delta recheck ask)
 let roundMinors = 0; // minors placed on account this round (into the ledger)
+const skippedBlockers: string[] = []; // blockers unsolved after the Senior's single delivery, recorded and skipped (boss ruling 2026-11-08; entry key "R<round>|<Fid>: "; no longer gate-blocking, the Chief's bypass plan goes into the ledger, mandatory disclosure in the final brief)
+let skipNote = ""; // accumulated skip records (into the ledger and the final brief)
+let seniorUsed = false; // whether a Senior rework was actually dispatched this round (the gate for "one Senior delivery": a never-escalated problem never enters skip adjudication — reset each round with the round loop)
 for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   const baseline = await HEAD0();
   chief = agent("Chief Engineer-R" + round, persona(CHIEF_EN + PROFILE_LINE, STRONG)); // B#27: a fresh instance every round — the checkpoint is the ledger, not anyone's conversation memory
@@ -623,6 +626,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   let cards = await chief.ask<RoundCards>(
     "Round " + round + "/" + roundsTotal + ". Requirements live in Agents/requirements.md; planning basis:\n" + String(plan).slice(0, 4000) + "\n" +
     (knownMinors.length > 0 ? "[known minors on account] " + knownMinors.length + " unresolved minor(s) (never gate-blocking; the closing round must clear them) — this round's cards must dispose of each (fix) or state why it stays: " + knownMinors.join("; ") + "\n" : "") +
+    (skippedBlockers.length > 0 ? "[Senior-unsolved skips] the following blockers are recorded and skipped per the boss ruling (unsolved after the Senior's single delivery; the Chief's bypass plan is in the ledger) — reopening one requires a card that opens with an explicit decision (reopen or accept the skip), never a silent retry: " + skippedBlockers.join("; ") + "\n" : "") +
     (lastPushed ? "Last round pushed " + lastPushed.slice(0, 7) + ": first check its remote CI status on (" + (maskUrl(push0.target) || "not configured") + ") via gh run list/view; if uncheckable, say so honestly; failures go into remoteCiIssues as mandatory fix items.\n" : "") +
     (round === startRound && startRound > 1 ? "[Resume round 1] If the last run was interrupted with a red gate, HEAD may carry an un-gated commit — pushing this round would carry it onto the remote: first check the last ledger round's gate and push records, and dispose of un-gated leftovers explicitly in this round's cards (fix or roll back).\n" : "") +
     (bossNote ? "[Boss feedback (read this round, LoopMail/FromBoss.md)] apply each item, log application in the ledger:\n" + bossNote + "\n" : "") +
@@ -781,6 +785,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   let escalations = 0; // fix attempts escalated to the Senior Engineer (strong tier)
   let interpIsPy3 = false;
   let lastFix: FixOutcome | null = null;
+  seniorUsed = false; // reset each round: "one Senior delivery" is per-round (review P1: without a reset a cross-round residue means zero-delivery adjudication)
   let imageFiles: string[] = []; // this round's image artifacts (the ledger and the visual note read it across attempts)
   let imgDetectOk = true; // whether image detection succeeded (B#18: failure must be disclosed; reset per attempt)
   let visualNote = "no visual review this round";
@@ -807,6 +812,8 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     const closingRound = round === roundsTotal; // grading is a deferral, never an exemption: the closing round's fast lane is off — zero findings of any severity
     const minors = closingRound ? [] : (verdict.findings || []).filter((f) => f.severity === "minor");
     const blockers = (verdict.findings || []).filter((f) => minors.indexOf(f) < 0); // a missing severity grades as major (fail-safe)
+    const openBlockers = blockers.filter((f) => !skippedBlockers.some((sk) => sk.startsWith("R" + round + "|" + f.id + ": "))); // blockers on the skip account no longer gate-block (boss ruling; this value is the ask-text snapshot)
+    const gateOpen = (): number => blockers.filter((f) => !skippedBlockers.some((sk) => sk.startsWith("R" + round + "|" + f.id + ": "))).length; // live unsolved-blocker count (every recomputation after a skip goes through here — never a stale snapshot)
     roundMinors = minors.length;
     for (let i = knownMinors.length - 1; i >= 0; i--) if (knownMinors[i].startsWith("R" + round + ": ")) knownMinors.splice(i, 1); // this round's re-report replaces the account (a withdrawn minor leaves it)
     for (const m of minors) knownMinors.push("R" + round + ": " + (m.id || "?") + " " + (m.evidence || "").slice(0, 120));
@@ -953,8 +960,8 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       dangerConsistent = trailGreen();
     }
     if (!commitOk) log("Gate block: this round's commit never landed (commitOk=false) — treated as red");
-    if (verdict.passed && blockers.length > 0) log("Gate block: tester passed=true but still carries " + blockers.length + " blocker/major findings — treated as red");
-    const mechGreen = verdict.passed && exitCode === 0 && canary && canaryRun && mapOk && dangerConsistent && commitOk && blockers.length === 0;
+    if (verdict.passed && openBlockers.length > 0) log("Gate block: tester passed=true but still carries " + openBlockers.length + " blocker/major findings — treated as red");
+    let mechGreen = verdict.passed && exitCode === 0 && canary && canaryRun && mapOk && dangerConsistent && commitOk && gateOpen() === 0;
     if (mechGreen && minors.length > 0) log("Round " + round + " gate: " + minors.length + " minor(s) on account as known minors (not blocking this round; the closing round must clear them) — the list goes into the ledger");
     if (visualP !== null) {
       phase("Visual review of image artifacts"); // merge point: consume and memoize, with a merge-point verification — the artifact set or content may have changed during the review (build regeneration / dangerous-operation re-execution writes); any change voids the in-flight verdict and re-dispatches
@@ -984,15 +991,42 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       }
       if (!visualOk) log("Visual review not passed: " + visualNote.slice(0, 300));
     }
+    if (!mechGreen && seniorUsed && gateOpen() > 0) {
+      // Boss ruling (2026-11-08): the Senior Engineer gets exactly one delivery; an unsolved recheck → Chief adjudication — a bypass compatible with the boss's words' gist → record and skip (mandatory ToBoss disclosure); no bypass and the problem blocks the whole workflow → interrupt. The gate is seniorUsed (a Senior delivery actually happened this round; a fresh batch of blockers reported after a skip is adjudicated the same way — each fire consumes an attempt, bounded by the attempt cap)
+      phase("Skip adjudication for unsolved blockers");
+      const skipVerdict = await chief.ask<{ bypass: string; interrupt: boolean }>(
+        "The Senior Engineer (strong tier) has made their single delivery this round (the attempt-4-or-later rework); the following blockers remain unsolved on recheck or were newly reported since:\n" + JSON.stringify(openBlockers) + "\nCurrent gate state: " + gate + "\nBoss ruling: unsolved means skipped — adjudicate which path: (1) a bypass compatible with the boss's words' gist (Agents/requirements.md ledger is the authority) that lets the workflow continue → bypass = one sentence (it goes into the ledger honestly and is disclosed to the boss item by item in the final brief, never silently); (2) the problem blocks the whole workflow and every bypass violates the boss's words' gist → interrupt=true, this round interrupts to the boss. Return JSON {bypass, interrupt}.",
+      );
+      if (skipVerdict.interrupt === true) {
+        const irS = await chief.ask<string>(
+          "The Senior's single delivery failed and no compatible bypass exists — a major issue: insert the interrupt report as an urgent mail at the top of LoopMail/ToBoss.md (unsolved blocker details, the Senior's delivery attempt and its outcome, why every bypass violates the boss's words' gist, completed rounds and artifacts, the decisions the boss must make, options with their costs), " + GC + " add -A && " + GC + " commit (never push a commit that has not passed the gate), return a one-sentence digest.",
+        );
+        await artifact.markdown("interrupt", "# Interrupt report (round " + round + ", Senior unsolved and no compatible bypass)\n\n" + irS + "\n\n---\nUnsolved blockers: " + openBlockers.map((f) => f.id).join("/") + "\nAwaiting the boss's decision.\n", { title: "Interrupt report (delivery copy)", description: "Master copy: the urgent mail in LoopMail/ToBoss.md; Senior-unsolved blockers with no compatible bypass, awaiting the boss's decision" });
+        finalVerdict = { verdict: "interrupted", requirementOutcomes: [], deviations: [], summary: "", deliverables: [], state: irS, decisionList: ["Round " + round + ": Senior-unsolved blockers with no compatible bypass: " + openBlockers.map((f) => f.id).join("/")], advice: "The Senior's single delivery failed and every bypass violates the boss's words' gist — boss intervention needed" };
+        interrupted = true;
+        ungatedHead = true;
+        gate = "interrupt (Senior-unsolved with no compatible bypass — Chief-adjudicated interrupt, report at the top of ToBoss)"; // keeps the post-loop not-passed interrupt path from reporting twice (review D)
+        break;
+      }
+      for (const f of openBlockers) skippedBlockers.push("R" + round + "|" + f.id + ": " + (f.evidence || "").slice(0, 100));
+      skipNote = (skipNote === "" ? "" : skipNote + "; ") + "R" + round + " " + openBlockers.map((f) => f.id).join("/") + ": unsolved after the Senior's single delivery, recorded and skipped — the Chief's bypass plan: " + String(skipVerdict.bypass || "(the Chief gave no one-sentence plan; recorded honestly)").slice(0, 200);
+      log(skipNote);
+      mechGreen = verdict.passed && exitCode === 0 && canary && canaryRun && mapOk && dangerConsistent && commitOk && gateOpen() === 0;
+      if (mechGreen && visualOk) {
+        gate = "pass (attempt " + attempt + ", " + openBlockers.length + " Senior-unsolved blocker(s) recorded and skipped — the Chief's bypass plan is in the ledger, mandatory disclosure in the final brief)";
+        break;
+      }
+      // mechanical reds remain: fall through to the mechanical branch below (the tester's own channel, never a second adjudication)
+    }
     if (mechGreen && visualOk) {
       gate = "pass (attempt " + attempt + (interpIsPy3 ? ", python3" : "") + (imageFiles.length > 0 ? ", incl. visual review" : "") + ")";
       break;
     }
     if (attempt === 10) {
-      gate = (!commitOk ? "commit not landed; " : "") + (verdict.passed ? (blockers.length > 0 ? "passed with blocker/major findings; " : "") : "test verdict not passed; ") + (canary ? "" : "no canary; ") + ((canary && !canaryRun) ? "canary result not reported; " : "") + (mapOk ? "" : "requirement map missing; ") + (dangerConsistent ? "" : "dangerous-operation declared/ruled/executed mismatch; ") + (visualOk ? "" : "visual review not passed; ") + (exitCode === 0 ? "" : "selfcheck exit " + exitCode);
+      gate = (!commitOk ? "commit not landed; " : "") + (verdict.passed ? (gateOpen() > 0 ? "passed with blocker/major findings; " : "") : "test verdict not passed; ") + (canary ? "" : "no canary; ") + ((canary && !canaryRun) ? "canary result not reported; " : "") + (mapOk ? "" : "requirement map missing; ") + (dangerConsistent ? "" : "dangerous-operation declared/ruled/executed mismatch; ") + (visualOk ? "" : "visual review not passed; ") + (exitCode === 0 ? "" : "selfcheck exit " + exitCode);
       break;
     }
-    if (blockers.length === 0) { // minors on account never enter the rework channel (closing round: minors=[], every finding reworks)
+    if (gateOpen() === 0) { // minors on account and skip-accounted blockers never enter the rework channel (live check — stale snapshots never decide after a skip; closing round: minors=[], every finding reworks)
       // Purely mechanical failure (no findings): Agents/selfcheck.py and the map are the tester's own fixtures — send them back to their owner, not through the engineer escalation path
       lastFix = null;
       await tester.ask<string>(
@@ -1002,13 +1036,16 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       continue;
     }
     const juniorAsk = attempt <= 3; // 3 failed junior attempts -> escalate to the Senior Engineer (strong tier)
-    if (!juniorAsk) escalations++;
+    if (!juniorAsk) {
+      escalations++;
+      seniorUsed = true; // the Senior is now actually engaged — an unsolved recheck triggers skip adjudication (boss ruling: one delivery)
+    }
     const fixer = juniorAsk
       ? agent("Rework-R" + round + "-A" + attempt, persona(ALGO_EN + PROFILE_LINE, CHEAP))
       : agent("Senior-rework-R" + round + "-A" + attempt, persona(ALGO_EN + SENIOR_EN + PROFILE_LINE, STRONG)); // one-shot instances: evidence travels in the task card, context stays bounded
     const fix = await fixer.ask<FixOutcome>(
       (juniorAsk ? "" : "[Escalation] The junior engineer could not solve the following in 3 attempts. You are the Senior Engineer (strong tier): find the root cause and fix it in one pass; amend into the same round commit.\n") +
-      "Gate attempt " + attempt + " failed: " + (verdict.passed ? "(self-report green but selfcheck/map not satisfied)" : JSON.stringify(blockers)) + (minors.length > 0 ? "\n(" + minors.length + " minor(s) are on account as known minors — outside this rework's scope; cleared together at the closing round)" : "") +
+      "Gate attempt " + attempt + " failed: " + (verdict.passed ? "(self-report green but selfcheck/map not satisfied)" : JSON.stringify(openBlockers)) + (minors.length > 0 ? "\n(" + minors.length + " minor(s) are on account as known minors — outside this rework's scope; cleared together at the closing round)" : "") +
       "\nMechanical state (every verdict; a missing item is what makes same-form idle loops): verdict.passed=" + verdict.passed + "; commitOk=" + commitOk + "; canary=" + (canary ? (canaryRun ? "present (reported)" : "present, no CANARY line") : "missing") + "; requirement_map=" + (mapOk ? "valid" : "missing") + "; danger declared/ruled/executed aligned=" + (dangerConsistent ? "yes" : "no") + "; selfcheck exit=" + (canary ? exitCode : "not run") +
       (imageFiles.length > 0 ? "; image artifacts: " + imageFiles.join(", ") + "; visual review=" + (visualOk ? "passed" : "failed — " + visualNote) : "") +
       "\nOutput excerpt:\n" + output +
@@ -1052,6 +1089,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     rebuttedCount += (fix.rebutted || []).length;
   }
 
+  if (interrupted) break; // dedicated interrupt paths (skip adjudication / attempt cap / major issue) completed their reporting and finalVerdict — never fall through to the push section
   if (gate === "" || !gate.startsWith("pass")) {
     phase("Gate re-check limit reached, interrupt");
     const ir = await chief.ask<string>(
@@ -1109,7 +1147,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
 
   phase("Chief archives the ledger");
   const archived = await chief.ask<string>(
-    "Record round " + round + " in Agents/ledger.md (head carries the repository identity line" + (repoRoot ? ": " + repoRoot : "") + " and the one-line-per-round index: update this round's index line first, then append the detail): cards, dev summary (" + (dev.summary || "").slice(0, 400) + "), destructive-operation ruling (" + dangerLog + (dangerTrail.length > 0 ? "; execution confirmation: " + (dangerTrail.every((e) => e.executed === e.form) ? "all match the approved forms" : "some unconfirmed — the next closure review must verify each one's on-disk effect") : "") + "), test verdict (findings " + findingsCount + " / rebuttals " + rebuttedCount + " / escalated " + escalations + ", minors on account " + roundMinors + "), coverage statement (" + (verdict.coverage || "").slice(0, 300) + "), visual review (" + visualNote.slice(0, 200) + "), gate " + gate + ", baseline " + (baseline !== "" ? baseline.slice(0, 7) : "empty tree / unreadable") + ", push " + pushState + ", deferred/declined sections (with reasons, “none” when empty), requirement coverage (" + (dev.requirementCoverage || []).join("; ") + "), next direction. Then " + GC + " add -A && " + GC + " commit (the small ledger commit); return one sentence.",
+    "Record round " + round + " in Agents/ledger.md (head carries the repository identity line" + (repoRoot ? ": " + repoRoot : "") + " and the one-line-per-round index: update this round's index line first, then append the detail): cards, dev summary (" + (dev.summary || "").slice(0, 400) + "), destructive-operation ruling (" + dangerLog + (dangerTrail.length > 0 ? "; execution confirmation: " + (dangerTrail.every((e) => e.executed === e.form) ? "all match the approved forms" : "some unconfirmed — the next closure review must verify each one's on-disk effect") : "") + "), test verdict (findings " + findingsCount + " / rebuttals " + rebuttedCount + " / escalated " + escalations + ", minors on account " + roundMinors + (skipNote !== "" ? "; skip records: " + skipNote.slice(0, 300) : "") + "), coverage statement (" + (verdict.coverage || "").slice(0, 300) + "), visual review (" + visualNote.slice(0, 200) + "), gate " + gate + ", baseline " + (baseline !== "" ? baseline.slice(0, 7) : "empty tree / unreadable") + ", push " + pushState + ", deferred/declined sections (with reasons, “none” when empty), requirement coverage (" + (dev.requirementCoverage || []).join("; ") + "), next direction. Then " + GC + " add -A && " + GC + " commit (the small ledger commit); return one sentence.",
   );
   let headLedger = await HEAD0();
   if (headLedger === "" || headLedger === headA) {
@@ -1208,7 +1246,7 @@ const resumeNoteE = startRound > roundsTotal ? "[Fully-completed resume] the led
 let reported = await chief.ask<FinalReport>(
     "The boss's requirement, verbatim: " + requirement + (focus ? "; this run's focus: " + focus : "") + "\n" +
     (closingBossNote !== "" ? "[Boss feedback (re-read from LoopMail/FromBoss.md at closing)] The boss wrote the following mid-run with no round left to carry it — handle each item or list it under the mail's decision section, never silently:\n" + closingBossNote + "\n" : "") +
-    (clampNote !== "" ? "[Round clamp] " + clampNote + " — list this in the final brief's decisions-for-the-boss section (for more rounds the boss locks them via the rounds argument and reruns).\n" : "") + mapGap + reqGapNote + interruptNote + (interrupted || startRound > roundsTotal ? "" : roundsTotal + " rounds complete — hard stop (or finished early).") + resumeNoteE +
+    (clampNote !== "" ? "[Round clamp] " + clampNote + " — list this in the final brief's decisions-for-the-boss section (for more rounds the boss locks them via the rounds argument and reruns).\n" : "") + mapGap + reqGapNote + interruptNote + (skippedBlockers.length > 0 ? "[Senior-unsolved skips] the following blockers were unsolved after the Senior's single delivery and recorded as skips under the Chief's bypass plan — the final brief must disclose each to the boss honestly (phenomenon, bypass plan, blast radius), never silently; where a later round reopened and fixed one, state it per the ledger: " + skipNote + "\n" : "") + (interrupted || startRound > roundsTotal ? "" : roundsTotal + " rounds complete — hard stop (or finished early).") + resumeNoteE +
     " Using Agents/requirements.md and the ledger as the only basis, append the Final Brief as a new mail at the top of LoopMail/ToBoss.md (the 2026-11-05 boss mail system: ToBoss.md is the Chief's delivery-mail master file — new mails go at the top, appended in reverse order, old mails are never modified; docs/ holds formal content such as REPORT.ipynb and the manuscript; formal files are referenced in mails by relative links as attachments). The boss wants a brief, not a reconciliation (2026-11-05 boss rule): the reconciliation (requirement by requirement -> outcome -> evidence; fill requirementOutcomes faithfully — a requirement without an entry is not done) is your internal affair, going only into Agents/requirement_map.md and the ledger (never touching the tester's verification column), never into the boss's mail as a reconciliation table. Mail writing discipline (the boss's words of 2026-11-05, hard rules): the art of de-redundancy — report the minimum, fastest for the boss to grasp the main line and the whole; no jargon piles (gloss jargon on first use); nothing contrary to fact (numbers and conclusions quote command output and the artifact manifest only); no code-segment or path dumps (evidence pointers listed in one section, no paths in the body). The mail body lets the boss tell at a glance whether the output is what was asked — nine fixed sections: (1) an opening paragraph of progress and verdict (what was done, how it went, whether it meets the boss's requirement; the summary field); (2) the deliverables list (deliverables: one line per artifact — what it is + which sentence of the boss's words it answers (quote <=15 chars) + the attachment link; content worth adopting from historical AI documents is merged here); (3) final state (commits/pushes/tests/known limitations); (4) deviations from the boss's requirements explained one by one (deviations); (5) the decision list (decisionList); (6) open questions answered one by one (questionAnswers: question text -> direct answer -> where the evidence is; when asked where something lives, answer the form too — raw or derived, whether a writer exists); (7) the autonomous-decision list (autonomousDecisions: decision -> reason -> consequence if rejected -> Occam self-assessment \"adds complexity vs simplifies\"; any complexity-increasing decision must be here, never only in the ledger); (8) deferred and declined as fixed subsections (each with its reason — a recorded deferral is a decision, not an omission; a declined idea is not re-proposed next run; fill the deferred/declined/processLessons fields faithfully, empty arrays when none); (9) process lessons (each = rule + why + scope; adopted lessons persist and load with the next run, a disproven lesson is marked superseded and never kept beside a new one; re-validate against the current repo on load) + one line of advice. The mail is a decision-layer document: no process narrative (that is the ledger), one conclusion sentence at the top of each section, each requirement stated once, aiming at two pages or less. At closing, tidy the delivery (2026-11-05 boss rules, hard; sweep the whole repository for historical redundancy first — including leftovers from earlier rounds and runs — not just this round's products): (1) code AND documents the final deliverable does not need (experiment scripts, superseded implementation versions, drafts and intermediate reports — historical redundancy, code and documents alike) -> git mv straight into Agents/; (2) an AI-generated document that has become history -> merge only the content worth adopting into the deliverables wording of the newest ToBoss mail, its body counting as historical redundancy -> git mv into Agents/; (3) docs/ keeps formal content only (the deliverable bodies the boss's words name); the repo root and docs/ pile up no working files; (4) LoopMail/FromBoss.md (written by the boss) stays as it is — what the boss wrote is never modified; (5) any file under LoopMail/ other than ToBoss.md/FromBoss.md is judged case by case — files the boss placed get the FromBoss_ prefix and stay untouched, stray agent-made products are put away per (1)/(2), and anything uncertain is treated as boss-placed; never delete a file throughout. " + GC + " add -A && " + GC + " commit, return FinalReport.",
 );
 // Final-brief landing check (closing-chain mechanical verification, same shape as the research loop's evalOnDisk; cross-loop audit F2): the master mail must be at the top of ToBoss.md — one repair, then a loud log
