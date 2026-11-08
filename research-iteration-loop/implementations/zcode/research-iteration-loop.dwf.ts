@@ -754,9 +754,10 @@ for (let round = startRound; round <= rounds; round++) {
       specAnchorR = "";
     }
     let specH = 0;
-    for (let i = 0; i < specAnchorR.length; i++) specH = (specH * 31 + specAnchorR.charCodeAt(i)) | 0; // 锚定不到规格表时 spec 分量为常数——退化为仅产物内容键（如实已知边界）
+    for (let i = 0; i < specAnchorR.length; i++) specH = (specH * 31 + specAnchorR.charCodeAt(i)) | 0; // 锚定不到规格表时 spec 分量为常数——常数键跨规格变更仍命中，本轮禁用复用（评审修复：宁可重审，绝不复用旧规格下的结论）
     const vKeyR = vPartsR.join("|") + "|spec:" + specH;
-    if (vKeyR === visualCacheKeyR) {
+    if (specAnchorR === "") log("视觉记忆化键的规格分量缺失（ToBoss 中锚定不到产物规格表）——本轮不复用视觉结论，重派审阅");
+    if (specAnchorR !== "" && vKeyR === visualCacheKeyR) {
       visualNoteR = visualCacheNoteR + "（视觉结论复用：产物集合未变，未重派审阅）";
       if (visualCacheIssuesR.length > 0) verdict.issues = verdict.issues.concat(visualCacheIssuesR);
       log("视觉审阅：产物集合未变——复用上次结论，不重派审阅员（实测缺陷 7 的不可收敛循环由此消除）");

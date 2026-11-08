@@ -753,9 +753,10 @@ for (let round = startRound; round <= rounds; round++) {
       specAnchorR = "";
     }
     let specH = 0;
-    for (let i = 0; i < specAnchorR.length; i++) specH = (specH * 31 + specAnchorR.charCodeAt(i)) | 0; // when no spec table is found the spec component is constant — the key degrades to artifact content only (honest known boundary)
+    for (let i = 0; i < specAnchorR.length; i++) specH = (specH * 31 + specAnchorR.charCodeAt(i)) | 0; // when no spec table is found the spec component is constant — a constant key still hits across a spec change, so reuse is disabled this round (review fix: re-review rather than reuse a verdict made under the old spec)
     const vKeyR = vPartsR.join("|") + "|spec:" + specH;
-    if (vKeyR === visualCacheKeyR) {
+    if (specAnchorR === "") log("Visual memoization key carries no spec component (no artifact spec table anchored in ToBoss) — the visual verdict is not reused this round; a fresh reviewer is dispatched");
+    if (specAnchorR !== "" && vKeyR === visualCacheKeyR) {
       visualNoteR = visualCacheNoteR + " (visual verdict reused: artifact set unchanged, no new reviewer dispatched)";
       if (visualCacheIssuesR.length > 0) verdict.issues = verdict.issues.concat(visualCacheIssuesR);
       log("Visual review: artifact set unchanged — reusing the last verdict, no new reviewer (this kills the non-converging loop of field defect 7)");

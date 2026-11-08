@@ -864,17 +864,19 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     visualNote = imageFiles.length === 0 ? (imgDetectOk ? "本轮无图像产物：不适用" : "图像产物检测失败——按无图处理，如实记录") : "尚未审阅";
     let visualP: Node<VisualVerdict> | null = null;
     let vKey = "";
+    let specKeyOk = true; // 规格哈希可读性（评审修复）：不可读时 spec 键分量退化为常数——常数键跨规格变更仍命中，本轮禁用复用
     const hashArtifacts = async (list: string[]): Promise<string> => {
       const vParts: string[] = [];
       for (const pV of list.slice().sort()) {
         try { const hV = await hashObj(pV); vParts.push(pV + ":" + (hV.slice(0, 12) || "?")); } catch { vParts.push(pV); } // 双帧哈希（审计 F9）
       }
-      try { const hSpec = await hashObj("Agents/requirements.md"); vParts.push("spec:" + (hSpec.slice(0, 12) || "?")); } catch { /* 规格键缺失：仅按产物内容 */ }
+      try { const hSpec = await hashObj("Agents/requirements.md"); if (hSpec === "") specKeyOk = false; vParts.push("spec:" + (hSpec.slice(0, 12) || "?")); } catch { specKeyOk = false; } // 规格哈希不可读→本轮不复用视觉结论（宁可重审，绝不复用旧规格下的结论）
       return vParts.join("|");
     };
     if (imageFiles.length > 0) {
       vKey = await hashArtifacts(imageFiles);
-      if (vKey === visualCacheKey) {
+      if (!specKeyOk) log("视觉记忆化键的规格分量不可读（双帧哈希失败）——本轮不复用视觉结论，重派审阅");
+      if (specKeyOk && vKey === visualCacheKey) {
         visualOk = visualCacheOk;
         visualNote = visualCacheNote + "（视觉结论复用：产物集合与规格未变，未重派审阅）";
         log("视觉审阅：产物集合与规格未变——复用上次结论，不重派审阅员（实测缺陷 7 的不可收敛循环由此消除）");

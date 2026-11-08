@@ -860,17 +860,19 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     visualNote = imageFiles.length === 0 ? (imgDetectOk ? "no image artifacts this round: not applicable" : "image-artifact detection failed — treated as no images, recorded honestly") : "not reviewed yet";
     let visualP: Node<VisualVerdict> | null = null;
     let vKey = "";
+    let specKeyOk = true; // spec-hash readability (review fix): when unreadable the spec key component degrades to a constant — a constant key still hits across a spec change, so reuse is disabled this round
     const hashArtifacts = async (list: string[]): Promise<string> => {
       const vParts: string[] = [];
       for (const pV of list.slice().sort()) {
         try { const hV = await hashObj(pV); vParts.push(pV + ":" + (hV.slice(0, 12) || "?")); } catch { vParts.push(pV); } // dual-frame hash (audit F9)
       }
-      try { const hSpec = await hashObj("Agents/requirements.md"); vParts.push("spec:" + (hSpec.slice(0, 12) || "?")); } catch { /* spec key unavailable: artifacts only */ }
+      try { const hSpec = await hashObj("Agents/requirements.md"); if (hSpec === "") specKeyOk = false; vParts.push("spec:" + (hSpec.slice(0, 12) || "?")); } catch { specKeyOk = false; } // spec hash unreadable -> no reuse this round (re-review rather than reuse a verdict made under the old spec)
       return vParts.join("|");
     };
     if (imageFiles.length > 0) {
       vKey = await hashArtifacts(imageFiles);
-      if (vKey === visualCacheKey) {
+      if (!specKeyOk) log("Visual memoization key carries no readable spec component (both hash frames failed) — the visual verdict is not reused this round; a fresh reviewer is dispatched");
+      if (specKeyOk && vKey === visualCacheKey) {
         visualOk = visualCacheOk;
         visualNote = visualCacheNote + " (visual verdict reused: artifact set and spec unchanged, no new reviewer dispatched)";
         log("Visual review: artifact set and spec unchanged — reusing the last verdict, no new reviewer (this kills the non-converging loop of field defect 7)");
