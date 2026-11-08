@@ -34,7 +34,7 @@ Hand a command to an AI and you spend the evening supervising its untested outpu
 
 ![Without bossloop: late-night chaos; with bossloop: read the report](assets/before-after.jpg)
 
-- **Low cost.** Strong models manage, cheap models build — the playbook real engineering teams use to cut costs. The cheap tier can be a locally deployed open model (e.g. Qwen3.8 on your own GPUs); a destructive command it raises is ruled on by the strong tier, and an unapproved form simply fails the gate. Cheaper tokens, larger jobs.
+- **Low cost.** Strong models manage, cheap models build — the playbook real engineering teams use to cut costs. The cheap tier can be a locally deployed open model (e.g. Qwen3.8 on your own GPUs); a destructive command the cheap tier raises is ruled on by the strong tier, and an unapproved form simply fails the gate. Cheaper tokens, larger jobs.
 - **High quality.** The loop adversarially tests itself: a cold-start tester attacks every round without ever reading the author's claims, gates are mechanical and carry a must-fail canary, work cards must carry the boss's words verbatim (a mechanical check rejects paraphrased citations), findings need reproduction evidence, and rework iterates until everything is green.
 - **Minimal supervision.** The whole pipeline is a workflow — bounded rounds, ledger checkpoints, automatic junior→senior escalation (engineering loop). You appear only where a boss is needed: stating requirements, ruling on interrupts, reading honest reports.
 
@@ -68,9 +68,9 @@ The Research Iteration Loop distills lessons from these research-agent systems �
 - [llnl/open-ai-co-scientist](https://github.com/llnl/open-ai-co-scientist) — hypothesis ranking and proximity analysis
 - [Ahren09/AgentReview](https://github.com/Ahren09/AgentReview) — quantified reviewer biases that motivated the blind-review discipline
 - [gulucaptain/Best-Paper-Writing-Skill](https://github.com/gulucaptain/Best-Paper-Writing-Skill) — award-paper writing rules that govern the Researcher role
-- [ScientistTwo](https://scientist-two.github.io/) ([arXiv:2609.19644](https://arxiv.org/abs/2609.19644)) — the evidence-attribution discipline (discriminative evidence, an eval-surface fingerprint, failure triage, evidence-backed rebuttals) draws on its paper
+- [ScientistTwo](https://scientist-two.github.io/) ([arXiv:2609.19644](https://arxiv.org/abs/2609.19644)) — the evidence-attribution discipline (discriminative evidence, an eval-surface fingerprint, failure triage, evidence-backed rebuttals) draws on the ScientistTwo paper
 
-Its own Limitations section notes that it "does not yet consistently achieve the caliber of spotlight or oral presentations that introduce paradigm-shifting conceptual breakthroughs" — a reminder to hold moderate expectations of autonomous research loops, bossloop included.
+The ScientistTwo paper's own Limitations section notes that the system "does not yet consistently achieve the caliber of spotlight or oral presentations that introduce paradigm-shifting conceptual breakthroughs" — a reminder to hold moderate expectations of autonomous research loops, bossloop included.
 
 ## License & citation
 

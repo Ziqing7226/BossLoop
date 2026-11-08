@@ -34,7 +34,7 @@ bossloop 是一组开源 Agent 工作流：一支自主的 AI 团队——规划
 
 ![没有 bossloop：彻夜盯屏；有 bossloop：读报告](assets/before-after.jpg)
 
-- **低成本。** 强模型做管理，廉价模型做开发——复刻真实工程团队的降本增效打法。廉价档可以是本地部署的开源模型（例如在自己的 GPU 上跑 Qwen3.8）；它提出的危险操作由强模型裁决，未经批准的写法过不了门禁。省 token，办大事。
+- **低成本。** 强模型做管理，廉价模型做开发——复刻真实工程团队的降本增效打法。廉价档可以是本地部署的开源模型（例如在自己的 GPU 上跑 Qwen3.8）；廉价档提出的危险操作由强模型裁决，未经批准的写法过不了门禁。省 token，办大事。
 - **高质量。** 循环自我对抗：每轮都有冷启动测试工程师攻击作品（绝不见作者自述）、门禁全部机械化并埋必须失败的金丝雀、任务卡必须逐字携带老板原话（机械对拍拒绝转述引用）、问题必须附复现证据、返修迭代直到全绿。
 - **少人工。** 全流程工作流化：有界轮次、账本断点、初级→高级自动升级（工程循环）；你只在老板该出场的地方出场——给要求、裁决打断、读汇报。
 
@@ -68,9 +68,9 @@ cp robust-engineering-loop/implementations/zcode/robust-engineering-loop.dwf.ts 
 - [llnl/open-ai-co-scientist](https://github.com/llnl/open-ai-co-scientist)——假设排名与相似度分析
 - [Ahren09/AgentReview](https://github.com/Ahren09/AgentReview)——量化的审稿偏差，促成盲审纪律
 - [gulucaptain/Best-Paper-Writing-Skill](https://github.com/gulucaptain/Best-Paper-Writing-Skill)——约束研究员角色的获奖论文写作规则
-- [ScientistTwo](https://scientist-two.github.io/)（[arXiv:2609.19644](https://arxiv.org/abs/2609.19644)）——科研迭代循环的证据归因纪律（区分性证据、协议面指纹、失败三分类、以证据闭环的审稿回应）借鉴自其论文
+- [ScientistTwo](https://scientist-two.github.io/)（[arXiv:2609.19644](https://arxiv.org/abs/2609.19644)）——科研迭代循环的证据归因纪律（区分性证据、协议面指纹、失败三分类、以证据闭环的审稿回应）借鉴自 ScientistTwo 论文
 
-其论文 Limitations 一节自述它 "does not yet consistently achieve the caliber of spotlight or oral presentations that introduce paradigm-shifting conceptual breakthroughs"（尚未能稳定达到引入范式级概念突破的 spotlight 或 oral 水准）——对自主科研循环，包括 bossloop，都宜保持适度预期。
+ScientistTwo 论文的 Limitations 一节自述该系统 "does not yet consistently achieve the caliber of spotlight or oral presentations that introduce paradigm-shifting conceptual breakthroughs"（尚未能稳定达到引入范式级概念突破的 spotlight 或 oral 水准）——对自主科研循环，包括 bossloop，都宜保持适度预期。
 
 ## 许可与引用
 
