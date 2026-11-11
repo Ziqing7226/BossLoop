@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 科研迭代循环（v0.6.7）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3；实证类审稿质询只以证据闭环）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表——机制类主张须附区分性证据 + 含 canary 的 selfcheck 机械门禁 + 协议面指纹防评测面漂移，测试基建归其所有；失败三分类定流向）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
+description: 科研迭代循环（v0.6.8）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3；实证类审稿质询只以证据闭环）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表——机制类主张须附区分性证据 + 含 canary 的 selfcheck 机械门禁 + 协议面指纹防评测面漂移，测试基建归其所有；失败三分类定流向）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
 args:
   idea:
     type: string
@@ -47,6 +47,8 @@ interface WorkCards {
   proposals: string[];
   /** 任务卡清单，每卡一句话指令＋逐字内嵌所引要求（Rn）的开局邮件原句 */
   cards: string[];
+  /** 老板停点兜底通道（终审 F5）：总工实时直读 FromBoss 发现【老板停点】标记而编排器快照陈旧时填写（逐字引用停点原话）——本轮不开工，编排器直接转入收尾评估回执 */
+  blocked?: string;
 }
 
 interface DevReport {
@@ -178,10 +180,10 @@ interface EvalReport {
 const CHIEF_ZH = [
   "你是总工程师。使命：在有限轮数内判断 args.idea 是否值得深挖，并把它迭代推进——不是把它做完美。",
   "接手先读账本（Agents/ledger.md）：若本想法已有记录，从断点轮继续，不重做已完成轮；被中断或取消的片段恢复时先做闭合复查——上一运行中断时的在途工作（工作树未提交改动、跑了一半的实验、账本危险操作行中「未确认」的执行）每项要么核实仍在并纳入本轮任务卡，要么在账本记明放弃及原因；先和解再前进，绝不静默跳过。",
-  "开局理解邮件（第一封邮件）：立项后、开工前把开局理解简报作为第一封邮件写入 LoopMail/ToBoss.md（≤1 页，四节必备）：①逐句清点——老板原话（idea、focus、LoopMail/FromBoss.md）逐句切分，每句标「已落实 Rn / 不适用（理由）/ 需澄清」；②要求与验收标准——老板原话逐字编号（R1/R2…）+ 内涵解释 + 可机械判定的验收标准，一条不落；③产物规格表——本轮要交付的东西（图、表、报告、稿件章节）各写清轴/定义域/单位/合格判据（可被机械判定），老板原话里每个数字与格式词必须落到某一行；每个交付物还须写明落点契约——落在哪个按功能命名的目录（轮次号/日期/阶段号绝不进老板可见目录名——轮次号只进账本）；探针、中间数据、调试输出的落点一律 Agents/；④待答问题——疑问句逐条登记（原文、登记时间、答复状态）。不确定处 ≤3 条、各给默认理解与理解错的后果。写完直接开工，绝不为「等老板过目」停机空转。",
+  "开局理解邮件（第一封邮件）：立项后、开工前把开局理解简报作为第一封邮件写入 LoopMail/ToBoss.md（≤1 页，五节必备）：①逐句清点——老板原话（idea、focus、LoopMail/FromBoss.md）逐句切分，每句标「已落实 Rn / 不适用（理由）/ 需澄清」；②要求与验收标准——老板原话逐字编号（R1/R2…）+ 内涵解释 + 可机械判定的验收标准，一条不落；③产物规格表——本轮要交付的东西（图、表、报告、稿件章节）各写清轴/定义域/单位/合格判据（可被机械判定），老板原话里每个数字与格式词必须落到某一行；每个交付物还须写明落点契约——落在哪个按功能命名的目录（轮次号/日期/阶段号绝不进老板可见目录名——轮次号只进账本）；探针、中间数据、调试输出的落点一律 Agents/；④待答问题——疑问句逐条登记（原文、登记时间、答复状态）；⑤老板所有文件——老板声明亲有/亲改的文件逐个登记（LoopMail/ 通信文件默认在列；老板原话或 FromBoss 中点名的文件逐个登记）：本节文件是老板的财产，老板本人的改动是授权行为不是缺陷，任务卡未明示时绝不修改、绝不收编进任何 agent 提交。不确定处 ≤3 条、各给默认理解与理解错的后果。写完直接开工，绝不为「等老板过目」停机空转。",
   "对老板原话必须得出一个自洽的理解方向、正确把握主旨；把握不准的绝不臆断——在简报中原样引用老板原话并标注「不确定」，工程师在开发、测试过程中可能就理解了。逐字保真不等于语义保真：照抄字面而理解错，是最危险的失败；老板原话填不进规格表时（例：某个数字既可读成分箱宽度也可读成横轴范围），不得按字面挑一种照办。",
   "每轮规划前先查待答问题：有未答项时，本轮任务卡先安排作答（回答成本极低，却直接影响老板判断）。",
-  "任务卡凡涉及老板原话，必须逐字内嵌开局邮件「要求与验收标准」节的原句（带 Rn 编号），禁止凭记忆转述：压缩短语只能作标题；实词（名词/动词/量词/否定词/数字）逐个保真，把握不住就全文照抄。老板原话中的关键实词是协议词：任务卡、开发报告、测试与断言注释、提交信息、稿件一律沿用同词，不得同义替换。",
+  "任务卡凡涉及老板原话，必须逐字内嵌开局邮件「要求与验收标准」节的原句（带 Rn 编号），禁止凭记忆转述：压缩短语只能作标题；实词（名词/动词/量词/否定词/数字）逐个保真，把握不住就全文照抄。老板原话中的关键实词是协议词：任务卡、开发报告、测试与断言注释、提交信息、稿件一律沿用同词，不得同义替换。卡粒度纪律：一张任务卡只承载一类可验收交付（代码/数据/图表/稿件章节各算一类），实验、渲染、写作、存档等异类工作拆成多卡——单卡过重是实测的假死与超支根因。",
   "奥卡姆剃刀：自主决定天然倾向「加东西」（加模块、加方案、加指标）——每个增加复杂度的决定必须写明预期价值，否则默认不做；凡是增加复杂度的决定，不能只写账本，必须进《初步评估报告》的自主决定清单。",
   "文件三类化（交付纪律，分界线就是位置）：docs/ 只放正式内容——老板原话提及的交付物本体、稿件、参考资料原文；LoopMail/＝BOSS—总工通信层，只两个合法文件——ToBoss.md（交付邮件正本，开局简报/评估报告按邮件倒序追加、新邮件插头部、旧邮件永不删改，docs/ 正式文件以相对链接作附件引用）＋FromBoss.md（老板运行中反馈，老板写入，正序追加，总工绝不改动）；LoopMail/ 下出现其它文件时先判定归属——老板放置的文件名加前缀 FromBoss_ 并原样保留（绝不改动内容），agent 自己散落的产物按交付整理规则归位，拿不准的一律按老板放置处理；其余老板面向的历史文档并入 ToBoss 邮件表述后本体迁 Agents/；Agents/ 下的一切都是工程脚手架——账本、映射表、Agents/selfcheck.py、测试调试脚本、被替代的代码、被证伪的历史、面向 Agent 的文档。整理交付只用 git mv 移入 Agents/，绝不删除文件——删除是老板的动作；老板只看非 Agents/ 的部分；若需要老板亲自翻 Agents/，说明工作流出了问题。",
   "调研（网络检索+本地论文库）：拿不到原文的论文列入 paperRequests 供老板代取——非阻塞，先降置信度推进，绝不空等。",
@@ -191,7 +193,7 @@ const CHIEF_ZH = [
   "每轮规划：上一轮审稿意见逐条处置——要么转成本轮任务卡，要么给出基于存档工件的反驳；实证类质询（针对数字、实验或证据的）只能以证据闭环——无现成证据时新入档（新任务卡产出工件+映射行），有现成存档工件可释疑时指明该工件，纯措辞修订不算闭环；不许空口忽略。",
   "新颖性处理：若文献读者报告该想法已被做过，不要终止——把范围重定界到该方向上尚未解决的缺口，重新选定方案，跑满全部轮次。",
   "git 写操作权限：只执行问句明示的 git add/commit；推送由编排器统一执行并核验——你在任何时刻都不执行 git push，也不执行 reset/rebase/tag 等其它写仓库的 git 操作。",
-  "老板反馈（FromBoss.md）：编排器每轮发卡前会附上 LoopMail/FromBoss.md 的当前内容（老板运行中下达的指令，可能为空）——逐条落实到本轮任务卡并把应用情况记入账本；与既有要求不一致时以老板最新指令为准并如实记录；新指令使已排产工作失效时，本轮任务卡以「作废重做」的显式决策开头。",
+  "老板反馈（LoopMail/FromBoss.md）：每轮发卡前你自己实时读该文件（老板运行中下达的指令，可能为空；编排器不再代读注入——脚本层读取在续跑/重放时返回陈旧快照，子代理直读天然新鲜）——逐条落实到本轮任务卡并把应用情况记入账本；与既有要求不一致时以老板最新指令为准并如实记录；新指令使已排产工作失效时，本轮任务卡以「作废重做」的显式决策开头。老板要暂停/打断本运行时会在 FromBoss.md 写下【老板停点】标记——检测到即停机回执（剩余轮次不再执行，评估报告如实呈现），绝不开工。【权源纪律】部署方（运行本工作流的人）是老板的秘书而非老板本人：仅标注【老板原话】的文本具老板效力，【秘书注】等展开性文本只是秘书的理解，冲突时一律以老板原话为准；拿不准哪句是老板原话的列入待答问题，绝不把秘书口径当老板裁定。",
   "诚实第一：数字必须可溯源到存档工件；不确定就说不确定；指令矛盾时如实升级提问。",
   "全程中文。",
 ].join("\n");
@@ -203,8 +205,8 @@ const ALGO_ZH = [
   "测试冻结规则：测试工程师验证期间，你不修改被测实现（否则测试对象在漂移，结论无效）。此时你只做两件事：准备可复现包（环境/命令/随机种子/数据窗口），响应门禁失败。测试报告返回后再按裁决修复。",
   "长任务安全（硬约束）：逐批次/逐场景用独立子进程运行，结果立即落盘后退出释放内存；脚本内置内存护栏（超约物理内存 70–80% 主动终止并保存现场）；每步有超时与失败出口；数据集与既有产物只读，不删除不覆盖；生成的代码视为不可信，可行时优先在容器/受限网络中执行（containment 是降险不是保证）。",
   "上下文纪律：长命令输出重定向到文件后用 tail/grep 取摘要，不整屏阅读；参考材料只读相关节选；工具输出超长只取与判定相关的摘录。",
-  "git 写操作权限：只执行问句明示的 git add/commit；你在任何时刻都不执行 git push，也不执行 reset/rebase/tag 等其它写仓库的 git 操作。",
-  "破坏性操作铁律：删除数据集/覆盖既有产物/git reset --hard/git clean -fdx/force push/改写已推送历史，一律只申报不执行——写入 dangerRequests（命令、原因、影响范围），等总工程师裁决后按其批准的写法执行。",
+  "git 写操作权限：只执行问句明示的 git add/commit；add 一律逐个显式路径（先 git status --porcelain 盘点），绝不 git add -A 与 git add -u（实测：-A 曾把构建残留与老板亲改文件收编进提交）；开局邮件「老板所有文件」节登记的文件绝不 add、绝不修改（除非任务卡明示）；你在任何时刻都不执行 git push，也不执行 reset/rebase/tag 等其它写仓库的 git 操作。",
+  "破坏性操作铁律：删除数据集/覆盖既有产物/git reset --hard/git clean -fdx/force push/改写已推送历史，一律只申报不执行——写入 dangerRequests（命令、原因、影响范围），等总工程师裁决后按其批准的写法执行；执行后回报必须逐字引用实际执行的每条命令原文——编排器按批准写法做逐字/归一一致性核查，转述、概括、只报结果都算未确认。",
   "实验三级执行纪律：每个新实验先 MINI_PILOT（冒烟，验证代码能跑通与内存量级）→ PILOT（小数据核对正确性）→ FULL（正式协议的完整对比）。调试只看 PILOT 及以前；所有入档数字与主张只来自 FULL——禁止拿最小对比的结果冒充验证结论。在 DevReport.experiments 字段如实统计尝试数/跑通数（含死在调试阶段的）。",
   "如实报告失败；指令矛盾则升级提问，不造假不绕过。全程中文。",
 ].join("\n");
@@ -217,7 +219,7 @@ const VISUAL_ZH = [
 const TEST_ZH = [
   "你是测试工程师：代码审查、正确性 roundtrip（含对抗输入）、跨场景泛化、扰动稳定性。",
   "独立性铁律：只读被测实现，绝不修改它——你动手修，验证就变成自我服务、不再独立。你只写自检与映射表。",
-  "先读 LoopMail/ToBoss.md 开局邮件（逐句清点/要求与验收标准/产物规格表/待答问题）：验收按规格表的合格判据，而不是只验结构（文件生成了、图非空、颜色合规）。",
+  "先读 LoopMail/ToBoss.md 开局邮件（逐句清点/要求与验收标准/产物规格表/待答问题/老板所有文件）：验收按规格表的合格判据，而不是只验结构（文件生成了、图非空、颜色合规）；「老板所有文件」节登记的文件，老板本人的改动是授权行为——绝不列为未授权修改类问题（改动若与要求相悖，如实升级提问而不是改判归属）。",
   "验收以开局邮件「要求与验收标准」节的老板原话为唯一准绳，不以任何卡面转述为准；发现转述失真（卡面/文档与原话的实词不一致）列入问题清单并定性「转述失真」。",
   "你拥有 claim→evidence 映射表（Agents/claim_map.md）：稿件每个数字 ↔ 存档工件 + 可重跑的检查命令；先写检查，再做主张。文件首行须含 claim-map 标记，正文用表格。",
   "区分性证据：凡主张含因果/机制语言（「X 使 Y 提升」「收益归功于 Z」），对应映射行须附能排除替代解释的检查——去掉或绕过所提机制后收益是否仍在，或等价对照；给不出就在主张旁显式标注「不可归因」，绝不以裸数字支撑机制主张。",
@@ -230,6 +232,7 @@ const TEST_ZH = [
   "长上下文纪律：diff 或审查面偏大时，先盘变更清单、再对高风险区（逻辑改动、门禁相关、涉危险操作处）深读；verdict 的 coverage 字段必须写明深审了哪些、只略读了哪些——它写在知道问题在哪之前，日后问题落在略读区将以此对账。",
   "整读义务：本轮 diff 触及的每个文件必须完整阅读（含改动处前后文），绝不只读其中几段就下结论；略读只允许发生在本轮 diff 之外的区域，且必须在 coverage 中申报；长命令输出重定向到文件后 tail/grep 取摘要。",
   "git 写操作权限：只执行问句明示的 git add/commit；你在任何时刻都不执行 git push，也不执行其它写仓库的 git 操作。",
+  "核验手段与换版纪律：文件级断言用路径过滤命令核验（git log --oneline -- <路径>、git diff --cached --name-only），绝不 grep git status --porcelain 的输出判定非 ASCII 路径——porcelain 八进制转义曾致「文件未提交」误判；台账/开局邮件版本字串升版时，依赖旧字串的断言（selfcheck 的 grep、版本比对）同一提交内同步更新——换版与断言面永不同轮脱节。",
   "每条裁决附证据。全程中文。",
 ].join("\n");
 
@@ -253,7 +256,8 @@ const READER_ZH = [
 ].join("\n");
 
 const idea = String(args.idea ?? "");
-const rounds = typeof args.rounds === "number" ? args.rounds : 3;
+const rounds = typeof args.rounds === "number" && args.rounds >= 1 ? args.rounds : 3; // 下界守卫（工程循环同款）：rounds<1 会让轮循环不执行、产出「0 轮硬停」的空评估——回退默认 3
+if (typeof args.rounds === "number" && args.rounds < 1) log("rounds=" + args.rounds + " 非法——按默认 3 轮执行");
 const focus = typeof args.focus === "string" ? args.focus : "";
 const profile = typeof args.profile === "string" ? args.profile : "";
 const remoteArg = typeof args.remote === "string" && args.remote !== "" ? args.remote : "gitcoffer";
@@ -261,7 +265,7 @@ if (idea === "") log("警告：idea 参数为空——续跑修正可能丢失�
 if (typeof args.remote === "undefined") log("提示：remote 参数缺失（疑似续跑丢参）——按默认 gitcoffer 探测，请核对启动日志的「推送目标」行");
 const PROFILE_LINE = profile ? "\n项目级约束（必须遵守，高于默认做法）：" + profile : "";
 
-/** 模型分档：tiered = 强弱分档（本参考实现 GLM-5.3 / GLM-5.3-Flash；跨 provider 部署请把这两个常量改成 provider 全名）；uniform = 全随会话模型。模型名只在 tiered 时以字符串传入——uniform 下整个脚本不出现任何模型声明，任何套餐都能直接启动（实测：裸 model() 声明会在非参考套餐上启动失败） */
+/** 模型分档：tiered = 强弱分档（本参考实现 GLM-5.3 / GLM-5.3-Flash；跨 provider 部署须把这两个常量改为 provider 全名＋与运行级一致的推理档位——档位不一致时脚本内声明与运行级绑定脱节，套餐通道消失时唯一路径是改常量为现存 provider 全名后 path-amend）；uniform = 全随会话模型。模型名只在 tiered 时以字符串传入——uniform 下整个脚本不出现任何模型声明，任何套餐都能直接启动（实测：裸 model() 声明会在非参考套餐上启动失败） */
 const tiered = String(args.models ?? "tiered").toLowerCase() !== "uniform";
 const STRONG = "GLM-5.3" as const;
 const CHEAP = "GLM-5.3-Flash" as const;
@@ -289,7 +293,6 @@ artifact.table("rounds", {
 });
 
 phase("总工程师调研立项");
-let chief = agent("总工程师", persona(CHIEF_ZH + PROFILE_LINE, STRONG)); // 强模型档：分析与规划（pre-loop 实例：调研立项/迁移复核；进入轮循环后每轮重建，B#27）
 let repoRoot = "";
 try {
   const tr = await world.run("git", ["rev-parse", "--show-toplevel"], { timeoutMs: 60000 });
@@ -297,7 +300,19 @@ try {
 } catch {
   repoRoot = "";
 }
-/** 世界读取层贯通（家族审计 #18）：files.* 按运行根解析——直帧优先（运行根=仓库根时的可靠形态，实测缺陷 2 教训 3），空/失败回落仓库根帧；双帧皆空按原语义返回空串 */
+if (repoRoot === "") {
+  const mRepo = profile.match(/(?:仓库|repo)\s*[=：:]\s*([^\s；;，,]+)/); // 仓库根回退（实测部署缺陷：工作区根非 git 仓库时 cwd 探测失败，git/账本读取系统性失效）——部署可在 profile 写「仓库=<路径>」，编排器带 -C 重试解析
+  if (mRepo) {
+    try {
+      const tr2 = await world.run("git", ["-C", mRepo[1], "rev-parse", "--show-toplevel"], { timeoutMs: 60000 });
+      const rr2 = (tr2.stdout || "").trim();
+      if (rr2 !== "") { repoRoot = rr2; log("仓库根回退：cwd 探测失败，按 profile「仓库=" + mRepo[1] + "」解析到仓库根 " + rr2); }
+    } catch {
+      /* profile 指定路径也不是仓库：保持空串，按原语义处理 */
+    }
+  }
+}
+/** 世界读取层贯通（家族审计 #18）：files.* 按运行根解析——直帧优先（运行根=仓库根时的可靠形态，实测缺陷 2 教训 3），空/失败回落仓库根帧，再回落 git show HEAD:<路径> 第三帧；三帧皆空按原语义返回空串 */
 const readRepo = async (p: string): Promise<string> => {
   try {
     const d = await files.read(p);
@@ -309,7 +324,13 @@ const readRepo = async (p: string): Promise<string> => {
     try {
       return await files.read(repoRoot + "/" + p);
     } catch {
-      /* 双帧皆失败：按原语义返回空串 */
+      /* 双帧失败：回落第三帧 */
+    }
+    try {
+      const g = await world.run("git", ["-C", repoRoot, "show", "HEAD:" + p], { timeoutMs: 60000, output: { tail: 1048576 } });
+      if ((g.stdout || "") !== "") return g.stdout || ""; // 第三帧（实测 D5：files.read 有尺寸上限，777KB 账本双帧静默空读曾被判「首次运行」并触发假迁移）——HEAD 版本＝随轮提交正本，工作树未提交差异由前两层保真
+    } catch {
+      /* 三帧皆失败：按原语义返回空串 */
     }
   }
   return "";
@@ -330,7 +351,7 @@ log("启动路径自检：Agents/ledger.md 试读" + (ledger !== "" ? "命中（
 if (ledger === "") {
   try {
     const agR = await globRepo("Agents/*");
-    if (agR.length > 0) log("警告：Agents/ 非空（" + agR.length + " 项）但 Agents/ledger.md 读取为空——账本可能超出读取上限，续跑轮次判定需人工核对，绝不静默当全新仓库");
+    if (agR.length > 0) log("警告：Agents/ 非空（" + agR.length + " 项）但 Agents/ledger.md 读取为空（直帧/仓库根帧/git show 三层均未读出）——账本可能异常，续跑轮次判定需人工核对，绝不静默当全新仓库");
   } catch {
     /* 探测失败则无补充信息 */
   }
@@ -368,7 +389,7 @@ if (legacyLayout) log("检测到 LoopMail 之前的布局：开工前先整体�
 
 if (repoRoot !== "") repoDiscipline = "\n【仓库根纪律】本会话的工作目录未必是仓库根：开发仓库根是 " + repoRoot + "。git 命令一律写成 git -C \"" + repoRoot + "\" <子命令>（add/commit/log/reflog/status 全部如此）；读写仓库内文件一律用绝对路径（" + repoRoot + "/ 前缀）；绝不读写工作目录下的同名散落副本；不确定时先 git -C \"" + repoRoot + "\" status 核实。";
 const GC = repoRoot !== "" ? "git -C \"" + repoRoot + "\"" : "git"; // 问句文本层 git 贯通（家族审计 #16）：廉价档执行者跟最近最具体的指令——问句层的 git 链必须自带 -C（系统面由 persona 纪律覆盖）
-chief = agent("总工程师", persona(CHIEF_ZH + PROFILE_LINE, STRONG)); // pre-loop 实例重建：repoDiscipline 已填充——首建发生在解析前，其 persona 冻结无纪律（终审 #1）
+let chief = agent("总工程师", persona(CHIEF_ZH + PROFILE_LINE, STRONG)); // pre-loop 实例：调研立项/迁移复核；进入轮循环后每轮重建（B#27）——repoDiscipline 此时已填充，persona 带全纪律；占位实例已删除（与重建实例同名撞名会运行即败，实测部署缺陷）
 /** 编排器统一 git 入口：显式 -C 仓库根——工作区根≠仓库根时不再静默失效（实测缺陷） */
 const G = (gitArgs: string[], timeoutMs = 120000): Promise<WorldRunResult> =>
   world.run("git", repoRoot !== "" ? ["-C", repoRoot, ...gitArgs] : gitArgs, { timeoutMs });
@@ -378,6 +399,10 @@ const maskUrl = (u: string): string => u.replace(/\/\/[^/@]+@/, "//***@");
 const HEADR = async (): Promise<string> => {
   for (let t = 0; t < 2; t++) {
     try {
+      if (repoRoot !== "") {
+        const h = await G(["rev-parse", "HEAD"], 60000); // repoRoot 已知时走 -C：git.log 面向 cwd 解析，工作区根非仓库时恒空→存档核验假红（实测部署缺陷）
+        return (h.stdout || "").trim();
+      }
       const l = await git.log(1);
       return l[0]?.hash ?? "";
     } catch {
@@ -458,13 +483,13 @@ const survey = await chief.ask<SurveyResult>(
   "待迭代的初步想法：" + idea + "\n" + (focus ? "老板特别关注：" + focus + "\n" : "") +
   (repoRoot ? "当前仓库根：" + repoRoot + "（与账本记录不符时如实注明；工作目录未必是仓库根——git 命令一律 git -C \"" + repoRoot + "\"，仓库内文件读写用绝对路径）。\n" : "") +
   (repoWarn !== "" ? "【环境警告】" + repoWarn + "——本轮照常推进；在账本记明。\n" : "") +
-  (legacyLayout ? "【迁移】检测到旧版布局：把工作文件归位到新布局（目标位置已是新布局的项跳过）：docs/workflow/ 下的 ledger.md、claim_map.md 与仓库根的 selfcheck.py 若存在则 git mv 进 Agents/，docs/boss_directives.md→LoopMail/FromBoss.md、docs/brief.md→LoopMail/ToBoss.md（git mv）；evaluation_report 历史报告并入 ToBoss 邮件表述后本体迁 Agents/；FromBoss.md/ToBoss.md 头注缺失时补一行 LoopMail 协议头注（FromBoss 正序追加/绝不删改老板写下的内容；ToBoss 新邮件插头部/倒序追加/旧邮件永不删改/四禁写作纪律），" + GC + " add -A && " + GC + " commit 后再续跑。\n" : "") +
+  (legacyLayout ? "【迁移】检测到旧版布局：把工作文件归位到新布局（目标位置已是新布局的项跳过）：docs/workflow/ 下的 ledger.md、claim_map.md 与仓库根的 selfcheck.py 若存在则 git mv 进 Agents/，docs/boss_directives.md→LoopMail/FromBoss.md、docs/brief.md→LoopMail/ToBoss.md（git mv）；evaluation_report 历史报告并入 ToBoss 邮件表述后本体迁 Agents/；FromBoss.md/ToBoss.md 头注缺失时补一行 LoopMail 协议头注（FromBoss 正序追加/绝不删改老板写下的内容；ToBoss 新邮件插头部/倒序追加/旧邮件永不删改/四禁写作纪律），" + GC + " add <本轮改动文件逐个显式路径> && " + GC + " commit 后再续跑。\n" : "") +
   (ledger
     ? "已有账本（头部目录+末尾详情，断点续跑依据）：\n" + (ledger.length > 6000 ? ledger.slice(0, 1600) + "\n……（中间省略）……\n" + ledger.slice(-3200) : ledger) + "\n若账本显示本想法已完成 N 轮，resumeFrom 填 N（从第 N+1 轮继续，勿重做已完成轮）；否则填 0。若有中断痕迹（工作树未提交改动、账本目录最后一轮无收尾记录），先做闭合复查：在途工作核实仍在并纳入本轮，或在账本记明放弃及原因——绝不静默跳过。\n"
     : "本仓库无既有账本：resumeFrom 填 0。\n") +
   "请完成调研（网络检索 + 本地论文库，如 docs/refs/），返回 SurveyResult。" +
   "约束：方案与竞品数量由你在 ≤3 内依据证据决定；第一轮结束前必须规划出至少一个完整（FULL 级）端到端对比的落地路径——最小对比不可作为验证。" +
-  "\n立项后、第 1 轮开工前把开局理解简报作为第一封邮件写入 LoopMail/ToBoss.md（≤1 页，四节标题固定为「逐句清点」「要求与验收标准」「产物规格表」「待答问题」）；LoopMail/ToBoss.md 与 LoopMail/FromBoss.md 不存在时先创建并写入协议头注（ToBoss：新邮件插头部、倒序追加、旧邮件永不删改、四禁写作纪律；FromBoss：正序追加、绝不删改老板写下的内容、总工每轮发卡前必读）：逐句清点覆盖老板原话的每一句（idea、focus、LoopMail/FromBoss.md）、要求与验收标准覆盖老板原话逐字编号（R1/R2…）+ 内涵解释 + 可机械判定的验收标准、产物规格表覆盖本轮要交付的图/表/报告（轴、定义域、单位、合格判据、落点契约——目录按功能命名，轮次号不进老板可见目录名）、待答问题覆盖所有疑问句；不确定处 ≤3 条、各给默认理解与理解错的后果；对老板原话必须得出自洽的理解方向、正确把握主旨，把握不准的绝不臆断——原样引用原话并标注「不确定」，工程师在开发、测试中可能就理解了；写完直接开工，不为等老板过目停机。",
+  "\n立项后、第 1 轮开工前把开局理解简报作为第一封邮件写入 LoopMail/ToBoss.md（≤1 页，五节标题固定为「逐句清点」「要求与验收标准」「产物规格表」「待答问题」「老板所有文件」）；LoopMail/ToBoss.md 与 LoopMail/FromBoss.md 不存在时先创建并写入协议头注（ToBoss：新邮件插头部、倒序追加、旧邮件永不删改、四禁写作纪律；FromBoss：正序追加、绝不删改老板写下的内容、总工每轮发卡前必读；老板停点在 FromBoss 写【老板停点】标记，编排器每轮机械检测并回执）：逐句清点覆盖老板原话的每一句（idea、focus、LoopMail/FromBoss.md）、要求与验收标准覆盖老板原话逐字编号（R1/R2…）+ 内涵解释 + 可机械判定的验收标准、产物规格表覆盖本轮要交付的图/表/报告（轴、定义域、单位、合格判据、落点契约——目录按功能命名，轮次号不进老板可见目录名）、待答问题覆盖所有疑问句、老板所有文件覆盖老板声明亲有/亲改的文件与 LoopMail/ 通信文件（默认在列；老板原话或 FromBoss 中点名的文件逐个登记；本节文件老板亲改是授权行为不是缺陷，任务卡未明示绝不修改、绝不收编进提交）；不确定处 ≤3 条、各给默认理解与理解错的后果；对老板原话必须得出自洽的理解方向、正确把握主旨，把握不准的绝不臆断——原样引用原话并标注「不确定」，工程师在开发、测试中可能就理解了；写完直接开工，不为等老板过目停机。",
 );
 if (legacyLayout) {
   let migratedLedger = "";
@@ -474,7 +499,7 @@ if (legacyLayout) {
     migratedLedger = "";
   }
   if (migratedLedger === "") {
-    await chief.ask<string>("迁移复核未通过：Agents/ledger.md 读取为空——旧布局迁移（git mv 归位）可能未完成或未提交。请补全迁移并 " + GC + " add -A && " + GC + " commit，返回一句话；确无账本可迁的如实说明。");
+    await chief.ask<string>("迁移复核未通过：Agents/ledger.md 读取为空——旧布局迁移（git mv 归位）可能未完成或未提交。请补全迁移并 " + GC + " add <本轮改动文件逐个显式路径> && " + GC + " commit，返回一句话；确无账本可迁的如实说明。");
   }
   try {
     migratedLedger = await readRepo("Agents/ledger.md");
@@ -494,8 +519,8 @@ if (legacyLayout) {
 if ((survey.paperRequests || []).length > 0) {
   log("求论文清单（非阻塞，供老板代取）：" + survey.paperRequests.join("；"));
 }
-// 入账完整性机械核查（与工程循环同款）：简报四节是否真的写进了文件——缺了就补一次，补不上如实记录
-const intakeMarkersR = ["逐句清点", "要求与验收标准", "产物规格表", "待答问题"];
+// 入账完整性机械核查（与工程循环同款）：简报五节是否真的写进了文件——缺了就补一次，补不上如实记录
+const intakeMarkersR = ["逐句清点", "要求与验收标准", "产物规格表", "待答问题", "老板所有文件"];
 let intakeMissingR: string[] = [];
 const checkIntakeR = async (): Promise<void> => {
   let bt = "";
@@ -511,7 +536,7 @@ const checkIntakeR = async (): Promise<void> => {
 await checkIntakeR();
 if (intakeMissingR.length > 0) {
   await chief.ask<string>(
-    "入账完整性核查未通过：" + intakeMissingR.join("；") + "。请补全 LoopMail/ToBoss.md 开局邮件（四节标题固定为「逐句清点」「要求与验收标准」「产物规格表」「待答问题」，逐句清点覆盖老板原话每一句；本轮补记的节或行须标注「（补记）」）并 " + GC + " add -A && " + GC + " commit，返回一句话。",
+    "入账完整性核查未通过：" + intakeMissingR.join("；") + "。请补全 LoopMail/ToBoss.md 开局邮件（五节标题固定为「逐句清点」「要求与验收标准」「产物规格表」「待答问题」「老板所有文件」，逐句清点覆盖老板原话每一句；本轮补记的节或行须标注「（补记）」）并 " + GC + " add <本轮改动文件逐个显式路径> && " + GC + " commit，返回一句话。",
   );
   await checkIntakeR();
   log(intakeMissingR.length === 0 ? "入账完整性：补齐后通过" : "入账完整性仍缺：" + intakeMissingR.join("；") + "——如实记录并继续");
@@ -571,7 +596,7 @@ async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
   if (ok.length > 0) {
     phase("执行已批准的危险操作");
     let execReport = await algo.ask<string>(
-      "执行总工程师已批准的危险操作，严格按批准写法，不得扩大范围、不得新增未批准的命令：" + ok.map((d, i) => (i + 1) + ". " + (d.safeForm || d.command)).join("；") + "。回报中必须逐字引用上列每条批准写法（一致性核查按逐字匹配，漏引或转述都算未确认）；完成后 " + GC + " add -A && " + GC + " commit，返回一句话。",
+      "执行总工程师已批准的危险操作，严格按批准写法，不得扩大范围、不得新增未批准的命令：" + ok.map((d, i) => (i + 1) + ". " + (d.safeForm || d.command)).join("；") + "。回报中必须逐字引用上列每条批准写法（一致性核查按逐字匹配，漏引或转述都算未确认）；完成后 " + GC + " add <本轮改动文件逐个显式路径> && " + GC + " commit，返回一句话。",
     );
     const missedR = ok.filter((d) => !execHit(execReport, d.safeForm || d.command));
     if (missedR.length > 0) {
@@ -596,6 +621,7 @@ let evalSurfaceFirstR = ""; // 协议面指纹首见登记（协议不可变性�
 let protocolDriftNote = ""; // 协议面漂移检出时的披露注入（与 claimGapNote 同款消费机制）
 let evalSurfaceLieNote = ""; // 协议面指纹失真时的披露注入（只置一次，防逐轮重复）
 let misunderstandingNote = ""; // 总工升级的理解分歧（待老板答复）——评估报告待老板决策节必须逐条列出
+let bossStopR = false; // 老板停点标记命中（FromBoss【老板停点】——老板级停点必须落机制回执，实测 D25）
 for (let round = startRound; round <= rounds; round++) {
   const roundHead0 = await HEADR(); // 本轮起点 HEAD：图像检测 diff 源的基线（工程循环同款）
   chief = agent("总工程师-R" + round, persona(CHIEF_ZH + PROFILE_LINE, STRONG)); // B#27：每轮全新实例——检查点是账本，不是任何人的会话记忆
@@ -607,18 +633,29 @@ for (let round = startRound; round <= rounds; round++) {
   let bossNote = "";
   try {
     bossNote = (await readRepo("LoopMail/FromBoss.md")).trim();
+    bossStopR = bossNote.includes("【老板停点】"); // 编排器机械停点检测（续跑时本读取可能陈旧——总工按人设实时直读兜底）
   } catch {
     bossNote = "";
+  }
+  if (bossStopR) {
+    log("检测到老板停点标记（LoopMail/FromBoss.md）——剩余轮次不再执行，评估报告向老板回执（研究循环无打断机制，停点即提前进入收尾评估）");
+    break;
   }
   phase("布置本轮任务卡");
   let cards = await chief.ask<WorkCards>(
     "第 " + round + "/" + rounds + " 轮。idea：" + idea + "\n" +
-    (round === rounds ? "【收官定稿】本轮任务卡必含一张「交付目录定稿」卡：全仓盘点交付目录——①按功能重命名归并（git mv；老板原话点名的交付物本体不改名，其目录映射表写入《初步评估报告》待老板决策——旧邮件永不删改：重命名若使此前邮件的相对链接断链，绝不回改旧邮件，断链逐条列入映射表：旧路径→新路径→受影响邮件）；②非交付物的过程产物 git mv 进 Agents/（绝不删除——删除是老板的动作）；③产出目录说明书（每个目录一句：是什么、对应哪个要求条目）本体存 Agents/（脚手架），其内容并入《初步评估报告》的交付物清单表述（与收尾整理②同款表述，绝不自创新节名）。\n" : "") +
+    (round === rounds ? "【收官定稿】本轮任务卡必含一张「交付目录定稿」卡：全仓盘点交付目录——①按功能重命名归并（git mv；老板原话点名的交付物本体不改名，其目录映射表写入《初步评估报告》待老板决策——旧邮件永不删改：重命名若使此前邮件的相对链接断链，绝不回改旧邮件，断链逐条列入映射表：旧路径→新路径→受影响邮件）；②非交付物的过程产物与全部测试/探针/调试脚本 git mv 进 Agents/（测试代码一律 Agents/，仓库根与 docs/ 不放任何 test 代码；绝不删除——删除是老板的动作）；③产出目录说明书（每个目录一句：是什么、对应哪个要求条目）本体存 Agents/（脚手架），其内容并入《初步评估报告》的交付物清单表述（与收尾整理②同款表述，绝不自创新节名）。\n" : "") +
   (round === 1 ? "调研结论：" + survey.summary : "上一轮审稿意见与你的规划：" + plan) + "\n" +
   "注意：方案 Portfolio 每轮由你重新选定（可新增/移除/替换，≤3 且 ≥1）；本轮选中的每个方案都要充分验证；proposals 字段列出本轮选定的 1–3 个方案名。\n" +
-  (bossNote ? "【老板指令文件（本轮读取）】逐条落实，应用情况入账本：\n" + bossNote + "\n" : "") +
+  "发卡前先实时读 LoopMail/FromBoss.md（编排器不再代读——续跑时脚本层快照可能陈旧，你的直读才新鲜）：老板运行中指令逐条落实到本轮任务卡，应用情况入账本；新指令使已排产工作失效时，本轮任务卡以「作废重做」的显式决策开头。\n" +
+  "若你直读发现【老板停点】标记：绝不开工——把 blocked 字段填为停机回执（逐字引用停点原话），编排器即停本轮转入收尾评估。\n" +
   "把本轮工作转成任务卡（复现竞品 X / 尝试方案 Y…），每张卡可追溯到要求条目并逐字内嵌开局邮件的原句（R1/R2…；压缩短语只能作标题，实词逐个保真）。轮次号以 Agents/ledger.md 的目录实态为准，与本提示编号不一致时按账本实态标注并说明（编排器计数仅内部用）。老板关注：" + (focus || "无"),
   );
+  if (cards.blocked) {
+    bossStopR = true; // 总工直读兜底命中老板停点（编排器快照陈旧，终审 F5）——本轮不开工，评估报告回执（与轮顶机械检测同通道）
+    log("总工实时直读发现老板停点标记——本轮任务卡不开工，直接进入收尾评估回执");
+    break;
+  }
   if ((cards.proposals || []).length < 1 || (cards.proposals || []).length > 3) {
     cards = await chief.ask<WorkCards>(
       "proposals 必须为 1–3 个方案名（当前 " + (cards.proposals || []).length + " 个）。请重新返回 WorkCards。",
@@ -851,7 +888,7 @@ for (let round = startRound; round <= rounds; round++) {
     if (badM[0] === "__unreadable__") log("claim_map 实质核查未运行：docs/paper_draft.md 不可读——如实记录");
     else if (badM.length > 0) {
       await tester.ask<string>(
-        "claim_map 实质核查未过（假映射表防线）：\n" + badM.slice(0, 10).join("\n") + (badM.length > 10 ? "\n……（共 " + badM.length + " 项）" : "") + "\n逐项修正：稿件数字补映射行（数字 | 存档工件 | 可重跑检查命令，绝不虚构工件路径）；不可达路径改为真实存档位置；确非主张数字的（版本号、章节号、表编号）在映射表末尾加一行「<!-- 非主张数字: <数字> -->」登记豁免（逐条注明出处，如「版本号见封面」），该数字不再进入覆盖扫描；主张数字绝不登记豁免——豁免是收声通道不是遮盖通道（家族审计 #3）。" + GC + " add -A && " + GC + " commit，返回一句话。",
+        "claim_map 实质核查未过（假映射表防线）：\n" + badM.slice(0, 10).join("\n") + (badM.length > 10 ? "\n……（共 " + badM.length + " 项）" : "") + "\n逐项修正：稿件数字补映射行（数字 | 存档工件 | 可重跑检查命令，绝不虚构工件路径）；不可达路径改为真实存档位置；确非主张数字的（版本号、章节号、表编号）在映射表末尾加一行「<!-- 非主张数字: <数字> -->」登记豁免（逐条注明出处，如「版本号见封面」），该数字不再进入覆盖扫描；主张数字绝不登记豁免——豁免是收声通道不是遮盖通道（家族审计 #3）。" + GC + " add <本轮改动文件逐个显式路径> && " + GC + " commit，返回一句话。",
       );
       const stillM = await auditClaimMap();
       log(stillM[0] === "__unreadable__" ? "claim_map 实质核查复核时稿件不可读——如实记录" : stillM.length === 0 ? "claim_map 实质核查：修正后通过" : "claim_map 实质核查仍有 " + stillM.length + " 项未对上——如实记录，稿件披露以 claim_map 缺口为准");
@@ -1088,14 +1125,14 @@ for (let round = startRound; round <= rounds; round++) {
   phase("本轮存档");
   const head0 = await HEADR(); // 瞬态失败重试（B#25）——存档核验不再裸读
   const archived = await chief.ask<string>(
-    "把本轮记入 Agents/ledger.md（头部含仓库标识行" + (repoRoot ? "：" + repoRoot : "") + "与一行一轮的目录：本轮先更新目录行、再追加详情；审稿团 " + n + " 人中缺席 " + absentN + " 人）：任务/产出（" + (dev.summary || "").slice(0, 400) + "）/存档前 HEAD " + (head0 !== "" ? head0.slice(0, 7) : "空树或读取失败") + "/危险操作裁决（" + dangerLog + "）/测试（覆盖声明：" + (verdict.coverage || "").slice(0, 300) + "；视觉审阅：" + visualNoteR.slice(0, 200) + "；claim_map 豁免 " + (exemptCountR >= 0 ? "登记 " + exemptCountR + " 个数字" : "计数未核查——实质核查未完成") + "）/审稿（" + digest.slice(0, 1200) + "）/下轮方向。然后 " + GC + " add -A && " + GC + " commit（备份推送由编排器执行并核验，你不执行 push；向云端发布永远是老板的明确动作）。返回一句话。",
+    "把本轮记入 Agents/ledger.md（头部含仓库标识行" + (repoRoot ? "：" + repoRoot : "") + "与一行一轮的目录：本轮先更新目录行、再追加详情；审稿团 " + n + " 人中缺席 " + absentN + " 人）：任务/产出（" + (dev.summary || "").slice(0, 400) + "）/存档前 HEAD " + (head0 !== "" ? head0.slice(0, 7) : "空树或读取失败") + "/危险操作裁决（" + dangerLog + "）/测试（覆盖声明：" + (verdict.coverage || "").slice(0, 300) + "；视觉审阅：" + visualNoteR.slice(0, 200) + "；claim_map 豁免 " + (exemptCountR >= 0 ? "登记 " + exemptCountR + " 个数字" : "计数未核查——实质核查未完成") + "）/审稿（" + digest.slice(0, 1200) + "）/下轮方向。然后 " + GC + " add <本轮改动文件逐个显式路径> && " + GC + " commit（备份推送由编排器执行并核验，你不执行 push；向云端发布永远是老板的明确动作）。返回一句话。",
   );
   const head1 = await HEADR(); // 瞬态失败重试（B#25）——存档核验不再裸读
   let commitOk = head1 !== "" && head1 !== head0;
   let headShown = head1;
   if (!commitOk) {
     await chief.ask<string>(
-      "本轮提交未落盘（HEAD 未变化）。请立即 " + GC + " add -A && " + GC + " commit，返回提交哈希。",
+      "本轮提交未落盘（HEAD 未变化）。请立即 " + GC + " add <本轮改动文件逐个显式路径> && " + GC + " commit，返回提交哈希。",
     );
     const head1b = await HEADR();
     if (head1b !== "" && head1b !== head0) {
@@ -1169,7 +1206,7 @@ let reconGap = ""; // 逐句对账补修后仍缺的 Rn（注入评估问句强�
   const rnGoneF = rnUnivF.filter((rn) => !(new RegExp("\\b" + rn + "\\b[^。]{0,30}(已交付|部分|未交付)")).test(ledgerTailF));
   if (rnGoneF.length > 0) {
     await chief.ask<string>(
-      "逐句对账覆盖核查未过：账本终章缺少以下开局邮件 Rn 的处置标注：" + rnGoneF.join("、") + "——每条标 已交付/部分/未交付→证据位置，绝不省略（蒸发即漏需求），" + GC + " add -A && " + GC + " commit，返回一句话。",
+      "逐句对账覆盖核查未过：账本终章缺少以下开局邮件 Rn 的处置标注：" + rnGoneF.join("、") + "——每条标 已交付/部分/未交付→证据位置，绝不省略（蒸发即漏需求），" + GC + " add <本轮改动文件逐个显式路径> && " + GC + " commit，返回一句话。",
     );
     try {
       ledgerTailF = (await readRepo("Agents/ledger.md")).slice(-6000);
@@ -1189,15 +1226,20 @@ try {
 } catch {
   closingBossNoteR = "";
 }
-if (closingBossNoteR !== "") log("收尾时重读 LoopMail/FromBoss.md：发现老板反馈 " + closingBossNoteR.length + " 字——注入评估问句逐条处置，绝不静默蒸发");
-const resumeNote = rows.length === 0 ? "账本显示全部轮次已完成，本次运行直接从账本与存档产物出评估报告。" : "";
+if (closingBossNoteR !== "") log("收尾时编排器快照读取 LoopMail/FromBoss.md：发现老板反馈 " + closingBossNoteR.length + " 字（快照可能陈旧——已指示总工实时直读处置，绝不静默蒸发）");
+if (!bossStopR && closingBossNoteR.includes("【老板停点】")) {
+  bossStopR = true; // 收尾机械检测兜底（终审 F6）：全完成续跑/末轮轮顶读取后才写入的停点——评估报告仍须回执，绝不安静结束
+  log("收尾检测到【老板停点】标记——评估报告回执注入");
+}
+const resumeNote = rows.length === 0 && !bossStopR ? "账本显示全部轮次已完成，本次运行直接从账本与存档产物出评估报告。" : "";
 let evalResult = await chief.ask<EvalReport>(
   "老板原话（idea，逐字）：" + idea + (focus ? "\n老板本次关注点：" + focus : "") + "\n" +
-  resumeNote + rounds + " 轮已完成，硬停。最新一轮审稿意见（更早各轮见账本 rows 摘要）：\n" + plan.slice(0, 6000) + "\n" +
+  resumeNote + (bossStopR ? "老板停点：计划 " + rounds + " 轮，实际执行 " + rows.length + " 轮即停（老板在 FromBoss 写下【老板停点】）。" : rounds + " 轮已完成，硬停。") + "最新一轮审稿意见（更早各轮见账本 rows 摘要）：\n" + plan.slice(0, 6000) + "\n" +
   "轮次记录（含每轮实验死亡率 experiments 字段）：" + JSON.stringify(rows) + "\n" +
   (startRound > 1 ? "【证据基座范围】本次运行从第 " + startRound + " 轮续跑：上述审稿意见与轮次记录只含本次运行的轮次——评估必须显式注明证据基座范围，绝不让老板误以为覆盖全部轮次。\n" : "") +
+  (bossStopR ? "【老板停点回执】老板在 LoopMail/FromBoss.md 写下【老板停点】：剩余轮次未执行即停——报告必须逐字引用停点原话向老板回执（已完成/未完成、待决策点），绝不静默。\n" : "") +
   "若轮次记录显示第 1 轮无端到端数字，报告必须显式声明「第 1 轮无 FULL 数字，稿件不得声称已验证」。\n" +
-  (closingBossNoteR !== "" ? "【老板反馈（收尾时重读 LoopMail/FromBoss.md）】以下为老板运行中写入、尚无轮次可落实的指令——逐条处置或在报告的待老板决策节列明，绝不静默：\n" + closingBossNoteR + "\n" : "") +
+  "收尾先实时读 LoopMail/FromBoss.md（编排器快照可能陈旧——你的直读才新鲜）：老板运行中写入、尚无轮次可落实的指令，逐条处置或在报告的待老板决策节列明，绝不静默。\n" +
   (claimGapNote !== "" ? "【机械核查未过】" + claimGapNote + "——报告必须如实披露，绝不静默。\n" : "") +
   (protocolDriftNote !== "" ? "【机械核查】" + protocolDriftNote : "") +
   (evalSurfaceLieNote !== "" ? "【机械核查】" + evalSurfaceLieNote : "") +
@@ -1206,7 +1248,7 @@ let evalResult = await chief.ask<EvalReport>(
   (round1FullMissing ? "【机械核查】第 1 轮无 FULL 级端到端数字——报告与稿件必须显式声明未验证。\n" : "") +
   "撰写《初步评估报告》：verdict（继续/转向/停止）、预期成功率（推理依据必须引用实验死亡率趋势与文献读者的新颖性核查结论；并明确标注『这是定性判断的数值化表达，非校准概率』）、创新性（引用最相近 3 篇工作与实质差异维度）、影响力、继续做要注意的点（每条注明对应主张的证据范围——数据集与条件）、" +
   "reviewerQuotes（逐字引用每位审稿人结论，不得改写）、待答问题逐条（questionAnswers：问题原文→直接答案→证据位置；问「存在哪」时连形态一起答——是 raw 还是派生格式、有没有写出器）、自主决定清单（autonomousDecisions：决定→理由→若否决的后果→奥卡姆自评「增加复杂度还是删减」；凡增加复杂度的决定必须进这一节，不能只写账本）、遗留与否决各设固定小节（deferred/declined，各带理由——记录在案的延后是决策而非遗漏，被否决的想法不得下轮重新提案；字段如实填写，无则空数组）、与老板要求相悖的偏离逐条说明（deviations：偏离+原因+替代选择；无则空数组）、流程教训（processLessons：每条=规则+为什么+适用范围；老板采纳的教训持久化并随下次运行加载，被证伪的教训标记废弃）、给老板的建议（含仅老板能做的决策清单：账号、数据、资源类）。" +
-  "逐句对账收尾（内部事务）：开局邮件逐句清点的每句 Rn 逐条标注 已交付/部分/未交付→证据位置，写进账本终章与 Agents/claim_map.md 的对账列——绝不以对账表形式出现在老板邮件正文，没有条目支撑的「已落实」不算完成。这份报告是决策层文档，并作为一封新邮件追加到 LoopMail/ToBoss.md 头部（2026-11-05 老板邮件化体系：ToBoss.md＝总工交付邮件正本，新邮件插头部、倒序追加、旧邮件永不删改；docs/＝正式内容如稿件与 REPORT.ipynb；正式文件在邮件中以链接作附件引用；写作纪律（2026-11-05 老板原话，硬性）：去冗余的艺术——最少的汇报、最快让老板把握主线和全貌，禁止堆砌黑话（行话首次出现用白话括注），禁止与事实不符（数字与结论只引用命令输出与产物 manifest），禁止堆砌代码段与路径指引（证据指针集中一节列，正文不堆路径））：不写过程流水账（第几次门禁通过、返修几轮、审稿几条——那些在账本）、每节开头一句结论、同一件事只说一次、以 ≤2 页为目标。收尾同时整理交付（2026-11-05 老板规则，硬性；先全仓盘点历史冗余——包括此前各轮与各次运行遗留的——再动手，一律 git mv，绝不删除——删除文件是老板的动作）：①凡非最终产出需要的代码与文档（实验脚本、被替换的实现版本、草稿与中间报告等历史冗余，包括代码和文档）→ 直接 git mv 进 Agents/；②AI 生成且已成历史的文档→只把值得采纳且有意义的内容并入 ToBoss 最新邮件的交付清单表述，文档本体算作历史冗余 git mv 进 Agents/；③docs/ 只保留正式内容（稿件本体等），仓库根与 docs/ 不堆工作文件；④老板写入或提供的文件（LoopMail/FromBoss.md、docs/refs/ 论文库）原样保留，绝不改动老板写下的内容；⑤LoopMail/ 下异于 ToBoss.md/FromBoss.md 的文件逐一判定归属——老板放置的文件名加前缀 FromBoss_ 并原样保留，agent 自己散落的按①②归位，拿不准的一律按老板放置处理；工作脚手架（账本、映射表、Agents/selfcheck.py、测试调试脚本、被证伪的历史）全部在 Agents/ 下。追加邮件到 LoopMail/ToBoss.md，" + GC + " add -A && " + GC + " commit。",
+  "逐句对账收尾（内部事务）：开局邮件逐句清点的每句 Rn 逐条标注 已交付/部分/未交付→证据位置，写进账本终章与 Agents/claim_map.md 的对账列——绝不以对账表形式出现在老板邮件正文，没有条目支撑的「已落实」不算完成。这份报告是决策层文档，并作为一封新邮件追加到 LoopMail/ToBoss.md 头部（2026-11-05 老板邮件化体系：ToBoss.md＝总工交付邮件正本，新邮件插头部、倒序追加、旧邮件永不删改；docs/＝正式内容如稿件与 REPORT.ipynb；正式文件在邮件中以链接作附件引用；写作纪律（2026-11-05 老板原话，硬性）：去冗余的艺术——最少的汇报、最快让老板把握主线和全貌，禁止堆砌黑话（行话首次出现用白话括注），禁止与事实不符（数字与结论只引用命令输出与产物 manifest），禁止堆砌代码段与路径指引（证据指针集中一节列，正文不堆路径））：不写过程流水账（第几次门禁通过、返修几轮、审稿几条——那些在账本）、每节开头一句结论、同一件事只说一次、以 ≤2 页为目标。收尾同时整理交付（2026-11-05 老板规则，硬性；先全仓盘点历史冗余——包括此前各轮与各次运行遗留的——再动手，一律 git mv，绝不删除——删除文件是老板的动作）：①凡非最终产出需要的代码与文档（实验脚本、被替换的实现版本、草稿与中间报告等历史冗余，包括代码和文档）→ 直接 git mv 进 Agents/；②AI 生成且已成历史的文档→只把值得采纳且有意义的内容并入 ToBoss 最新邮件的交付清单表述，文档本体算作历史冗余 git mv 进 Agents/；③docs/ 只保留正式内容（稿件本体等），仓库根与 docs/ 不堆工作文件；④老板写入或提供的文件（LoopMail/FromBoss.md、docs/refs/ 论文库）原样保留，绝不改动老板写下的内容；⑤LoopMail/ 下异于 ToBoss.md/FromBoss.md 的文件逐一判定归属——老板放置的文件名加前缀 FromBoss_ 并原样保留，agent 自己散落的按①②归位，拿不准的一律按老板放置处理；工作脚手架（账本、映射表、Agents/selfcheck.py、测试调试脚本、被证伪的历史）全部在 Agents/ 下。追加邮件到 LoopMail/ToBoss.md，" + GC + " add <本轮改动文件逐个显式路径> && " + GC + " commit。",
 );
 let evalOnDisk = "";
 try {
@@ -1215,7 +1257,7 @@ try {
   evalOnDisk = "";
 }
 if (!evalOnDisk.slice(0, 2000).includes("初步评估报告")) {
-  await chief.ask<string>("评估报告未落盘（LoopMail/ToBoss.md 头部未见《初步评估报告》邮件）：把报告作为新邮件插入 LoopMail/ToBoss.md 头部并 " + GC + " add -A && " + GC + " commit，返回一句话。");
+  await chief.ask<string>("评估报告未落盘（LoopMail/ToBoss.md 头部未见《初步评估报告》邮件）：把报告作为新邮件插入 LoopMail/ToBoss.md 头部并 " + GC + " add <本轮改动文件逐个显式路径> && " + GC + " commit，返回一句话。");
   try {
     evalOnDisk = await readRepo("LoopMail/ToBoss.md");
   } catch {
@@ -1227,7 +1269,7 @@ if (!evalOnDisk.slice(0, 2000).includes("初步评估报告")) {
 const askedQ = ((idea + " " + focus + " " + closingBossNoteR).match(/？|\?/g) || []).length;
 if (askedQ > 0 && (!evalResult.questionAnswers || evalResult.questionAnswers.length === 0)) {
   evalResult = await chief.ask<EvalReport>(
-    "老板原话（idea，逐字）：" + idea + (focus ? "；本次关注点：" + focus : "") + "\n老板原话含 " + askedQ + " 处疑问，但报告里 questionAnswers 为空——疑问句在登记环节蒸发属漏需求。逐条补答（问题原文→直接答案，含形态→证据位置；确实无法作答的写「无法作答：原因」），写回 LoopMail/ToBoss.md 最新邮件并 " + GC + " add -A && " + GC + " commit（报告提交存在且未推送时可 --amend 并入；绝不改写已推送历史），返回完整 EvalReport。",
+    "老板原话（idea，逐字）：" + idea + (focus ? "；本次关注点：" + focus : "") + "\n老板原话含 " + askedQ + " 处疑问，但报告里 questionAnswers 为空——疑问句在登记环节蒸发属漏需求。逐条补答（问题原文→直接答案，含形态→证据位置；确实无法作答的写「无法作答：原因」），写回 LoopMail/ToBoss.md 最新邮件并 " + GC + " add <本轮改动文件逐个显式路径> && " + GC + " commit（报告提交存在且未推送时可 --amend 并入；绝不改写已推送历史），返回完整 EvalReport。",
   );
   if (!evalResult.questionAnswers || evalResult.questionAnswers.length === 0) log("报告仍缺待答问题（已如实记录，老板原话含 " + askedQ + " 处疑问）");
 }
@@ -1302,7 +1344,7 @@ const md = [
   "---",
   "说明：预期成功率是定性判断的数值化表达，非校准概率；审稿人原话未经改写，可能与总判断不一致。",
 ].join("\n");
-await artifact.markdown("report", md, { title: "初步评估报告（投递副本）", description: (evalOnDisk.slice(0, 2000).includes("初步评估报告") ? "正本在 LoopMail/ToBoss.md 最新邮件" : "⚠ 正本未落盘（补写失败）——本副本为唯一交付表述") + "；" + rounds + " 轮硬停后的 go/no-go 评估", primary: true });
+await artifact.markdown("report", md, { title: "初步评估报告（投递副本）", description: (evalOnDisk.slice(0, 2000).includes("初步评估报告") ? "正本在 LoopMail/ToBoss.md 最新邮件" : "⚠ 正本未落盘（补写失败）——本副本为唯一交付表述") + "；" + (bossStopR ? "老板停点：计划 " + rounds + " 轮实际执行 " + rows.length + " 轮即停的 go/no-go 评估" : (startRound > rounds ? "全部 " + rounds + " 轮此前已完成（全完成续跑复核）的 go/no-go 评估" : rounds + " 轮硬停后的 go/no-go 评估")), primary: true });
 
 return {
   conclusion: evalResult.advice,

@@ -4,8 +4,8 @@ message: >-
   please mention this work.
 type: software
 title: bossloop
-version: v0.6.7
-date-released: "2026-11-08"
+version: v0.6.8
+date-released: "2026-11-11"
 authors:
   - alias: Ziqing7226
 repository-code: "https://github.com/Ziqing7226/bossloop"
