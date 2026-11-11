@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Research Iteration Loop (v0.6.9), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3; empirical review critiques are closed only with evidence); the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map — mechanism claims carry discriminative evidence + a mechanical selfcheck gate with a canary + an eval-surface fingerprint against silent drift, owning the test fixtures; failure triage decides the flow); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
+description: Research Iteration Loop (v0.7.0), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3; empirical review critiques are closed only with evidence); the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map — mechanism claims carry discriminative evidence + a mechanical selfcheck gate with a canary + an eval-surface fingerprint against silent drift, owning the test fixtures; failure triage decides the flow); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
 args:
   idea:
     type: string
@@ -570,11 +570,13 @@ let algo = agent("Algorithm Engineer", persona(ALGO_EN + PROFILE_LINE, CHEAP)); 
 let researcher = agent("Researcher", persona(RESEARCHER_EN + PROFILE_LINE, CHEAP)); // cheap tier
 let editor = agent("Editor", persona(EDITOR_EN + PROFILE_LINE, STRONG)); // strong tier
 let reader = agent("Reference Reader", persona(READER_EN + PROFILE_LINE, STRONG)); // strong tier
-// All four roles and the Chief are re-instantiated every round (B#27): reassigned at the top of the round loop — the checkpoint is the ledger, not anyone's conversation memory
+// The four hands are re-instantiated every round (B#27): reassigned at the top of the round loop — the checkpoint is the ledger, not anyone's conversation memory; the Chief is a resident fixed-name instance since v0.6.9 (see its creation line)
 
 let visualCacheKeyR = ""; // visual-verdict memoization (field defect 7): key = artifact-content set + an anchor on the opening mail's spec table (lastIndexOf — the bottom-most occurrence is this run's opening mail; family audit #1 fixed the mis-anchored tail slice) — a spec change invalidates the cache; no round in the key (it would never hit; reused across rounds)
 let visualCacheNoteR = "";
 let visualCacheIssuesR: string[] = [];
+let independentAdjudicatorUsedR = false; // the independent adjudicator runs at most once per run (robust §4.6 same shape: one-shot, read-only, final)
+let dangerUnverifiedNote = ""; // entries still not verbatim-closed after re-confirmation and adjudication (mechanically injected into the evaluation report, never silently)
 const rows: RoundRow[] = [];
 let plan = "Round " + startRound + ": follow the survey (proposals: " + survey.proposals.join(", ") + "; competitors: " + survey.competitors.join(", ") + ")";
 
@@ -616,7 +618,23 @@ async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
       const form = d.safeForm || d.command;
       if (!execHit(execReport, form)) log("Dangerous-operation execution unconfirmed: " + d.command + " — recorded honestly, flagged in the ledger");
     }
-    entry += "; execution confirmation: " + (ok.every((d) => execHit(execReport, d.safeForm || d.command)) ? "all match the approved forms" : "some unconfirmed (see log)");
+    const missed2R = ok.filter((d) => !execHit(execReport, d.safeForm || d.command));
+    let adjNote = "";
+    if (missed2R.length > 0 && !independentAdjudicatorUsedR) {
+      independentAdjudicatorUsedR = true; // at most once per run (robust §4.6 same shape)
+      phase("Destructive ops: independent final adjudication");
+      const adjudicator = agent("Destructive-ops Independent Adjudicator", persona("You are the independent final adjudicator for dangerous operations: a one-shot read-only verifier with no context overlap with the declarer, the adjudicator or the executor. Never execute any command, never write any file, never touch the working tree — read-only evidence gathering; verdicts rest on evidence only (git log/reflog, filesystem existence and content, timestamps), and where evidence is missing say plainly \"cannot determine\". Always respond in English.", STRONG));
+      const adjR = await adjudicator.ask<string>(
+        "Read-only final adjudication: the following dangerous operations were approved, but the execution reports never quoted the approved form verbatim across two attempts, so the orchestrator cannot confirm their execution status from the reports. Verify one by one whether each was actually executed with its effect on disk (git log/reflog, filesystem existence and content, timestamps): " + missed2R.map((d, i) => "(" + (i + 1) + ") approved form: " + (d.safeForm || d.command)).join("; ") + "\nOutput one line per entry: \"<number>\" executed (evidence) / not executed (evidence) / cannot determine (what evidence is missing), then a one-line summary. Never touch the working tree.",
+      );
+      adjNote = "Independent adjudicator's read-only verification: " + String(adjR || "").slice(0, 300);
+      log(adjNote);
+    }
+    const allOkR = ok.every((d) => execHit(execReport, d.safeForm || d.command));
+    if (!allOkR) {
+      dangerUnverifiedNote = (dangerUnverifiedNote === "" ? "" : dangerUnverifiedNote + "; ") + missed2R.map((d) => d.command.slice(0, 60)).join("/") + (adjNote !== "" ? " (" + adjNote.slice(0, 220) + ")" : " (re-confirmation unclosed, the adjudication budget is spent — suspended honestly)");
+    }
+    entry += "; execution confirmation: " + (allOkR ? "all match the approved forms" : (adjNote !== "" ? "some entries not verbatim-confirmed (the independent adjudicator's finding is in the log and the evaluation report)" : "some unconfirmed (re-confirmation unclosed — the ledger and the evaluation report disclose honestly)"));
   } else {
     log("All destructive requests rejected: no workaround allowed");
   }
@@ -1247,6 +1265,7 @@ let evalResult = await chief.ask<EvalReport>(
   (startRound > 1 ? "[Evidence scope] This run resumed at round " + startRound + ": the reviews and round records above cover this run's rounds only — the report must state its evidence scope explicitly, never letting the boss believe it covers all rounds.\n" : "") +
   (bossStopR ? "[Boss stop point receipt] the boss wrote a 【老板停点】 marker in LoopMail/FromBoss.md: the run stopped with rounds remaining — the report must quote the stop words verbatim and receipt them to the boss (done/not done, decision points), never silently.\n" : "") +
   (visualOn ? "" : "[Visual-review exemption] the boss set visualReview=off for this run (image artifacts were detected and listed but not independently reviewed) — the report must disclose this exemption honestly, never silently.\n") +
+  (dangerUnverifiedNote !== "" ? "[Unclosed dangerous-operation execution status] the execution reports for these approved dangerous operations never closed verbatim (after the executor's re-confirmation and the independent adjudicator's read-only verification) — the report must disclose each command and its adjudication finding to the boss honestly, never silently:\n" + dangerUnverifiedNote + "\n" : "") +
   "If the round records show round 1 had no end-to-end number, the report must state it plainly: no FULL number in round 1, the manuscript must not claim validation.\n" +
   "At closing, read LoopMail/FromBoss.md yourself, fresh (the orchestrator's snapshot may be stale): directives the boss wrote mid-run with no round left to apply them — dispose of each or list it under decisions for the boss, never silently.\n" +
   (claimGapNote !== "" ? "[Mechanical check failed] " + claimGapNote + " — the report must disclose honestly, never silently.\n" : "") +

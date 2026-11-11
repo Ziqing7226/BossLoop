@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 科研迭代循环（v0.6.9）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3；实证类审稿质询只以证据闭环）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表——机制类主张须附区分性证据 + 含 canary 的 selfcheck 机械门禁 + 协议面指纹防评测面漂移，测试基建归其所有；失败三分类定流向）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
+description: 科研迭代循环（v0.7.0）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3；实证类审稿质询只以证据闭环）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表——机制类主张须附区分性证据 + 含 canary 的 selfcheck 机械门禁 + 协议面指纹防评测面漂移，测试基建归其所有；失败三分类定流向）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
 args:
   idea:
     type: string
@@ -571,11 +571,13 @@ let algo = agent("算法工程师", persona(ALGO_ZH + PROFILE_LINE, CHEAP)); // 
 let researcher = agent("研究员", persona(RESEARCHER_ZH + PROFILE_LINE, CHEAP)); // 廉价模型档
 let editor = agent("编辑", persona(EDITOR_ZH + PROFILE_LINE, STRONG)); // 强模型档
 let reader = agent("文献资深读者", persona(READER_ZH + PROFILE_LINE, STRONG)); // 强模型档
-// 以上四个角色与总工均为每轮重建（B#27）：轮循环顶部重新赋值，检查点是账本，不是任何人的会话记忆
+// 以上四个角色每轮重建（B#27）：轮循环顶部重新赋值，检查点是账本，不是任何人的会话记忆；总工自 v0.6.9 起为常驻实例（固定名，见其创建行）
 
 let visualCacheKeyR = ""; // 视觉结论记忆化（实测缺陷 7）：键=产物内容集合＋开局邮件规格表锚（lastIndexOf「产物规格表」——最底部出现即本次开局邮件；家族审计 #1 修正尾部切片锚错）哈希——规格变更使缓存失效；不含轮次（含了就永不命中，跨轮复用）
 let visualCacheNoteR = "";
 let visualCacheIssuesR: string[] = [];
+let independentAdjudicatorUsedR = false; // 独立终裁官每运行至多一次（robust §4.6 同款：一次性、只读、终局）
+let dangerUnverifiedNote = ""; // 再确认+终裁后仍未逐字闭合的执行条目（机械注入评估报告披露，绝不静默）
 const rows: RoundRow[] = [];
 let plan = "第 " + startRound + " 轮：按调研结论执行（方案：" + survey.proposals.join("、") + "；竞品：" + survey.competitors.join("、") + "）";
 
@@ -617,7 +619,23 @@ async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
       const form = d.safeForm || d.command;
       if (!execHit(execReport, form)) log("危险操作执行确认缺失：" + d.command + "——如实记录，账本将标注未确认");
     }
-    entry += "；执行确认：" + (ok.every((d) => execHit(execReport, d.safeForm || d.command)) ? "全部与批准写法一致" : "存在未确认项（见日志）");
+    const missed2R = ok.filter((d) => !execHit(execReport, d.safeForm || d.command));
+    let adjNote = "";
+    if (missed2R.length > 0 && !independentAdjudicatorUsedR) {
+      independentAdjudicatorUsedR = true; // 每运行至多一次（robust §4.6 同款）
+      phase("危险操作·独立终裁");
+      const adjudicator = agent("危险操作独立终裁官", persona("你是危险操作独立终裁官：与申报人、裁决者、执行者均无上下文重叠的一次性只读核验者。绝不执行任何命令、绝不写入任何文件、绝不改动工作树——只读取证；结论只认证据（git log/reflog、文件系统存在性与内容、时间戳），拿不到证据就如实写「无法判定」。全程中文。", STRONG));
+      const adjR = await adjudicator.ask<string>(
+        "只读终裁：以下已批准的危险操作，执行回报两次均未逐字引用批准写法，编排器无法从回报确认其执行状态。逐条核验是否已实际执行且效果落盘（git log/reflog、文件系统存在性与内容、时间戳）：" + missed2R.map((d, i) => "(" + (i + 1) + ") 批准写法：" + (d.safeForm || d.command)).join("；") + "\n每条输出一行：「编号」已执行（证据）/未执行（证据）/无法判定（缺何证据），最后一行总结。绝不改写工作树。",
+      );
+      adjNote = "独立终裁官只读核验：" + String(adjR || "").slice(0, 300);
+      log(adjNote);
+    }
+    const allOkR = ok.every((d) => execHit(execReport, d.safeForm || d.command));
+    if (!allOkR) {
+      dangerUnverifiedNote = (dangerUnverifiedNote === "" ? "" : dangerUnverifiedNote + "；") + missed2R.map((d) => d.command.slice(0, 60)).join("/") + (adjNote !== "" ? "（" + adjNote.slice(0, 220) + "）" : "（再确认未闭合，独立终裁额度已用——如实挂起）");
+    }
+    entry += "；执行确认：" + (allOkR ? "全部与批准写法一致" : (adjNote !== "" ? "存在未逐字确认项（独立终裁核验结论见日志与评估报告）" : "存在未确认项（再确认未闭合——账本与评估报告如实披露）"));
   } else {
     log("危险操作全部驳回：不得绕过，另寻安全路径");
   }
@@ -1249,6 +1267,7 @@ let evalResult = await chief.ask<EvalReport>(
   (startRound > 1 ? "【证据基座范围】本次运行从第 " + startRound + " 轮续跑：上述审稿意见与轮次记录只含本次运行的轮次——评估必须显式注明证据基座范围，绝不让老板误以为覆盖全部轮次。\n" : "") +
   (bossStopR ? "【老板停点回执】老板在 LoopMail/FromBoss.md 写下【老板停点】：剩余轮次未执行即停——报告必须逐字引用停点原话向老板回执（已完成/未完成、待决策点），绝不静默。\n" : "") +
   (visualOn ? "" : "【视觉审阅豁免】本运行老板以 visualReview=off 豁免独立视觉审阅（图像产物照常检测列报但未经独立审阅）——报告必须如实披露此豁免，绝不静默。\n") +
+  (dangerUnverifiedNote !== "" ? "【危险操作执行状态未闭合】以下已批准危险操作的执行回报未逐字闭合（执行者再确认、独立终裁官只读核验之后仍无法逐字核实）——报告必须如实向老板披露每条的命令与终裁结论，绝不静默：\n" + dangerUnverifiedNote + "\n" : "") +
   "若轮次记录显示第 1 轮无端到端数字，报告必须显式声明「第 1 轮无 FULL 数字，稿件不得声称已验证」。\n" +
   "收尾先实时读 LoopMail/FromBoss.md（编排器快照可能陈旧——你的直读才新鲜）：老板运行中写入、尚无轮次可落实的指令，逐条处置或在报告的待老板决策节列明，绝不静默。\n" +
   (claimGapNote !== "" ? "【机械核查未过】" + claimGapNote + "——报告必须如实披露，绝不静默。\n" : "") +
