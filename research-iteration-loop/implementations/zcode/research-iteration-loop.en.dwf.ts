@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Research Iteration Loop (v0.6.8), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3; empirical review critiques are closed only with evidence); the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map — mechanism claims carry discriminative evidence + a mechanical selfcheck gate with a canary + an eval-surface fingerprint against silent drift, owning the test fixtures; failure triage decides the flow); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
+description: Research Iteration Loop (v0.6.9), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3; empirical review critiques are closed only with evidence); the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map — mechanism claims carry discriminative evidence + a mechanical selfcheck gate with a canary + an eval-surface fingerprint against silent drift, owning the test fixtures; failure triage decides the flow); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
 args:
   idea:
     type: string
@@ -25,6 +25,10 @@ args:
     type: string
     default: "tiered"
     description: Model tiering; tiered = analysis roles (chief/editor/reviewers/reader) on the strong model and hands-on roles (engineer/tester/researcher) on the cheap one (GLM-5.3 vs GLM-5.3-Flash here; cross-provider deployments must edit the in-script model constants to full provider names), uniform = every role on the session model (names no model, starts on any plan)
+  visualReview:
+    type: string
+    default: "auto"
+    description: Visual-review switch; auto = image artifacts get the independent visual review (default); off = the boss's exemption for this run (no reviewer dispatched, recorded honestly in the ledger and the evaluation report — a boss-level switch, never silent)
 */
 
 interface SurveyResult {
@@ -176,6 +180,7 @@ interface EvalReport {
 const CHIEF_EN = [
   "You are the Chief Engineer. Mission: decide within a bounded number of rounds whether args.idea deserves deep investment, and drive it forward — not perfect it.",
   "Take over by reading the ledger (Agents/ledger.md): if this idea already has a record, resume from that round instead of redoing finished rounds; when resuming an interrupted or cancelled fragment, do a closure review first — every piece of in-flight work from the interrupted run (uncommitted working-tree changes, half-run experiments, dangerous-operation ledger rows still marked unconfirmed) is either verified still present and folded into this round's cards, or written off in the ledger with its reason; reconcile before advancing, never silently skip.",
+  "Resident identity (v0.6.9): you are this run's one Chief Engineer (fixed name, unchanged throughout); every round's planning takes Agents/ledger.md as the only basis — your own earlier plans and rulings are not a basis: whenever the ledger has moved past your memory, the ledger wins; a proposal contradicted by the reviews is re-selected per the reviews, never defended from memory.",
   "Opening brief (the first mail): after scoping and before round 1 starts, write it as the first mail into LoopMail/ToBoss.md (at most one page, five mandatory sections): (1) sentence inventory — every sentence of the boss's words (idea, focus, LoopMail/FromBoss.md) split and marked fulfilled-as-Rn / not-applicable-with-reason / needs-clarification; (2) requirements and acceptance criteria — the boss's words verbatim numbered (R1/R2…) with interpretation and machine-checkable pass criteria, every item registered; (3) artifact spec table — for each deliverable this round (figure, table, report, manuscript section) its axis, domain, units and pass criteria (machine-checkable), with every number and format word in the boss's words landing on a row; each deliverable also carries its landing contract — which function-named directory it lands in (round numbers/dates/stage numbers never enter boss-facing directory names — round numbers live only in the ledger); probes, intermediate data and debug output always land under Agents/; (4) open questions — every interrogative sentence logged (text, when logged, answer status); (5) boss-owned files — every file the boss declared personally owned or edited registered one by one (the LoopMail mail files are on the list by default; files named in the boss's verbatim words or in FromBoss are registered one by one): the boss's own edits there are authorized acts, not defects — never modified, never swept into any agent commit unless a card says so; at most 3 unsure points, each with a default reading and the cost of misreading. Then start working immediately — never idle waiting for the boss to look at it.",
   "The reading of the boss's words must be self-consistent and capture the gist; what you cannot pin down, never guess — carry the boss's words verbatim (quoted, marked unsure) in the brief; the engineers may resolve them during development or testing. Verbatim fidelity is not semantic fidelity: copying the words while misreading the meaning is the most dangerous failure; when the boss's words cannot be filled into the spec table (e.g. a number reads either as bin width or as axis range), do not pick one literal reading.",
   "Before planning each round, check the open questions: with unanswered items, the first card is the answer (a cheap answer that directly shapes the boss's judgement).",
@@ -256,8 +261,10 @@ if (typeof args.rounds === "number" && args.rounds < 1) log("rounds=" + args.rou
 const focus = typeof args.focus === "string" ? args.focus : "";
 const profile = typeof args.profile === "string" ? args.profile : "";
 const remoteArg = typeof args.remote === "string" && args.remote !== "" ? args.remote : "gitcoffer";
+const visualOn = String(args.visualReview ?? "auto").toLowerCase() !== "off"; // boss-level visual-review exemption switch (same as the engineering loop; field finding D10: an exemption that did not travel with the saved copy burned 2.4M tokens on re-review) — off = artifacts still detected and listed but no reviewer dispatched, recorded honestly
 if (idea === "") log("Warning: the idea argument is empty — an amendment resume may have dropped arguments; check this run's arguments");
 if (typeof args.remote === "undefined") log("Note: the remote argument is missing (an amendment resume likely dropped it) — falling back to the default gitcoffer; check the push-target line in the startup log");
+if (!visualOn) log("visualReview=off set by the boss: the visual review is exempted — image artifacts are still detected and listed, but no reviewer is dispatched (recorded honestly in the ledger and the evaluation report)");
 const PROFILE_LINE = (profile ? "\nProject constraints (mandatory, override defaults): " + profile : "") + "\nAlways respond in English.";
 
 /** Model tiering: tiered = strong/cheap split (GLM-5.3 / GLM-5.3-Flash here; cross-provider deployments edit these constants to full provider names plus a reasoning tier consistent with the run-level binding (e.g. provider/model$high — a tier mismatch decouples the in-script declaration from the run binding; when a plan's channel vanishes the only path is editing the constants to existing full provider names and path-amending)); uniform = session model for all. Model names enter only as plain strings when tiered — a uniform run declares no model at all and starts on any plan (field-tested: bare model() declarations fail to launch on non-reference plans) */
@@ -384,7 +391,8 @@ if (legacyLayout) log("Pre-LoopMail layout detected: migrate everything before w
 
 if (repoRoot !== "") repoDiscipline = "\n[Repository-root discipline] this session's working directory is not necessarily the repo root: the development repository root is " + repoRoot + ". Write every git command as git -C \"" + repoRoot + "\" <subcommand> (add/commit/log/reflog/status alike); read and write in-repo files by absolute path (prefixed " + repoRoot + "/); never touch same-named stray copies under the working directory; when unsure, verify with git -C \"" + repoRoot + "\" status first.";
 const GC = repoRoot !== "" ? "git -C \"" + repoRoot + "\"" : "git"; // ask-text git threading (family audit #16): a cheap-tier executor follows the most recent, most specific instruction — the ask layer's git chains must carry -C themselves (the system side is covered by the persona discipline)
-let chief = agent("Chief Engineer", persona(CHIEF_EN + PROFILE_LINE, STRONG)); // pre-loop instance: survey and scoping, migration recheck; re-instantiated fresh every round once the round loop starts (B#27) — repoDiscipline is filled by now; the placeholder instance is gone (a placeholder and its rebuild sharing a name collide at run time, a field-tested deployment defect)
+let chief = agent("Chief Engineer", persona(CHIEF_EN + PROFILE_LINE, STRONG)); // resident instance (v0.6.9, the boss's design): one per run, fixed name, clickable in the panel — every round's planning takes the ledger as the only basis (anti-anchoring persona clause); the checkpoint is the ledger, never anyone's conversation memory; a new run means new instances; repoDiscipline is filled by now, the persona carries the full discipline
+const visualReviewer = agent("Visual Reviewer", persona(VISUAL_EN + PROFILE_LINE, STRONG)); // resident instance (v0.6.9): fixed name, one judging standard across rounds — re-asked only when the artifact set or the spec changes (memoization key); image accumulation across rounds is absorbed by the strong tier and engine compaction
 /** The orchestrator's single git entry: explicit -C <repo root> so a workspace root ≠ repo root stops failing silently (field-tested) */
 const G = (gitArgs: string[], timeoutMs = 120000): Promise<WorldRunResult> =>
   world.run("git", repoRoot !== "" ? ["-C", repoRoot, ...gitArgs] : gitArgs, { timeoutMs });
@@ -572,7 +580,7 @@ let plan = "Round " + startRound + ": follow the survey (proposals: " + survey.p
 
 /** Destructive operations: declare -> strong-tier Chief rules -> run exactly as approved; returns the ruling log for the ledger. Covers the initial build AND the fix paths. */
 async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
-  phase("Destructive-operation review");
+  phase("Destructive ops: declare & adjudicate");
   const raw = await chief.ask<DangerReview>(
     "Destructive-operation review (you are the strong-tier authority; this ruling is never handed to the boss). Requester: Algorithm Engineer (cheap tier). Rule on each request: " + JSON.stringify(reqs) +
     ". Judge by: is the blast radius bounded, is it reversible, is there a narrower safe equivalent (scoped path, dry-run first, back up first, list affected files first)? Reject by default; use approve-with-change with safeForm when a safer equivalent exists; approve only when necessary and safe. Approval carries conditions: back up first so it is reversible, stop on failure; if bounded retries still fail, park it (recorded in the ledger and surfaced in the Preliminary Evaluation Report, no further attempts) rather than switching to a larger-blast-radius alternative. Only when the experiment cannot proceed at all without the operation, say so in reason as 'experiment blocked' — it surfaces in the Preliminary Evaluation Report (this loop has no interrupt mechanism). Return DangerReview (decisions map one-to-one to the requests).",
@@ -623,7 +631,6 @@ let misunderstandingNote = ""; // misunderstandings escalated by the Chief (awai
 let bossStopR = false; // the boss-stop marker hit (FromBoss 【老板停点】 — a boss-level stop must land in a mechanism with a receipt, field finding D25)
 for (let round = startRound; round <= rounds; round++) {
   const roundHead0 = await HEADR(); // the HEAD where this round starts: the baseline for the image detection's diff source (same as the engineering loop)
-  chief = agent("Chief Engineer-R" + round, persona(CHIEF_EN + PROFILE_LINE, STRONG)); // B#27: a fresh instance every round — the checkpoint is the ledger, not anyone's conversation memory
   algo = agent("Algorithm Engineer-R" + round, persona(ALGO_EN + PROFILE_LINE, CHEAP));
   researcher = agent("Researcher-R" + round, persona(RESEARCHER_EN + PROFILE_LINE, CHEAP));
   editor = agent("Editor-R" + round, persona(EDITOR_EN + PROFILE_LINE, STRONG));
@@ -640,7 +647,7 @@ for (let round = startRound; round <= rounds; round++) {
     log("Boss stop point detected (LoopMail/FromBoss.md) — the remaining rounds stay unexecuted and the evaluation report receipts the stop (this loop has no interrupt mechanism; the stop closes into the closing evaluation)");
     break;
   }
-  phase("Issue work cards");
+  phase("Chief: issue work cards");
   let cards = await chief.ask<WorkCards>(
     "Round " + round + "/" + rounds + ". Idea: " + idea + "\n" +
     (round === rounds ? "[Closing finalization] this round's cards must include a delivery-directory finalization card: inventory the delivery directories across the repository — (1) rename and merge by function (git mv; a deliverable the boss's own words named is never renamed — its mapping table goes into the preliminary evaluation report for the boss's decision; old mails are never edited — where a rename breaks a relative link in an earlier mail, never patch the old mail, list every broken link in the mapping table: old path → new path → affected mail); (2) process artifacts that are not deliverables, and every test/probe/debug script, are git mv-ed into Agents/ (test code lives under Agents/ only — the repo root and docs/ hold no test code; never deleted — deleting is the boss's move); (3) produce a directory readme (one line per directory: what it is, which requirement it serves) whose body lives in Agents/ (scaffolding), its content merged into the preliminary evaluation report's deliverables wording (same wording style as the closing tidy — never inventing a new section name).\n" : "") +
@@ -776,7 +783,10 @@ for (let round = startRound; round <= rounds; round++) {
     imgDetectOkR = false; // a failed detection must be disclosed, never silently treated as no images
   }
   let visualNoteR = imageFilesR.length === 0 ? (imgDetectOkR ? "no image artifacts this round: not applicable" : "image-artifact detection failed — treated as no images, recorded honestly") : "not reviewed yet";
-  if (imageFilesR.length > 0) {
+  if (imageFilesR.length > 0 && !visualOn) {
+    visualNoteR = "the boss exempted the visual review (visualReview=off) — image artifacts are still listed; the visual verdict is the boss's own eye (recorded honestly)";
+    log("Visual review exempted (visualReview=off) — recorded honestly");
+  } else if (imageFilesR.length > 0) {
     const vPartsR: string[] = [];
     for (const pV of imageFilesR.slice().sort()) {
       try { const hV = await world.run("git", ["hash-object", pV], { timeoutMs: 60000 }); vPartsR.push(pV + ":" + ((hV.stdout || "").trim().slice(0, 12) || "?")); } catch { log("Artifact hash unavailable (git failed): " + pV + " — the cache key degrades to a bare path (recorded honestly, family audit #13)"); vPartsR.push(pV); } // no -C: artifact paths are workspace-relative — hash the copy the reviewer actually sees (review #2)
@@ -799,7 +809,7 @@ for (let round = startRound; round <= rounds; round++) {
       log("Visual review: artifact set unchanged — reusing the last verdict, no new reviewer (this kills the non-converging loop of field defect 7)");
     } else {
     phase("Visual review of image artifacts");
-    const vvR = await agent("Visual review-R" + round, persona(VISUAL_EN + PROFILE_LINE, STRONG)).ask<VisualVerdict>(
+    const vvR = await visualReviewer.ask<VisualVerdict>(
       "This round's task: " + cards.title + ". Spec: the artifact spec table in the LoopMail/ToBoss.md opening mail. Open and review each image (workspace-relative paths):\n" + imageFilesR.join("\n") +
       "\nissues carry spec violations and product defects only (wrong resolution/domain, wrong palette, rendering holes or broken images, large blanks or a handful of points, facts contradicting the claimed conclusion — each citing a spec row or reproducible evidence); presentation/information limits do not go into issues — put them in the summary under an 观感限制 prefix; note \"left for the boss to judge\" where the look is the boss's own eye. Return VisualVerdict (name the file and what you saw).",
     );
@@ -1029,7 +1039,7 @@ for (let round = startRound; round <= rounds; round++) {
     }
   }
 
-  phase("Fixes & extra experiments");
+  phase("Engineer: fixes & extra experiments");
   let fixDev: DevReport = dev;
   const disp = await chief.ask<ChiefFixes>(
     "Test verdict: " + JSON.stringify(verdict) + "\nGate: " + gate + "\nDispose by the verdict's failure triage (failureClass): implementation-bug → fix / extra-experiment instructions (into fixes); idea-flawed → re-scope the proposal (never a stop signal — left to next round's portfolio re-selection from the reviews, not into fixes); misunderstanding → never into fixes (the engineer does not adjudicate understanding), put it into escalations (question as written + why it cannot be adjudicated in-loop + the default reading and its risk). An empty fixes array means no repair is needed.",
@@ -1121,7 +1131,7 @@ for (let round = startRound; round <= rounds; round++) {
     ])
     .join("\n\n");
 
-  phase("Archive round");
+  phase("Chief: archive round");
   const head0 = await HEADR(); // retried on transient failure (B#25) — archive verification never bare-reads
   const archived = await chief.ask<string>(
     "Record this round in Agents/ledger.md (head carries the repository identity line" + (repoRoot ? ": " + repoRoot : "") + " and a one-line-per-round index: update this round's index line first, then append the detail; review panel of " + n + " with " + absentN + " absent) — task/build (" + (dev.summary || "").slice(0, 400) + ")/HEAD before archive " + (head0 !== "" ? head0.slice(0, 7) : "empty tree / unreadable") + "/destructive-operation ruling (" + dangerLog + ")/test (coverage statement: " + (verdict.coverage || "").slice(0, 300) + "; visual review: " + visualNoteR.slice(0, 200) + "; claim_map exemptions " + (exemptCountR >= 0 ? "counted: " + exemptCountR : "not audited — the substance check did not complete") + ")/reviews (" + digest.slice(0, 1200) + ")/next direction. Then " + GC + " add each changed file by explicit path && " + GC + " commit (the backup push is executed and verified by the orchestrator — you never push; publishing to the cloud is always the boss's explicit action). Return one sentence.",
@@ -1216,7 +1226,7 @@ let reconGap = ""; // Rns still missing dispositions after the repair (injected 
     log(stillGoneF.length === 0 ? "Reconciliation coverage: passed after repair" : "Reconciliation coverage still missing " + stillGoneF.length + " Rn(s) (" + stillGoneF.join(", ") + ") — recorded honestly");
   }
 }
-phase("Preliminary evaluation report");
+phase("Chief: preliminary evaluation report");
 // Closing re-read of FromBoss.md (same as the engineering loop): boss feedback written after the last round can never evaporate; merged into the question universe
 let closingBossNoteR = "";
 try {
@@ -1236,6 +1246,7 @@ let evalResult = await chief.ask<EvalReport>(
   "Round records: " + JSON.stringify(rows) + "\n" +
   (startRound > 1 ? "[Evidence scope] This run resumed at round " + startRound + ": the reviews and round records above cover this run's rounds only — the report must state its evidence scope explicitly, never letting the boss believe it covers all rounds.\n" : "") +
   (bossStopR ? "[Boss stop point receipt] the boss wrote a 【老板停点】 marker in LoopMail/FromBoss.md: the run stopped with rounds remaining — the report must quote the stop words verbatim and receipt them to the boss (done/not done, decision points), never silently.\n" : "") +
+  (visualOn ? "" : "[Visual-review exemption] the boss set visualReview=off for this run (image artifacts were detected and listed but not independently reviewed) — the report must disclose this exemption honestly, never silently.\n") +
   "If the round records show round 1 had no end-to-end number, the report must state it plainly: no FULL number in round 1, the manuscript must not claim validation.\n" +
   "At closing, read LoopMail/FromBoss.md yourself, fresh (the orchestrator's snapshot may be stale): directives the boss wrote mid-run with no round left to apply them — dispose of each or list it under decisions for the boss, never silently.\n" +
   (claimGapNote !== "" ? "[Mechanical check failed] " + claimGapNote + " — the report must disclose honestly, never silently.\n" : "") +

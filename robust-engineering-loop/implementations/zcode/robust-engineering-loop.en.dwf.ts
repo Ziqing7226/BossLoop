@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Robust Engineering Loop (v0.6.8), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (the junior's rework budget escalates to the Senior Engineer; the Senior gets one delivery, an unsolved blocker is then skip-adjudicated by the Chief — recorded in the ledger and disclosed in ToBoss — and the run interrupts only when no bypass honors the boss's words' gist and the problem blocks the whole workflow; a round is pushed only fully green or after an adjudicated skip); a round is pushed to the agreed remote only fully green or after an adjudicated skip (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
+description: Robust Engineering Loop (v0.6.9), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (the junior's rework budget escalates to the Senior Engineer; the Senior gets one delivery, an unsolved blocker is then skip-adjudicated by the Chief — recorded in the ledger and disclosed in ToBoss — and the run interrupts only when no bypass honors the boss's words' gist and the problem blocks the whole workflow; a round is pushed only fully green or after an adjudicated skip); a round is pushed to the agreed remote only fully green or after an adjudicated skip (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
 args:
   requirement:
     type: string
@@ -189,7 +189,8 @@ const CHIEF_EN = [
   "Work cards that touch a boss requirement must embed the ledger's verbatim sentence from Agents/requirements.md (with its Rn) — never paraphrase from memory: a compressed phrase may serve only as the title, and the verbatim original travels with the card; every content word must survive the retelling — nouns (the object), verbs (the operation), quantifiers, negations, numbers; if any one changes the card is distorted, and when unsure copy the sentence in full. The boss's key content words are protocol words: cards, dev reports, test names and assertion comments, commit messages and documents all reuse the same words, never synonyms. Card-granularity discipline: one work card carries one class of acceptable deliverable (code/docs/data/figures are different classes) — development, rendering, documentation and the formal commit split into separate cards; one oversized card is the field-tested hang-and-burn root cause.",
   "Occam's razor: your autonomous decisions naturally lean toward adding things (modules, checks, config) — every complexity-increasing decision must state the value it buys, or it is not taken; such a decision never lives only in the ledger — it goes into the final brief's autonomous-decision list.",
   "Misdiagnosis arbitration: when the engineers dispute a finding, arbitrate on evidence only; if still undecided -> major issue, interrupt and report to the boss.",
-  "Take over by reading the ledger (Agents/ledger.md): resume, never redo; the ledger also records each round's baseline hash and pushed SHAs. Resuming after an interrupt or a cancelled stretch opens with a closure review of the discarded range: every in-flight item is either verified present or dropped with a ledger note — lost work is reconciled before new rounds, never silently skipped; ledger dangerous-operation rows marked \"execution confirmation: some unconfirmed\" are verified one by one against on-disk effects during the closure review (drifted wording is not non-execution — cross-loop audit F6: the cross-run remediation path for an intermediate state).",
+  "Take over by reading the ledger (Agents/ledger.md): resume, never redo; the ledger also records each round's baseline hash and pushed SHAs. Resuming after an interrupt or a cancelled stretch opens with a closure review of the discarded range: every in-flight item is either verified present or dropped with a ledger note — lost work is reconciled before new rounds, never silently skipped; ledger dangerous-operation rows marked \"execution confirmation: some unconfirmed\" are verified one by one against on-disk effects during the closure review (drifted wording is not non-execution — cross-loop audit F6: the cross-run remediation path for an intermediate state.",
+  "Resident identity (v0.6.9): you are this run's one Chief Engineer (fixed name, unchanged throughout); every round's planning takes Agents/ledger.md as the only basis — your own earlier plans and rulings are not a basis: whenever the ledger has moved past your memory, the ledger wins; a decision contradicted by later validation goes through the explicit rollback-vs-fix-forward decision, never defended from memory.",
   "Git write scope: run only the git add/commit/amend an ask names; pushes are executed and verified by the orchestrator — never push yourself, and never run reset/rebase/tag or any other repository-writing git operation.",
   "Boss feedback (LoopMail/FromBoss.md): read it yourself, fresh, before every round's cards (instructions the boss issues mid-run; may be empty; the orchestrator no longer reads it in — a script-layer read returns the journaled snapshot on a resume, the subagent's own read is the fresh one) — turn each into work cards and log its application in the ledger; it carries run steering only, not a replacement for the requirement ledger; when it disagrees with earlier boss requirements, the latest boss instruction wins and is recorded honestly. When the boss wants to pause or interrupt this run, they write a 【老板停点】 (boss stop point) marker into FromBoss.md — on detecting it, stop with a receipt, never start work (the boss's stop point is a boss-level action: it must land in a mechanism and be receipted). [Authority discipline] the deployer (whoever runs this workflow) is the boss's secretary, not the boss: only text marked [boss's words verbatim / 老板原话] carries the boss's authority; [secretary's note / 秘书注] and similar elaborations are the secretary's reading — on any conflict the boss's verbatim words win; where you cannot tell which is which, list it as an open question and never treat the secretary's wording as a boss ruling.",
   GATE_CRITERIA,
@@ -454,7 +455,8 @@ if (legacyLayout) log("Pre-LoopMail layout detected: migrate everything before w
 
 if (repoRoot !== "") repoDiscipline = "\n[Repository-root discipline] this session's working directory is not necessarily the repo root: the development repository root is " + repoRoot + ". Write every git command as git -C \"" + repoRoot + "\" <subcommand> (add/commit/log/reflog/status alike); read and write in-repo files by absolute path (prefixed " + repoRoot + "/); never touch same-named stray copies under the working directory; when unsure, verify with git -C \"" + repoRoot + "\" status first.";
 const GC = repoRoot !== "" ? "git -C \"" + repoRoot + "\"" : "git"; // ask-text git threading (family audit #16): a cheap-tier executor follows the most recent, most specific instruction — the ask layer's git chains must carry -C themselves (the system side is covered by the persona discipline)
-let chief = agent("Chief Engineer", persona(CHIEF_EN + PROFILE_LINE, STRONG)); // pre-loop instance: commitment intake, migration recheck, interrupts; re-instantiated fresh every round once the round loop starts (B#27) — repoDiscipline is filled by now; the placeholder instance is gone (a placeholder and its rebuild sharing a name collide at run time, a field-tested deployment defect)
+let chief = agent("Chief Engineer", persona(CHIEF_EN + PROFILE_LINE, STRONG)); // resident instance (v0.6.9, the boss's design): one per run, fixed name, clickable in the panel — every round's planning takes the ledger as the only basis (anti-anchoring persona clause); the checkpoint is the ledger, never anyone's conversation memory; a new run means new instances; repoDiscipline is filled by now, the persona carries the full discipline
+const visualReviewer = agent("Visual Reviewer", persona(VISUAL_EN + PROFILE_LINE, STRONG)); // resident instance (v0.6.9): fixed name, one judging standard across rounds — re-asked only when the artifact set or the spec changes (memoization key); image accumulation across rounds is absorbed by the strong tier and engine compaction
 /** The orchestrator's single git entry: explicit -C <repo root> so a workspace root ≠ repo root stops failing silently (field-tested) */
 const G = (gitArgs: string[], timeoutMs = 120000): Promise<WorldRunResult> =>
   world.run("git", repoRoot !== "" ? ["-C", repoRoot, ...gitArgs] : gitArgs, { timeoutMs });
@@ -529,7 +531,7 @@ if (legacyLayout) {
   log(migratedLedger !== "" && mailsOk ? "Migration recheck: the ledger and both LoopMail files are in place" : "Migration recheck still incomplete (ledger " + (migratedLedger !== "" ? "present" : "missing") + ", LoopMail pair " + (mailsOk ? "present" : "missing") + ") — recorded honestly; the run continues but the migration may be partial (field family: a half-migration entering the run silently)");
 }
 if (commit0.blocked) {
-  phase("Major issue interrupt");
+  phase("Chief: major issue interrupt");
   const ir = await chief.ask<string>(
     "Interrupted per blocked. Complete the interrupt urgent mail at the top of LoopMail/ToBoss.md (problem, completed rounds and artifacts, points needing the boss's decision, suggested options), " + GC + " add each changed file by explicit path && " + GC + " commit, and return a one-sentence summary for the boss.",
   );
@@ -642,7 +644,6 @@ let skipNote = ""; // accumulated skip records (into the ledger and the final br
 let seniorUsed = false; // whether a Senior rework was actually dispatched this round (the gate for "one Senior delivery": a never-escalated problem never enters skip adjudication — reset each round with the round loop)
 for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   const baseline = await HEAD0();
-  chief = agent("Chief Engineer-R" + round, persona(CHIEF_EN + PROFILE_LINE, STRONG)); // B#27: a fresh instance every round — the checkpoint is the ledger, not anyone's conversation memory
   algo = agent("Algorithm Engineer-R" + round, persona(ALGO_EN + PROFILE_LINE, CHEAP));
   senior = agent("Senior Engineer-R" + round, persona(ALGO_EN + SENIOR_EN + PROFILE_LINE, STRONG));
   let bossNote = "";
@@ -654,7 +655,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     bossNote = "";
   }
   if (bossStopHit) {
-    phase("Boss stop point receipt");
+    phase("Chief: boss stop point receipt");
     const irB = await chief.ask<string>(
       "The boss wrote a 【老板停点】 (boss stop point) marker in LoopMail/FromBoss.md: stop immediately, receipt it, do not start this round. Insert the stop receipt as an urgent mail at the top of LoopMail/ToBoss.md (the stop words quoted verbatim, completed rounds and artifacts, remaining unexecuted rounds, points needing the boss's decision), " + GC + " add each changed file by explicit path && " + GC + " commit, and return a one-sentence summary.",
     );
@@ -794,7 +795,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   let approvedDanger: string[] = [];
   const dangerTrail: { declared: string; decision: string; form: string; executed: string }[] = []; // consistency evidence: declared -> ruled -> executed must all line up
   if ((dev.dangerRequests || []).length > 0) {
-    phase("Destructive-operation review");
+    phase("Destructive ops: declare & adjudicate");
     const review = await adjudicateDanger(dev.dangerRequests, "Algorithm Engineer", "cheap tier", false);
     dangerLog = review.decisions.map((d) => d.command + " -> " + d.decision + (d.safeForm ? " (as: " + d.safeForm + ")" : "") + ": " + d.reason).join("; ");
     log("Round " + round + " destructive-operation ruling: " + dangerLog.slice(0, 300));
@@ -944,7 +945,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
         visualNote = visualCacheNote + " (visual verdict reused: artifact set and spec unchanged, no new reviewer dispatched)";
         log("Visual review: artifact set and spec unchanged — reusing the last verdict, no new reviewer (this kills the non-converging loop of field defect 7)");
       } else {
-        visualP = agent("Visual review-R" + round + "-A" + attempt, persona(VISUAL_EN + PROFILE_LINE, STRONG)).ask<VisualVerdict>(
+        visualP = visualReviewer.ask<VisualVerdict>(
           "This round's task: " + cards.title + ". Spec: the artifact spec table in Agents/requirements.md. Open and review each image (repo-relative paths — open them by absolute path per the repository-root discipline):\n" + imageFiles.join("\n") +
           "\nissues carry spec violations and product defects only (wrong resolution/domain, wrong palette, rendering holes or broken images, large blanks or a handful of points, facts contradicting the claimed conclusion — each citing a spec row or reproducible evidence); presentation/information limits (elements the spec never asked for, a first frame that cannot show the difference, weak support) do not go into issues — put them in the summary under an 观感限制 prefix; note \"left for the boss to judge\" where the look is the boss's own eye. Return VisualVerdict (name the file and what you saw).",
         ); // not awaited: runs concurrently with the selfcheck; the verdict merges at the gate and is memoized — a mechanical-failure round pays for the review once
@@ -1048,7 +1049,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
         log("Visual merge-point verification: the artifact set or content changed during the review (strict build regenerating artifacts / a dangerous operation re-executed per its approved form writing the tree) — the in-flight verdict is void, re-dispatched against the current content");
         imageFiles = imgNow;
         vKey = await hashArtifacts(imgNow);
-        vv = await agent("Visual review re-dispatch-R" + round + "-A" + attempt, persona(VISUAL_EN + PROFILE_LINE, STRONG)).ask<VisualVerdict>(
+        vv = await visualReviewer.ask<VisualVerdict>(
           "This round's task: " + cards.title + ". Spec: the artifact spec table in Agents/requirements.md. Open and review each image (repo-relative paths — open them by absolute path per the repository-root discipline):\n" + imageFiles.join("\n") +
           "\nissues carry spec violations and product defects only (wrong resolution/domain, wrong palette, rendering holes or broken images, large blanks or a handful of points, facts contradicting the claimed conclusion — each citing a spec row or reproducible evidence); presentation/information limits (elements the spec never asked for, a first frame that cannot show the difference, weak support) do not go into issues — put them in the summary under an 观感限制 prefix; note \"left for the boss to judge\" where the look is the boss's own eye. Return VisualVerdict (name the file and what you saw).",
         );
@@ -1098,7 +1099,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     const rebuttedN = (fix.rebutted || []).map((r) => "rebutted " + (r && r.id ? r.id : "?")).join(", ");
     handledNote = (handledNote === "" ? "" : handledNote + "; ") + [fixedN, rebuttedN].filter((s) => s !== "").join(", ");
     if ((fix.dangerRequests || []).length > 0) {
-      phase("Destructive-operation review");
+      phase("Destructive ops: declare & adjudicate");
       const dr = await adjudicateDanger(fix.dangerRequests, juniorAsk ? "Algorithm Engineer" : "Senior Engineer", juniorAsk ? "cheap tier" : "strong tier", !juniorAsk);
       const ok2 = dr.decisions.filter((d) => d.decision !== "reject");
       approvedDanger = approvedDanger.concat(ok2.map((d) => (d.decision === "approve-with-change" ? (d.safeForm || "").trim() : (d.command || "").trim())));
@@ -1164,7 +1165,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
 
   if (interrupted) break; // dedicated interrupt paths (skip adjudication / attempt cap / major issue) completed their reporting and finalVerdict — never fall through to the push section
   if (gate === "" || !gate.startsWith("pass")) {
-    phase("Gate re-check limit reached, interrupt");
+    phase("Chief: gate limit interrupt");
     const ir = await chief.ask<string>(
       "Round " + round + " gate is still not green after " + ATTEMPT_MAX + " gate re-checks (" + gate + "). Major issue: insert the interrupt report as an urgent mail at the top of LoopMail/ToBoss.md (current state, failure evidence, fixes attempted, points needing the boss's decision), " + GC + " add each changed file by explicit path && " + GC + " commit (do not push the un-gated commit unless the boss agreed otherwise), return a one-sentence summary.",
     );
@@ -1176,7 +1177,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   }
   headA = await HEAD0();
 
-  phase("Push to the agreed remote");
+  phase("Orchestrator: push & verify");
   let pushState = "not pushed";
   if (push0.target !== "" && branch !== "") {
     // Pre-push check: the remote HEAD should be this round's baseline (pushed and verified last round) — a mismatch means an agent likely pushed inside its session; record loudly
@@ -1275,7 +1276,7 @@ try {
 if (closingBossNote !== "") log("Closing snapshot read of LoopMail/FromBoss.md: " + closingBossNote.length + " chars of boss feedback (the snapshot may be stale — the Chief is instructed to read it fresh and dispose of it, never silently dropped)");
 const closingStopHit = closingBossNote.includes("【老板停点】"); // closing mechanical backstop (review F6): a stop written after the last round-top read, or on a fully-completed resume — a boss stop must land in a mechanism with a receipt, never end quietly
 if (closingStopHit) log("Boss-stop marker detected at closing — injecting the final-brief receipt requirement");
-phase("Final report");
+phase("Chief: final report");
 // Reconcile every requirement even after an interrupt: mark done vs not done, never drop an entry
 const interruptNote = finalVerdict
   ? "This run was interrupted. Current state: " + finalVerdict.state + "; points awaiting the boss: " + finalVerdict.decisionList.join("; ") + ". The line-by-line reconciliation is an internal affair: every entry, done or not, goes into the ledger and the reconciliation notes in Agents/requirement_map.md — none omitted; what the boss sees stays in brief form (explanation first, decisions pending, suggested options), never a reconciliation table. verdict must be interrupted."

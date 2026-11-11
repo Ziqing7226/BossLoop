@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 科研迭代循环（v0.6.8）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3；实证类审稿质询只以证据闭环）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表——机制类主张须附区分性证据 + 含 canary 的 selfcheck 机械门禁 + 协议面指纹防评测面漂移，测试基建归其所有；失败三分类定流向）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
+description: 科研迭代循环（v0.6.9）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3；实证类审稿质询只以证据闭环）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表——机制类主张须附区分性证据 + 含 canary 的 selfcheck 机械门禁 + 协议面指纹防评测面漂移，测试基建归其所有；失败三分类定流向）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
 args:
   idea:
     type: string
@@ -25,6 +25,10 @@ args:
     type: string
     default: "tiered"
     description: 模型分档；tiered = 分析类角色（总工/编辑/审稿/文献读者）用强模型、实践类角色（算法/测试/研究员）用廉价模型（本参考实现为 GLM-5.3 与 GLM-5.3-Flash，跨 provider 部署需把脚本内模型常量改为 provider 全名），uniform = 全部随会话模型（不声明任何模型，任何套餐可直接启动）
+  visualReview:
+    type: string
+    default: "auto"
+    description: 视觉审阅开关；auto = 有图像产物即派独立审阅（默认）；off = 老板豁免本运行的视觉审阅（跳过派审，如实记录进账本与评估报告——豁免是老板级动作，绝不静默）
 */
 
 interface SurveyResult {
@@ -180,6 +184,7 @@ interface EvalReport {
 const CHIEF_ZH = [
   "你是总工程师。使命：在有限轮数内判断 args.idea 是否值得深挖，并把它迭代推进——不是把它做完美。",
   "接手先读账本（Agents/ledger.md）：若本想法已有记录，从断点轮继续，不重做已完成轮；被中断或取消的片段恢复时先做闭合复查——上一运行中断时的在途工作（工作树未提交改动、跑了一半的实验、账本危险操作行中「未确认」的执行）每项要么核实仍在并纳入本轮任务卡，要么在账本记明放弃及原因；先和解再前进，绝不静默跳过。",
+  "常驻身份（v0.6.9）：你是本运行唯一的总工程师（固定名全程不变）；每轮规划以 Agents/ledger.md 为唯一依据，你此前的规划与裁决不是依据——账本已更新而你的记忆未更新时，一律以账本为准；被审稿否证的旧方案按审稿意见重选，绝不凭记忆辩护。",
   "开局理解邮件（第一封邮件）：立项后、开工前把开局理解简报作为第一封邮件写入 LoopMail/ToBoss.md（≤1 页，五节必备）：①逐句清点——老板原话（idea、focus、LoopMail/FromBoss.md）逐句切分，每句标「已落实 Rn / 不适用（理由）/ 需澄清」；②要求与验收标准——老板原话逐字编号（R1/R2…）+ 内涵解释 + 可机械判定的验收标准，一条不落；③产物规格表——本轮要交付的东西（图、表、报告、稿件章节）各写清轴/定义域/单位/合格判据（可被机械判定），老板原话里每个数字与格式词必须落到某一行；每个交付物还须写明落点契约——落在哪个按功能命名的目录（轮次号/日期/阶段号绝不进老板可见目录名——轮次号只进账本）；探针、中间数据、调试输出的落点一律 Agents/；④待答问题——疑问句逐条登记（原文、登记时间、答复状态）；⑤老板所有文件——老板声明亲有/亲改的文件逐个登记（LoopMail/ 通信文件默认在列；老板原话或 FromBoss 中点名的文件逐个登记）：本节文件是老板的财产，老板本人的改动是授权行为不是缺陷，任务卡未明示时绝不修改、绝不收编进任何 agent 提交。不确定处 ≤3 条、各给默认理解与理解错的后果。写完直接开工，绝不为「等老板过目」停机空转。",
   "对老板原话必须得出一个自洽的理解方向、正确把握主旨；把握不准的绝不臆断——在简报中原样引用老板原话并标注「不确定」，工程师在开发、测试过程中可能就理解了。逐字保真不等于语义保真：照抄字面而理解错，是最危险的失败；老板原话填不进规格表时（例：某个数字既可读成分箱宽度也可读成横轴范围），不得按字面挑一种照办。",
   "每轮规划前先查待答问题：有未答项时，本轮任务卡先安排作答（回答成本极低，却直接影响老板判断）。",
@@ -261,8 +266,10 @@ if (typeof args.rounds === "number" && args.rounds < 1) log("rounds=" + args.rou
 const focus = typeof args.focus === "string" ? args.focus : "";
 const profile = typeof args.profile === "string" ? args.profile : "";
 const remoteArg = typeof args.remote === "string" && args.remote !== "" ? args.remote : "gitcoffer";
+const visualOn = String(args.visualReview ?? "auto").toLowerCase() !== "off"; // 老板级视觉审阅豁免开关（工程循环同款；实测 D10：豁免令未随副本携带，白烧 2.4M tokens 重审）——off=图像产物照常检测列报但不派审阅员，如实记录
 if (idea === "") log("警告：idea 参数为空——续跑修正可能丢失参数，请核对本次运行参数");
 if (typeof args.remote === "undefined") log("提示：remote 参数缺失（疑似续跑丢参）——按默认 gitcoffer 探测，请核对启动日志的「推送目标」行");
+if (!visualOn) log("老板已设 visualReview=off：视觉审阅豁免——图像产物照常检测列报，但不派审阅员（如实记录进账本与评估报告）");
 const PROFILE_LINE = profile ? "\n项目级约束（必须遵守，高于默认做法）：" + profile : "";
 
 /** 模型分档：tiered = 强弱分档（本参考实现 GLM-5.3 / GLM-5.3-Flash；跨 provider 部署须把这两个常量改为 provider 全名＋与运行级一致的推理档位——档位不一致时脚本内声明与运行级绑定脱节，套餐通道消失时唯一路径是改常量为现存 provider 全名后 path-amend）；uniform = 全随会话模型。模型名只在 tiered 时以字符串传入——uniform 下整个脚本不出现任何模型声明，任何套餐都能直接启动（实测：裸 model() 声明会在非参考套餐上启动失败） */
@@ -389,7 +396,8 @@ if (legacyLayout) log("检测到 LoopMail 之前的布局：开工前先整体�
 
 if (repoRoot !== "") repoDiscipline = "\n【仓库根纪律】本会话的工作目录未必是仓库根：开发仓库根是 " + repoRoot + "。git 命令一律写成 git -C \"" + repoRoot + "\" <子命令>（add/commit/log/reflog/status 全部如此）；读写仓库内文件一律用绝对路径（" + repoRoot + "/ 前缀）；绝不读写工作目录下的同名散落副本；不确定时先 git -C \"" + repoRoot + "\" status 核实。";
 const GC = repoRoot !== "" ? "git -C \"" + repoRoot + "\"" : "git"; // 问句文本层 git 贯通（家族审计 #16）：廉价档执行者跟最近最具体的指令——问句层的 git 链必须自带 -C（系统面由 persona 纪律覆盖）
-let chief = agent("总工程师", persona(CHIEF_ZH + PROFILE_LINE, STRONG)); // pre-loop 实例：调研立项/迁移复核；进入轮循环后每轮重建（B#27）——repoDiscipline 此时已填充，persona 带全纪律；占位实例已删除（与重建实例同名撞名会运行即败，实测部署缺陷）
+let chief = agent("总工程师", persona(CHIEF_ZH + PROFILE_LINE, STRONG)); // 常驻实例（v0.6.9 老板方案）：全程唯一、固定名，面板可点击观察——每轮规划以账本为唯一依据（人设反锚定条款），检查点是账本不是任何人的会话记忆，跨运行=新运行=新实例；repoDiscipline 此时已填充，persona 带全纪律
+const visualReviewer = agent("视觉审阅员", persona(VISUAL_ZH + PROFILE_LINE, STRONG)); // 常驻实例（v0.6.9）：固定名全程唯一，跨轮同一判尺——仅在产物集合或规格变更时被重新问询（记忆化键），图像随轮累积由强档与引擎压缩吸收
 /** 编排器统一 git 入口：显式 -C 仓库根——工作区根≠仓库根时不再静默失效（实测缺陷） */
 const G = (gitArgs: string[], timeoutMs = 120000): Promise<WorldRunResult> =>
   world.run("git", repoRoot !== "" ? ["-C", repoRoot, ...gitArgs] : gitArgs, { timeoutMs });
@@ -573,7 +581,7 @@ let plan = "第 " + startRound + " 轮：按调研结论执行（方案：" + su
 
 /** 破坏性操作：申报→强档总工裁决→按批准执行；返回裁决日志（入账本）。初始开发与修复/补充实验路径都走这里 */
 async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
-  phase("危险操作审核");
+  phase("危险操作·申报与裁决");
   const raw = await chief.ask<DangerReview>(
     "破坏性操作审核（你是强模型档裁决者，此判断不下放给老板）。申报人：算法工程师（廉价档）。逐条裁决：" + JSON.stringify(reqs) +
     "。判断依据：影响范围能否精确界定、是否可逆、有无更窄更安全的等价写法（限定路径、先 dry-run、先备份、先列受影响清单）；默认 reject，能给安全写法用 approve-with-change 并写 safeForm，必要且安全才 approve。批准附条件：先备份保证可逆、失败即停；同一操作有界重试仍败就挂起（在账本记明并进入《初步评估报告》，不再尝试），绝不改用影响面更大的方案。仅当实验在无该操作时根本无法继续，才在 reason 中如实写明「实验受阻」，交由《初步评估报告》呈现（研究循环无打断机制）。返回 DangerReview（decisions 与请求逐条对应）。",
@@ -624,7 +632,6 @@ let misunderstandingNote = ""; // 总工升级的理解分歧（待老板答复�
 let bossStopR = false; // 老板停点标记命中（FromBoss【老板停点】——老板级停点必须落机制回执，实测 D25）
 for (let round = startRound; round <= rounds; round++) {
   const roundHead0 = await HEADR(); // 本轮起点 HEAD：图像检测 diff 源的基线（工程循环同款）
-  chief = agent("总工程师-R" + round, persona(CHIEF_ZH + PROFILE_LINE, STRONG)); // B#27：每轮全新实例——检查点是账本，不是任何人的会话记忆
   algo = agent("算法工程师-R" + round, persona(ALGO_ZH + PROFILE_LINE, CHEAP));
   researcher = agent("研究员-R" + round, persona(RESEARCHER_ZH + PROFILE_LINE, CHEAP));
   editor = agent("编辑-R" + round, persona(EDITOR_ZH + PROFILE_LINE, STRONG));
@@ -641,7 +648,7 @@ for (let round = startRound; round <= rounds; round++) {
     log("检测到老板停点标记（LoopMail/FromBoss.md）——剩余轮次不再执行，评估报告向老板回执（研究循环无打断机制，停点即提前进入收尾评估）");
     break;
   }
-  phase("布置本轮任务卡");
+  phase("总工程师·布置本轮任务卡");
   let cards = await chief.ask<WorkCards>(
     "第 " + round + "/" + rounds + " 轮。idea：" + idea + "\n" +
     (round === rounds ? "【收官定稿】本轮任务卡必含一张「交付目录定稿」卡：全仓盘点交付目录——①按功能重命名归并（git mv；老板原话点名的交付物本体不改名，其目录映射表写入《初步评估报告》待老板决策——旧邮件永不删改：重命名若使此前邮件的相对链接断链，绝不回改旧邮件，断链逐条列入映射表：旧路径→新路径→受影响邮件）；②非交付物的过程产物与全部测试/探针/调试脚本 git mv 进 Agents/（测试代码一律 Agents/，仓库根与 docs/ 不放任何 test 代码；绝不删除——删除是老板的动作）；③产出目录说明书（每个目录一句：是什么、对应哪个要求条目）本体存 Agents/（脚手架），其内容并入《初步评估报告》的交付物清单表述（与收尾整理②同款表述，绝不自创新节名）。\n" : "") +
@@ -777,7 +784,10 @@ for (let round = startRound; round <= rounds; round++) {
     imgDetectOkR = false; // 检测失败必须如实披露，不得静默按无图处理
   }
   let visualNoteR = imageFilesR.length === 0 ? (imgDetectOkR ? "本轮无图像产物：不适用" : "图像产物检测失败——按无图处理，如实记录") : "尚未审阅";
-  if (imageFilesR.length > 0) {
+  if (imageFilesR.length > 0 && !visualOn) {
+    visualNoteR = "老板豁免视觉审阅（visualReview=off）——图像产物照常列报，视觉结论以老板亲验为准（如实记录）";
+    log("视觉审阅已豁免（visualReview=off）——如实记录");
+  } else if (imageFilesR.length > 0) {
     const vPartsR: string[] = [];
     for (const pV of imageFilesR.slice().sort()) {
       try { const hV = await world.run("git", ["hash-object", pV], { timeoutMs: 60000 }); vPartsR.push(pV + ":" + ((hV.stdout || "").trim().slice(0, 12) || "?")); } catch { log("产物哈希未取得（git 失败）：" + pV + "——缓存键退化为纯路径（如实记录，家族审计 #13）"); vPartsR.push(pV); } // 不带 -C：产物路径是工作区相对，哈希必须与审阅员看到的副本同基准（终审 #2）
@@ -800,7 +810,7 @@ for (let round = startRound; round <= rounds; round++) {
       log("视觉审阅：产物集合未变——复用上次结论，不重派审阅员（实测缺陷 7 的不可收敛循环由此消除）");
     } else {
     phase("视觉审阅图像产物");
-    const vvR = await agent("视觉审阅-R" + round, persona(VISUAL_ZH + PROFILE_LINE, STRONG)).ask<VisualVerdict>(
+    const vvR = await visualReviewer.ask<VisualVerdict>(
       "本轮任务：" + cards.title + "。规格见 LoopMail/ToBoss.md 开局邮件的产物规格表。逐张打开并审阅以下图像（相对工作区路径）：\n" + imageFilesR.join("\n") +
       "\nissues 只收规格违反/产物缺陷（分辨率或定义域错、色板错、渲染空洞或坏图、大片空白或极少数据点、与所声称结论矛盾的事实错误——每条引用规格表条目或可复现证据）；观感/信息量限制（规格未要求的元素缺席、首帧看不出差异、支撑弱）不进 issues，写进 summary 并加「观感限制：」前缀；观感属老板亲验范围的注明「留老板亲验」。返回 VisualVerdict（问题写清文件名与你看到的现象）。",
     );
@@ -1030,7 +1040,7 @@ for (let round = startRound; round <= rounds; round++) {
     }
   }
 
-  phase("修复与补充实验");
+  phase("算法工程师·修复与补充实验");
   let fixDev: DevReport = dev;
   const disp = await chief.ask<ChiefFixes>(
     "测试结论：" + JSON.stringify(verdict) + "\n门禁：" + gate + "\n按测试的失败三分类（failureClass）处置：实现坏→修复/补充实验指令（写入 fixes）；想法坏→方案重定界（重定界不是终止理由——留待下轮依审稿重选方案组合，不写入 fixes）；理解错→绝不写入 fixes（工程师不执行理解裁决），写入 escalations（问题原文+为何无法自行裁决+默认理解及其风险）。fixes 为空数组=无需修复。",
@@ -1122,7 +1132,7 @@ for (let round = startRound; round <= rounds; round++) {
     ])
     .join("\n\n");
 
-  phase("本轮存档");
+  phase("总工程师·本轮存档");
   const head0 = await HEADR(); // 瞬态失败重试（B#25）——存档核验不再裸读
   const archived = await chief.ask<string>(
     "把本轮记入 Agents/ledger.md（头部含仓库标识行" + (repoRoot ? "：" + repoRoot : "") + "与一行一轮的目录：本轮先更新目录行、再追加详情；审稿团 " + n + " 人中缺席 " + absentN + " 人）：任务/产出（" + (dev.summary || "").slice(0, 400) + "）/存档前 HEAD " + (head0 !== "" ? head0.slice(0, 7) : "空树或读取失败") + "/危险操作裁决（" + dangerLog + "）/测试（覆盖声明：" + (verdict.coverage || "").slice(0, 300) + "；视觉审阅：" + visualNoteR.slice(0, 200) + "；claim_map 豁免 " + (exemptCountR >= 0 ? "登记 " + exemptCountR + " 个数字" : "计数未核查——实质核查未完成") + "）/审稿（" + digest.slice(0, 1200) + "）/下轮方向。然后 " + GC + " add <本轮改动文件逐个显式路径> && " + GC + " commit（备份推送由编排器执行并核验，你不执行 push；向云端发布永远是老板的明确动作）。返回一句话。",
@@ -1218,7 +1228,7 @@ let reconGap = ""; // 逐句对账补修后仍缺的 Rn（注入评估问句强�
     log(stillGoneF.length === 0 ? "逐句对账覆盖：补齐后通过" : "逐句对账覆盖仍缺 " + stillGoneF.length + " 条（" + stillGoneF.join("、") + "）——已如实记录");
   }
 }
-phase("初步评估报告");
+phase("总工程师·初步评估报告");
 // 收尾重读 FromBoss.md（工程循环同款）：末轮之后老板写入的反馈绝不蒸发；并入疑问句宇宙
 let closingBossNoteR = "";
 try {
@@ -1238,6 +1248,7 @@ let evalResult = await chief.ask<EvalReport>(
   "轮次记录（含每轮实验死亡率 experiments 字段）：" + JSON.stringify(rows) + "\n" +
   (startRound > 1 ? "【证据基座范围】本次运行从第 " + startRound + " 轮续跑：上述审稿意见与轮次记录只含本次运行的轮次——评估必须显式注明证据基座范围，绝不让老板误以为覆盖全部轮次。\n" : "") +
   (bossStopR ? "【老板停点回执】老板在 LoopMail/FromBoss.md 写下【老板停点】：剩余轮次未执行即停——报告必须逐字引用停点原话向老板回执（已完成/未完成、待决策点），绝不静默。\n" : "") +
+  (visualOn ? "" : "【视觉审阅豁免】本运行老板以 visualReview=off 豁免独立视觉审阅（图像产物照常检测列报但未经独立审阅）——报告必须如实披露此豁免，绝不静默。\n") +
   "若轮次记录显示第 1 轮无端到端数字，报告必须显式声明「第 1 轮无 FULL 数字，稿件不得声称已验证」。\n" +
   "收尾先实时读 LoopMail/FromBoss.md（编排器快照可能陈旧——你的直读才新鲜）：老板运行中写入、尚无轮次可落实的指令，逐条处置或在报告的待老板决策节列明，绝不静默。\n" +
   (claimGapNote !== "" ? "【机械核查未过】" + claimGapNote + "——报告必须如实披露，绝不静默。\n" : "") +

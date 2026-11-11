@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 鲁棒工程循环（v0.6.8）：把一句开发要求变成经过冷启动对抗验证的实现。总工建要求台账（老板原话逐字）并承诺 N 轮（老板可锁定）；每轮开发+文档单笔提交 → 冷启动门禁（diff 审查、鲁棒性测试、canary、零警告构建、上一轮 remote CI 结转）→ 先复现再返修（误诊须证据反驳）、amend 并入本轮提交（初级返修预算用尽升级高级工程师；高级一次交付，未解经总工绕过裁决记账跳过并在最终简报向老板披露，无可行绕过且影响整个工作流才打断；全绿或经裁决记账跳过才推送）；门禁全绿或经总工裁决记账跳过后才推送约定 remote（默认 GitCoffer，append-only 永不 force）；账本断点续跑；破坏性操作申报-裁决-执行三段核验、绝不转交用户；模型分档 tiered/uniform。
+description: 鲁棒工程循环（v0.6.9）：把一句开发要求变成经过冷启动对抗验证的实现。总工建要求台账（老板原话逐字）并承诺 N 轮（老板可锁定）；每轮开发+文档单笔提交 → 冷启动门禁（diff 审查、鲁棒性测试、canary、零警告构建、上一轮 remote CI 结转）→ 先复现再返修（误诊须证据反驳）、amend 并入本轮提交（初级返修预算用尽升级高级工程师；高级一次交付，未解经总工绕过裁决记账跳过并在最终简报向老板披露，无可行绕过且影响整个工作流才打断；全绿或经裁决记账跳过才推送）；门禁全绿或经总工裁决记账跳过后才推送约定 remote（默认 GitCoffer，append-only 永不 force）；账本断点续跑；破坏性操作申报-裁决-执行三段核验、绝不转交用户；模型分档 tiered/uniform。
 args:
   requirement:
     type: string
@@ -190,6 +190,7 @@ const CHIEF_ZH = [
   "奥卡姆剃刀：你的自主决定天然倾向「加东西」（加模块、加检查、加配置）——每个增加复杂度的决定必须写明预期价值，否则默认不做；凡是增加复杂度的自主决定，不能只写账本，必须进《最终简报》的自主决定清单。",
   "误诊仲裁：算法工程师与测试工程师就某条问题争执时，你只依据证据仲裁；仍不能定 → 重大问题，打断上报老板。",
   "接手先读账本（Agents/ledger.md）：断点续跑，不重做已完成轮；账本同时记录每轮 baseline 哈希与已推送 SHA；被中断或取消的片段恢复时先做闭合复查——丢弃范围内的每项在途工作要么核实仍在、要么在账本记明放弃，先和解再前进，绝不静默跳过；账本危险操作行标有「执行确认：存在未确认项」的条目，闭合复查时逐条核实效果是否落盘（写法漂移不算未执行，跨循环审计 F6：中间态的跨运行补救路径）。",
+  "常驻身份（v0.6.9）：你是本运行唯一的总工程师（固定名全程不变）；每轮规划以 Agents/ledger.md 为唯一依据，你此前的规划与裁决不是依据——账本已更新而你的记忆未更新时，一律以账本为准；被后续验证否证的旧决定按「回退还是继续修」的显式决策处置，绝不凭记忆辩护。",
   "git 写操作权限：只执行问句明示的 git add/commit/amend；git push 由编排器统一执行并核验——你在任何时刻都不执行 push，也不执行 reset/rebase/tag 等其它写仓库的 git 操作。",
   "老板反馈（LoopMail/FromBoss.md）：每轮发卡前你自己实时读该文件（老板运行中下达的指令，可能为空；编排器不再代读注入——脚本层读取在续跑/重放时返回陈旧快照，子代理直读天然新鲜）——逐条落实到任务卡并把应用情况记入账本；它承载运行中指挥，不替代要求台账；与老板此前要求不一致时，以老板最新指令为准并如实记录。老板要暂停/打断本运行时会在 FromBoss.md 写下【老板停点】标记——检测到即停机回执，绝不开工（老板停点是老板级动作，必须落机制并回执）。【权源纪律】部署方（运行本工作流的人）是老板的秘书而非老板本人：仅标注【老板原话】的文本具老板效力，【秘书注】等展开性文本只是秘书的理解，冲突时一律以老板原话为准；拿不准哪句是老板原话的列入待答问题，绝不把秘书口径当老板裁定。",
   GATE_CRITERIA,
@@ -362,7 +363,7 @@ artifact.table("rounds", {
   key: "round",
 });
 
-phase("总工：要求入账与总体规划");
+phase("总工程师·要求入账与总体规划");
 let repoRoot = "";
 try {
   const tr = await world.run("git", ["rev-parse", "--show-toplevel"], { timeoutMs: 60000 });
@@ -459,7 +460,8 @@ if (legacyLayout) log("检测到 LoopMail 之前的布局：开工前先整体�
 
 if (repoRoot !== "") repoDiscipline = "\n【仓库根纪律】本会话的工作目录未必是仓库根：开发仓库根是 " + repoRoot + "。git 命令一律写成 git -C \"" + repoRoot + "\" <子命令>（add/commit/log/reflog/status 全部如此）；读写仓库内文件一律用绝对路径（" + repoRoot + "/ 前缀）；绝不读写工作目录下的同名散落副本；不确定时先 git -C \"" + repoRoot + "\" status 核实。";
 const GC = repoRoot !== "" ? "git -C \"" + repoRoot + "\"" : "git"; // 问句文本层 git 贯通（家族审计 #16）：廉价档执行者跟最近最具体的指令——问句层的 git 链必须自带 -C（系统面由 persona 纪律覆盖）
-let chief = agent("总工程师", persona(CHIEF_ZH + PROFILE_LINE, STRONG)); // pre-loop 实例：承诺入账/迁移复核/打断；进入轮循环后每轮重建（B#27）——repoDiscipline 此时已填充，persona 带全纪律；占位实例已删除（与重建实例同名撞名会运行即败，实测部署缺陷）
+let chief = agent("总工程师", persona(CHIEF_ZH + PROFILE_LINE, STRONG)); // 常驻实例（v0.6.9 老板方案）：全程唯一、固定名，面板可点击观察——每轮规划以账本为唯一依据（人设反锚定条款），检查点是账本不是任何人的会话记忆，跨运行=新运行=新实例；repoDiscipline 此时已填充，persona 带全纪律
+const visualReviewer = agent("视觉审阅员", persona(VISUAL_ZH + PROFILE_LINE, STRONG)); // 常驻实例（v0.6.9）：固定名全程唯一，跨轮同一判尺——仅在产物集合或规格变更时被重新问询（记忆化键），图像随轮累积由强档与引擎压缩吸收
 /** 编排器统一 git 入口：显式 -C 仓库根——工作区根≠仓库根时不再静默失效（实测缺陷） */
 const G = (gitArgs: string[], timeoutMs = 120000): Promise<WorldRunResult> =>
   world.run("git", repoRoot !== "" ? ["-C", repoRoot, ...gitArgs] : gitArgs, { timeoutMs });
@@ -534,7 +536,7 @@ if (legacyLayout) {
   log(migratedLedger !== "" && mailsOk ? "迁移复核：账本与 LoopMail 两文件均已落位" : "迁移复核仍有缺项（账本" + (migratedLedger !== "" ? "在" : "缺") + "、LoopMail 两文件" + (mailsOk ? "在" : "缺") + "）——如实记录，运行继续但迁移可能不完整（实测家族：半迁移静默进运行）");
 }
 if (commit0.blocked) {
-  phase("重大问题打断");
+  phase("总工程师·重大问题打断");
   const ir = await chief.ask<string>(
     "已按 blocked 打断。补全 LoopMail/ToBoss.md 头部的打断加急邮件（问题、已完成轮次与产物、需要老板决策的问题、建议选项），" + GC + " add <本轮改动文件逐个显式路径> && " + GC + " commit，返回一句话摘要供老板速览。",
   );
@@ -646,7 +648,6 @@ let skipNote = ""; // 跳过记账累计（入账本与最终简报）
 let seniorUsed = false; // 本轮是否已实际派发高级返修（"高级一次交付"的门：从未升级的问题不进跳过裁决——每轮随轮循环复位）
 for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   const baseline = await HEAD0();
-  chief = agent("总工程师-R" + round, persona(CHIEF_ZH + PROFILE_LINE, STRONG)); // B#27：每轮全新实例——检查点是账本，不是任何人的会话记忆
   algo = agent("算法工程师-R" + round, persona(ALGO_ZH + PROFILE_LINE, CHEAP));
   senior = agent("高级工程师-R" + round, persona(ALGO_ZH + SENIOR_ZH + PROFILE_LINE, STRONG));
   let bossNote = "";
@@ -658,7 +659,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     bossNote = "";
   }
   if (bossStopHit) {
-    phase("老板停点回执");
+    phase("总工程师·老板停点回执");
     const irB = await chief.ask<string>(
       "老板在 LoopMail/FromBoss.md 写下【老板停点】：立即停机回执，不开工本轮。把停点回执作为加急邮件插入 LoopMail/ToBoss.md 头部（逐字引用停点原话、已完成轮次与产物、剩余未执行轮次、需要老板决策的点），" + GC + " add <本轮改动文件逐个显式路径> && " + GC + " commit，返回一句话摘要。",
     );
@@ -678,7 +679,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     interrupted = true;
     break;
   }
-  phase("总工发卡");
+  phase("总工程师·发卡");
   let cards = await chief.ask<RoundCards>(
     "第 " + round + "/" + roundsTotal + " 轮。老板要求见 Agents/requirements.md；本轮规划依据：\n" + String(plan).slice(0, 4000) + "\n" +
     (knownMinors.length > 0 ? "【known minors 挂账】未清偿 minor " + knownMinors.length + " 条（不阻塞门禁；收官轮强制清零）——本轮任务卡须逐条处置（修复）或写明保留理由：" + knownMinors.join("；") + "\n" : "") +
@@ -798,7 +799,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   let approvedDanger: string[] = [];
   const dangerTrail: { declared: string; decision: string; form: string; executed: string }[] = []; // 一致性核查凭据：申报→裁决→执行三段必须对得上
   if ((dev.dangerRequests || []).length > 0) {
-    phase("危险操作审核");
+    phase("危险操作·申报与裁决");
     const review = await adjudicateDanger(dev.dangerRequests, "算法工程师", "廉价模型档", false);
     dangerLog = review.decisions.map((d) => d.command + " → " + d.decision + (d.safeForm ? "（改：" + d.safeForm + "）" : "") + "：" + d.reason).join("；");
     log("第 " + round + " 轮危险操作裁决：" + dangerLog.slice(0, 300));
@@ -948,7 +949,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
         visualNote = visualCacheNote + "（视觉结论复用：产物集合与规格未变，未重派审阅）";
         log("视觉审阅：产物集合与规格未变——复用上次结论，不重派审阅员（实测缺陷 7 的不可收敛循环由此消除）");
       } else {
-        visualP = agent("视觉审阅-R" + round + "-A" + attempt, persona(VISUAL_ZH + PROFILE_LINE, STRONG)).ask<VisualVerdict>(
+        visualP = visualReviewer.ask<VisualVerdict>(
           "本轮任务：" + cards.title + "。规格见 Agents/requirements.md 的产物规格表。逐张打开并审阅以下图像（仓库内相对路径——按仓库根纪律用绝对路径打开）：\n" + imageFiles.join("\n") +
           "\nissues 只收规格违反/产物缺陷（分辨率或定义域错、色板错、渲染空洞或坏图、大片空白或极少数据点、与所声称结论矛盾的事实错误——每条引用规格表条目或可复现证据）；观感/信息量限制（规格未要求的元素缺席、首帧看不出差异、支撑弱）不进 issues，写进 summary 并加「观感限制：」前缀；观感属老板亲验范围的注明「留老板亲验」。返回 VisualVerdict（问题写清文件名与你看到的现象）。",
         ); // 不 await：与 selfcheck 并行；结论在门禁判定处汇合并记忆化——机械失败轮的视觉结论只付一次价
@@ -1052,7 +1053,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
         log("视觉审阅汇合点核验：产物集合或内容在审阅期间变更（严格构建产物再生／危险操作补执行写入工作树）——起跑时结论作废，按当前内容重派审阅");
         imageFiles = imgNow;
         vKey = await hashArtifacts(imgNow);
-        vv = await agent("视觉审阅重派-R" + round + "-A" + attempt, persona(VISUAL_ZH + PROFILE_LINE, STRONG)).ask<VisualVerdict>(
+        vv = await visualReviewer.ask<VisualVerdict>(
           "本轮任务：" + cards.title + "。规格见 Agents/requirements.md 的产物规格表。逐张打开并审阅以下图像（仓库内相对路径——按仓库根纪律用绝对路径打开）：\n" + imageFiles.join("\n") +
           "\nissues 只收规格违反/产物缺陷（分辨率或定义域错、色板错、渲染空洞或坏图、大片空白或极少数据点、与所声称结论矛盾的事实错误——每条引用规格表条目或可复现证据）；观感/信息量限制（规格未要求的元素缺席、首帧看不出差异、支撑弱）不进 issues，写进 summary 并加「观感限制：」前缀；观感属老板亲验范围的注明「留老板亲验」。返回 VisualVerdict（问题写清文件名与你看到的现象）。",
         );
@@ -1102,7 +1103,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     const rebuttedN = (fix.rebutted || []).map((r) => "已反驳 " + (r && r.id ? r.id : "?")).join("、");
     handledNote = (handledNote === "" ? "" : handledNote + "；") + [fixedN, rebuttedN].filter((s) => s !== "").join("、");
     if ((fix.dangerRequests || []).length > 0) {
-      phase("危险操作审核");
+      phase("危险操作·申报与裁决");
       const dr = await adjudicateDanger(fix.dangerRequests, juniorAsk ? "算法工程师" : "高级工程师", juniorAsk ? "廉价模型档" : "强模型档", !juniorAsk);
       const ok2 = dr.decisions.filter((d) => d.decision !== "reject");
       approvedDanger = approvedDanger.concat(ok2.map((d) => (d.decision === "approve-with-change" ? (d.safeForm || "").trim() : (d.command || "").trim())));
@@ -1168,7 +1169,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
 
   if (interrupted) break; // 专属打断路径（跳过裁决/尝试上限/重大问题）已完成上报与 finalVerdict——绝不落推送段
   if (gate === "" || !gate.startsWith("pass")) {
-    phase("门禁复核超限，打断上报");
+    phase("总工程师·门禁超限打断");
     const ir = await chief.ask<string>(
       "第 " + round + " 轮门禁复核 " + ATTEMPT_MAX + " 次仍未通过（" + gate + "）。属重大问题：把打断报告作为加急邮件插入 LoopMail/ToBoss.md 头部（当前状态、失败证据、已尝试的修复、需要老板决策的点），" + GC + " add <本轮改动文件逐个显式路径> && " + GC + " commit（不推送未过门禁的提交，除非老板此前另有约定），返回一句话摘要。",
     );
@@ -1180,7 +1181,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   }
   headA = await HEAD0();
 
-  phase("推送约定 remote");
+  phase("编排器·推送与核验");
   let pushState = "未推送";
   if (push0.target !== "" && branch !== "") {
     // 推送前核对：远端 HEAD 应为本轮 baseline（上轮已推送核验）——不符即疑似代理在会话内推送过，大声记录并对账
@@ -1222,7 +1223,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   }
   log("第 " + round + " 轮推送：" + pushState);
 
-  phase("总工记账");
+  phase("总工程师·记账");
   const archived = await chief.ask<string>(
     "把第 " + round + " 轮记入 Agents/ledger.md（头部含仓库标识行" + (repoRoot ? "：" + repoRoot : "") + "与一行一轮的目录：本轮先更新目录行、再追加详情）：任务卡、开发摘要（" + (dev.summary || "").slice(0, 400) + "）、危险操作裁决（" + dangerLog + (dangerTrail.length > 0 ? "；执行确认：" + (dangerTrail.every((e) => e.executed === e.form) ? "全部与批准写法一致" : "存在未确认项——下轮闭合复查须逐条核实效果是否落盘") : "") + "）、测试判决（问题 " + findingsCount + " / 反驳 " + rebuttedCount + " / 升级 " + escalations + "、minor 挂账 " + roundMinors + " 条" + (handledNote !== "" ? "；已处置：" + handledNote.slice(0, 300) : "") + (skipNote !== "" ? "；跳过记账：" + skipNote.slice(0, 300) : "") + "）、门禁 " + gate + "、覆盖声明（" + (verdict.coverage || "").slice(0, 300) + "）、视觉审阅（" + visualNote.slice(0, 200) + "）、要求覆盖（" + (dev.requirementCoverage || []).join("；") + "）、baseline " + (baseline !== "" ? baseline.slice(0, 7) : "空树或读取失败") + "、推送 " + pushState + "、遗留与否决（deferred/declined，各带理由，无则写“无”）、下一轮方向。然后 " + GC + " add <本轮改动文件逐个显式路径> && " + GC + " commit（账本小提交），返回一句话。",
   );
@@ -1279,7 +1280,7 @@ try {
 if (closingBossNote !== "") log("收尾时编排器快照读取 LoopMail/FromBoss.md：发现老板反馈 " + closingBossNote.length + " 字（快照可能陈旧——已指示总工实时直读处置，绝不静默蒸发）");
 const closingStopHit = closingBossNote.includes("【老板停点】"); // 收尾机械检测兜底（终审 F6）：全完成续跑/末轮轮顶读取后才写入的停点——老板停点必须落机制回执，绝不安静结束
 if (closingStopHit) log("收尾检测到【老板停点】标记——最终简报回执注入");
-phase("最终简报");
+phase("总工程师·最终简报");
 // 无论是否被打断都做逐条对账：打断时把已完成/未完成如实写清，不许省略条目
 const interruptNote = finalVerdict
   ? "【本次运行已打断】现状：" + finalVerdict.state + "；待老板决策点：" + finalVerdict.decisionList.join("；") + "。逐条对账是内部事务：已完成/未完成的每一条写进账本与 Agents/requirement_map.md 的对账标注，不得省略；老板看到的文档保持简报形态（解释开头、待决策、建议选项），不在老板文档里对账。verdict 必须填 interrupted。"
