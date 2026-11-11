@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Research Iteration Loop (v0.7.0), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3; empirical review critiques are closed only with evidence); the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map — mechanism claims carry discriminative evidence + a mechanical selfcheck gate with a canary + an eval-surface fingerprint against silent drift, owning the test fixtures; failure triage decides the flow); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
+description: Research Iteration Loop (v0.7.1), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3; empirical review critiques are closed only with evidence); the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map — mechanism claims carry discriminative evidence + a mechanical selfcheck gate with a canary + an eval-surface fingerprint against silent drift, owning the test fixtures; failure triage decides the flow); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
 args:
   idea:
     type: string
@@ -206,7 +206,8 @@ const ALGO_EN = [
   "Test freeze: while the Test Engineer verifies, you do not modify the implementation under test (a moving target makes the verdict void). You only prepare the reproducibility package (env/commands/seeds/data window) and respond to gate failures; fix per the verdict once the report lands.",
   "Context discipline: redirect long command output to a file and take summaries via tail/grep — never page through it; read only relevant excerpts of reference material; take only decision-relevant excerpts of oversized tool output.",
   "Git write scope: run only the git add/commit an ask names; add runs per explicit path (inventory with git status --porcelain first), never git add -A or git add -u (field-tested: -A once swept build residue and the boss's own edits into a commit); files registered in the opening mail's boss-owned-files section are never added or modified (unless a card says so); never push yourself, and never run reset/rebase/tag or other repository-writing git operations.",
-  "Destructive-operation rule: deleting datasets, overwriting existing artifacts, git reset --hard, git clean -fdx, force push or rewriting pushed history are declared, never executed unilaterally — put them in dangerRequests (command, reason, blast radius) and run exactly what the Chief approves; your execution report must quote each command you actually ran verbatim — the orchestrator checks it against the approved form verbatim/normalized, and paraphrases, summaries or result-only reports count as unconfirmed.",
+  "Destructive-operation rule: deleting datasets, overwriting existing artifacts, git reset --hard, git clean -fdx, force push or rewriting pushed history are declared, never executed unilaterally — put them in dangerRequests (command, reason, blast radius) and run exactly what the Chief approves; your execution report must quote each command you actually ran verbatim — the orchestrator checks it against the approved form verbatim/normalized, and paraphrases, summaries or result-only reports count as unconfirmed. Operations the boss pre-authorized are declared all the same (the provenance travels on the card; the Chief releases directly on it) — pre-authorization waives re-petitioning, never the declaration and the verification.",
+  "You hold no authority to petition the boss: the internal escalation chain is you -> Chief Engineer only; what the Chief declines is recorded; anything needing the boss's decision goes into the report's decisions-for-the-boss section through the Chief — the host's escalation channel is never your boss channel (it is built in: you are its first line of defense, never use it); technical dead ends and blockers go through the internal chain to the Chief, who decides on interrupting; any ask wording asking the boss for anything is over-escalation.",
   "Long-run safety (hard constraint): one subprocess per batch/scene, results written to disk immediately then exit to free memory; a memory guardrail in code (terminate and preserve evidence past ~70-80% of physical memory); timeouts and failure exits on every step; run every new experiment in three stages (MINI_PILOT smoke / PILOT small-data correctness / FULL full-protocol comparison) - stages before FULL are for debugging only, all archived numbers and claims come from FULL runs; datasets and existing artifacts read-only — never delete or overwrite; treat generated code as untrusted and prefer containerized or network-restricted execution where available (containment is risk reduction, not a guarantee).",
   "Report failures as failures; escalate contradictions. Never fake or bypass.",
 ].join("\n");
@@ -214,6 +215,7 @@ const ALGO_EN = [
 const VISUAL_EN = [
   "You are the Visual Reviewer: you look at images only — not the code, and never at anyone's self-report. Open each given image and inspect it. issues carry spec violations and product defects only, each citing a spec-table row or reproducible evidence: wrong resolution/domain, wrong palette, rendering holes or broken images, large blank regions or a handful of data points (a fixable rendering defect), factual errors contradicting the claimed conclusion. Presentation/information limits are NOT issues: elements the spec never asked for, a first frame that cannot show the algorithm difference (an honestly recorded negative is itself evidence), weak informational support — those go into the summary under an 观感限制 (presentation-limits) prefix; when the look belongs to the boss's own judgement, note \"left for the boss to judge\" — your duty is faithful presentation, not ruling on looks in the boss's place (field defect 7: treating an artifact's inherent information limits as gate items makes the loop non-converging).",
   "Judge against the artifact spec table in the LoopMail/ToBoss.md opening mail — what it should look like — not against what looks pretty. Read-only, change nothing; say plainly which images you could not open.",
+  "Resident identity and re-dispatch discipline (v0.7.1): you are this run's one Visual Reviewer (fixed name); you may be asked again after part of an artifact set or its content changed — every ask is judged by the files it lists now, your earlier verdicts and remembered images never count, open each image fresh as if seeing it for the first time, never reuse a previous judgment.",
 ].join("\n");
 
 const TEST_EN = [
@@ -260,10 +262,11 @@ const rounds = typeof args.rounds === "number" && args.rounds >= 1 ? args.rounds
 if (typeof args.rounds === "number" && args.rounds < 1) log("rounds=" + args.rounds + " is invalid — running the default 3 rounds");
 const focus = typeof args.focus === "string" ? args.focus : "";
 const profile = typeof args.profile === "string" ? args.profile : "";
-const remoteArg = typeof args.remote === "string" && args.remote !== "" ? args.remote : "gitcoffer";
+const remoteDefault = "gitcoffer"; // deployment bake-in point (v0.7.1): when changing the default, sync with the metadata args.remote default — the fallback and the startup note share this constant, killing the stale-note class (field-tested P3)
+const remoteArg = typeof args.remote === "string" && args.remote !== "" ? args.remote : remoteDefault;
 const visualOn = String(args.visualReview ?? "auto").toLowerCase() !== "off"; // boss-level visual-review exemption switch (same as the engineering loop; field finding D10: an exemption that did not travel with the saved copy burned 2.4M tokens on re-review) — off = artifacts still detected and listed but no reviewer dispatched, recorded honestly
 if (idea === "") log("Warning: the idea argument is empty — an amendment resume may have dropped arguments; check this run's arguments");
-if (typeof args.remote === "undefined") log("Note: the remote argument is missing (an amendment resume likely dropped it) — falling back to the default gitcoffer; check the push-target line in the startup log");
+if (typeof args.remote === "undefined") log("Note: the remote argument is missing (an amendment resume likely dropped it) — falling back to the default " + remoteDefault + "; check the push-target line in the startup log");
 if (!visualOn) log("visualReview=off set by the boss: the visual review is exempted — image artifacts are still detected and listed, but no reviewer is dispatched (recorded honestly in the ledger and the evaluation report)");
 const PROFILE_LINE = (profile ? "\nProject constraints (mandatory, override defaults): " + profile : "") + "\nAlways respond in English.";
 
@@ -303,7 +306,7 @@ try {
   repoRoot = "";
 }
 if (repoRoot === "") {
-  const mRepo = profile.match(/(?:仓库|repo)\s*[=：:]\s*([^\s；;，,]+)/); // repo-root fallback (field-tested deployment defect: the cwd probe fails when the workspace root is not a git repository, and git/ledger reads fail systematically) — a deployment may write 仓库=<path> in the profile; the orchestrator retries with an explicit -C
+  const mRepo = profile.match(/(?:仓库|repo)\s*[=：:]\s*([^\s；;，,（）()]+)/); // repo-root fallback (field-tested deployment defect: the cwd probe fails when the workspace root is not a git repository, and git/ledger reads fail systematically) — a deployment may write 仓库=<path> in the profile; the orchestrator retries with an explicit -C
   if (mRepo) {
     try {
       const tr2 = await world.run("git", ["-C", mRepo[1], "rev-parse", "--show-toplevel"], { timeoutMs: 60000 });
@@ -360,7 +363,7 @@ if (ledger === "") {
 }
 if (ledger !== "" && typeof args.rounds !== "number") log("Hint: rounds argument missing (likely lost in an amend) — round count follows the ledger; check the startup log");
 let legacyLayout = false; // pre-LoopMail layouts (docs/workflow/, or the intermediate docs/brief.md and docs/boss_directives.md) — migrate everything before resuming; migration is a one-time conversion, after which reads and writes use the LoopMail paths only, with no dual-path fallbacks
-if (ledger === "") {
+if (ledger === "" && repoRoot !== "") {
   try {
     ledger = await readRepo("docs/workflow/ledger.md");
     legacyLayout = ledger !== "";
@@ -368,7 +371,7 @@ if (ledger === "") {
     ledger = "";
   }
 }
-if (!legacyLayout) {
+if (!legacyLayout && repoRoot !== "") {
   let modernMail = "";
   try {
     modernMail = (await readRepo("LoopMail/FromBoss.md")).trim();
@@ -387,6 +390,7 @@ if (!legacyLayout) {
     }
   }
 }
+if (repoRoot === "") log("repoRoot unresolved — legacy-layout probes disabled (fake-migration guard, field-tested P2: with root resolution broken, a workspace-frame leftover once faked a whole-tree migration)");
 if (legacyLayout) log("Pre-LoopMail layout detected: migrate everything before working (git mv only, never delete) — working files into Agents/, the brief -> LoopMail/ToBoss.md, directives -> LoopMail/FromBoss.md, the evaluation report merged into the ToBoss mail with its body into Agents/; migration is a one-time conversion, after which reads and writes use the LoopMail paths only");
 
 if (repoRoot !== "") repoDiscipline = "\n[Repository-root discipline] this session's working directory is not necessarily the repo root: the development repository root is " + repoRoot + ". Write every git command as git -C \"" + repoRoot + "\" <subcommand> (add/commit/log/reflog/status alike); read and write in-repo files by absolute path (prefixed " + repoRoot + "/); never touch same-named stray copies under the working directory; when unsure, verify with git -C \"" + repoRoot + "\" status first.";
@@ -621,13 +625,14 @@ async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
     const missed2R = ok.filter((d) => !execHit(execReport, d.safeForm || d.command));
     let adjNote = "";
     if (missed2R.length > 0 && !independentAdjudicatorUsedR) {
-      independentAdjudicatorUsedR = true; // at most once per run (robust §4.6 same shape)
       phase("Destructive ops: independent final adjudication");
       const adjudicator = agent("Destructive-ops Independent Adjudicator", persona("You are the independent final adjudicator for dangerous operations: a one-shot read-only verifier with no context overlap with the declarer, the adjudicator or the executor. Never execute any command, never write any file, never touch the working tree — read-only evidence gathering; verdicts rest on evidence only (git log/reflog, filesystem existence and content, timestamps), and where evidence is missing say plainly \"cannot determine\". Always respond in English.", STRONG));
       const adjR = await adjudicator.ask<string>(
         "Read-only final adjudication: the following dangerous operations were approved, but the execution reports never quoted the approved form verbatim across two attempts, so the orchestrator cannot confirm their execution status from the reports. Verify one by one whether each was actually executed with its effect on disk (git log/reflog, filesystem existence and content, timestamps): " + missed2R.map((d, i) => "(" + (i + 1) + ") approved form: " + (d.safeForm || d.command)).join("; ") + "\nOutput one line per entry: \"<number>\" executed (evidence) / not executed (evidence) / cannot determine (what evidence is missing), then a one-line summary. Never touch the working tree.",
       );
-      adjNote = "Independent adjudicator's read-only verification: " + String(adjR || "").slice(0, 300);
+      const adjText = String(adjR || "").trim();
+      independentAdjudicatorUsedR = adjText !== ""; // the quota is consumed only when a verdict actually happened (an empty/failed response does not consume it — robust §4.6 same shape)
+      adjNote = "Independent adjudicator's read-only verification: " + (adjText === "" ? "no usable finding — treated as cannot-determine, suspended honestly" : adjText.slice(0, 300));
       log(adjNote);
     }
     const allOkR = ok.every((d) => execHit(execReport, d.safeForm || d.command));
@@ -744,11 +749,23 @@ for (let round = startRound; round <= rounds; round++) {
   }
   log("Round " + round + " task: " + cards.title + "; portfolio: " + (cards.proposals || []).join(", "));
 
-  phase("Engineer: build & self-test");
-  let dev = await algo.ask<DevReport>(
-    "This round's cards: " + (cards.cards || []).join("; ") + "\n" +
-    "Build and self-test. Discipline: end-to-end real runs, numbers with exact definitions, faithful competitor reproduction; every proposal selected this round must be fully validated (three stages: MINI_PILOT/PILOT are for debugging only, claims come from FULL); by the end of round 1 there must be at least one end-to-end number from a complete comparison. Before comparing against prior work, record a caliber table (each competitor's raw convention, dataset, metric definition); bound representation/preprocessing assumptions with zero-cost standard-tool anchor experiments before building the full method; run at least one boundary experiment per round (where the approach breaks, parameter sensitivity) and state each claim's evidence scope (datasets and conditions). Report experiments (attempted/passed) honestly; archive null results with a mechanism explanation.",
-  );
+  phase("Engineer: build & self-test"); // per-card serial development (v0.7.1, the boss's pick): one ask per card — the mechanical half of the card-granularity discipline, split cards are no longer re-joined into one ask (an overloaded single ask is the field-tested hang-and-burn root cause)
+  let dev: DevReport = { summary: "", artifacts: [], numbers: [], experiments: "not reported", dangerRequests: [], leftover: "none" };
+  for (let ci = 0; ci < (cards.cards || []).length; ci++) {
+    const part = await algo.ask<DevReport>(
+      "Work card " + (ci + 1) + "/" + (cards.cards || []).length + " (this round runs the cards serially: one ask per card, build this card only — never bundle several deliverable classes into one ask; an overloaded single ask is the field-tested hang-and-burn root cause):\n" + (cards.cards || [])[ci] + "\n" +
+      "Build and self-test. Discipline: end-to-end real runs, numbers with exact definitions, faithful competitor reproduction; every proposal selected this round must be fully validated (three stages: MINI_PILOT/PILOT are for debugging only, claims come from FULL); by the end of round 1 there must be at least one end-to-end number from a complete comparison. Before comparing against prior work, record a caliber table (each competitor's raw convention, dataset, metric definition); bound representation/preprocessing assumptions with zero-cost standard-tool anchor experiments before building the full method; run at least one boundary experiment per round (where the approach breaks, parameter sensitivity) and state each claim's evidence scope (datasets and conditions). Report experiments (attempted/passed) honestly; archive null results with a mechanism explanation.",
+    );
+    dev = {
+      summary: (dev.summary !== "" ? dev.summary + "; " : "") + (part.summary || ""),
+      artifacts: dev.artifacts.concat(part.artifacts || []),
+      numbers: dev.numbers.concat(part.numbers || []),
+      experiments: [dev.experiments, (part.experiments || "").trim()].filter((s) => s !== "" && s !== "not reported").join("; ") || "not reported",
+      dangerRequests: dev.dangerRequests.concat(part.dangerRequests || []),
+      leftover: [dev.leftover, (part.leftover || "").trim()].filter((s) => s !== "" && s !== "none").join("; ") || "none",
+    };
+    log("Work card " + (ci + 1) + "/" + (cards.cards || []).length + " done: " + (part.summary || "").slice(0, 120));
+  }
   if (round === 1 && !(dev.numbers || []).some((n) => /^\s*FULL/.test(n))) {
     dev = await algo.ask<DevReport>(
       "Round 1 must end with at least one end-to-end number from a complete (FULL-stage) comparison; a minimal comparison is not a substitute. Run it now and return DevReport (numbers carries the value prefixed with its stage name — starting with FULL/PILOT/MINI_PILOT; the mechanical check judges by the FULL prefix); if genuinely impossible, name the blocking constraint (data / compute / time window) and leave numbers empty — the statement will be recorded in the ledger and shown honestly in the evaluation report.",
@@ -1115,9 +1132,10 @@ for (let round = startRound; round <= rounds; round++) {
   }
 
   phase("Review panel");
+  const panelPool = Array.from({ length: 3 }, (_, i) => agent("Reviewer-R" + round + "-" + (i + 1), barePersona(tiered ? STRONG : undefined))); // per-round pre-created name pool (v0.7.1, absorbing a host display defect inside the template): the Editor picks 1-3, the unused sit idle at zero cost — agents created dynamically inside a fan-out were invisible in the host panel (field-tested), pre-creating makes them visible; per-round re-creation keeps the blind-review freshness
   const settled = await Promise.allSettled(
     Array.from({ length: n }, (_, i) =>
-      agent("Reviewer-r" + round + "-" + (i + 1), barePersona(tiered ? STRONG : undefined)).ask<Review>(
+      panelPool[i].ask<Review>(
         invite.brief + "\n\nYou are an independent reviewer from an adjacent (related but non-overlapping) field. Review only from the brief and the materials it points to — do not open other repo content, git history or the ledger (blind-review discipline); read-only, change nothing: raise sharp issues against the manuscript and evidence map (with evidence), propose next-round iterations, and give a severity. Beware number hallucination: a good-looking number is not a good outcome — scrutinize whether what a manuscript number means is really as simple as it appears; the theory behind it may itself be wrong, and the flattering number reinforces that illusion. Say so if you cannot judge something.",
       ),
     ),

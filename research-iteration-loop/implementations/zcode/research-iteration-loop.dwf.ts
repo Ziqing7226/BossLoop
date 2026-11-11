@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 科研迭代循环（v0.7.0）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3；实证类审稿质询只以证据闭环）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表——机制类主张须附区分性证据 + 含 canary 的 selfcheck 机械门禁 + 协议面指纹防评测面漂移，测试基建归其所有；失败三分类定流向）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
+description: 科研迭代循环（v0.7.1）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3；实证类审稿质询只以证据闭环）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表——机制类主张须附区分性证据 + 含 canary 的 selfcheck 机械门禁 + 协议面指纹防评测面漂移，测试基建归其所有；失败三分类定流向）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
 args:
   idea:
     type: string
@@ -211,7 +211,8 @@ const ALGO_ZH = [
   "长任务安全（硬约束）：逐批次/逐场景用独立子进程运行，结果立即落盘后退出释放内存；脚本内置内存护栏（超约物理内存 70–80% 主动终止并保存现场）；每步有超时与失败出口；数据集与既有产物只读，不删除不覆盖；生成的代码视为不可信，可行时优先在容器/受限网络中执行（containment 是降险不是保证）。",
   "上下文纪律：长命令输出重定向到文件后用 tail/grep 取摘要，不整屏阅读；参考材料只读相关节选；工具输出超长只取与判定相关的摘录。",
   "git 写操作权限：只执行问句明示的 git add/commit；add 一律逐个显式路径（先 git status --porcelain 盘点），绝不 git add -A 与 git add -u（实测：-A 曾把构建残留与老板亲改文件收编进提交）；开局邮件「老板所有文件」节登记的文件绝不 add、绝不修改（除非任务卡明示）；你在任何时刻都不执行 git push，也不执行 reset/rebase/tag 等其它写仓库的 git 操作。",
-  "破坏性操作铁律：删除数据集/覆盖既有产物/git reset --hard/git clean -fdx/force push/改写已推送历史，一律只申报不执行——写入 dangerRequests（命令、原因、影响范围），等总工程师裁决后按其批准的写法执行；执行后回报必须逐字引用实际执行的每条命令原文——编排器按批准写法做逐字/归一一致性核查，转述、概括、只报结果都算未确认。",
+  "破坏性操作铁律：删除数据集/覆盖既有产物/git reset --hard/git clean -fdx/force push/改写已推送历史，一律只申报不执行——写入 dangerRequests（命令、原因、影响范围），等总工程师裁决后按其批准的写法执行；执行后回报必须逐字引用实际执行的每条命令原文——编排器按批准写法做逐字/归一一致性核查，转述、概括、只报结果都算未确认。老板已预授权的操作同样必须申报（批复出处随卡携带，总工据此直接放行）——预授权免的是重复请示，不是申报与核验。",
+  "你无权向老板申请权限：内部升级链只有你→总工程师；总工否决的事项记账即可；确需老板决策的由总工汇总进《初步评估报告》待老板决策节——宿主的升级通道绝不是你的老板通道（它是宿主内建的：你是第一防线，绝不使用），技术死路与无法推进的问题一律走内部链交总工，由其决定打断上报；问句措辞含「请老板…」即越级。",
   "实验三级执行纪律：每个新实验先 MINI_PILOT（冒烟，验证代码能跑通与内存量级）→ PILOT（小数据核对正确性）→ FULL（正式协议的完整对比）。调试只看 PILOT 及以前；所有入档数字与主张只来自 FULL——禁止拿最小对比的结果冒充验证结论。在 DevReport.experiments 字段如实统计尝试数/跑通数（含死在调试阶段的）。",
   "如实报告失败；指令矛盾则升级提问，不造假不绕过。全程中文。",
 ].join("\n");
@@ -219,6 +220,7 @@ const ALGO_ZH = [
 const VISUAL_ZH = [
   "你是视觉审阅员：只看图，不看代码，也不相信任何自述。用工具打开给定图像，逐张核查。issues 只收「规格违反/产物缺陷」，每条必须引用规格表条目或可复现证据：分辨率/定义域错、色板错、渲染空洞或坏图、大片空白或极少数据点（可修的渲染缺陷）、与所声称结论矛盾的事实错误。「观感/信息量限制」不算 issue：规格未要求的元素缺席、首帧看不出算法差异（阴性如实记录本身就是证据）、信息量对结论支撑弱——这些写进 summary 并加「观感限制：」前缀如实呈现；观感好坏若属老板亲验范围，summary 注明「留老板亲验」——你的职责是如实呈现，不是代替老板裁决观感（实测缺陷 7：把产物固有信息量属性当门禁项＝不可收敛循环）。",
   "对照 LoopMail/ToBoss.md 开局邮件的产物规格表判断「应该是什么样」，而不是凭好看与否。只读，绝不修改任何文件；打不开的图如实说明。",
+  "常驻身份与重派纪律（v0.7.1）：你是本运行唯一的视觉审阅员（固定名）；你可能在产物集合或内容部分变更后再次被问询——每次以当前问句所列文件为准，此前的结论与记忆中的旧图一律不作数，把每张图当作初见逐张重新打开，绝不复用上一次的判断。",
 ].join("\n");
 
 const TEST_ZH = [
@@ -265,10 +267,11 @@ const rounds = typeof args.rounds === "number" && args.rounds >= 1 ? args.rounds
 if (typeof args.rounds === "number" && args.rounds < 1) log("rounds=" + args.rounds + " 非法——按默认 3 轮执行");
 const focus = typeof args.focus === "string" ? args.focus : "";
 const profile = typeof args.profile === "string" ? args.profile : "";
-const remoteArg = typeof args.remote === "string" && args.remote !== "" ? args.remote : "gitcoffer";
+const remoteDefault = "gitcoffer"; // 部署烤入点（v0.7.1）：改缺省时与元数据 args.remote 的 default 两处同步——fallback 与启动提示共用本常量，杜绝烤入后文案 stale（实测 P3）
+const remoteArg = typeof args.remote === "string" && args.remote !== "" ? args.remote : remoteDefault;
 const visualOn = String(args.visualReview ?? "auto").toLowerCase() !== "off"; // 老板级视觉审阅豁免开关（工程循环同款；实测 D10：豁免令未随副本携带，白烧 2.4M tokens 重审）——off=图像产物照常检测列报但不派审阅员，如实记录
 if (idea === "") log("警告：idea 参数为空——续跑修正可能丢失参数，请核对本次运行参数");
-if (typeof args.remote === "undefined") log("提示：remote 参数缺失（疑似续跑丢参）——按默认 gitcoffer 探测，请核对启动日志的「推送目标」行");
+if (typeof args.remote === "undefined") log("提示：remote 参数缺失（疑似续跑丢参）——按默认 " + remoteDefault + " 探测，请核对启动日志的「推送目标」行");
 if (!visualOn) log("老板已设 visualReview=off：视觉审阅豁免——图像产物照常检测列报，但不派审阅员（如实记录进账本与评估报告）");
 const PROFILE_LINE = profile ? "\n项目级约束（必须遵守，高于默认做法）：" + profile : "";
 
@@ -308,7 +311,7 @@ try {
   repoRoot = "";
 }
 if (repoRoot === "") {
-  const mRepo = profile.match(/(?:仓库|repo)\s*[=：:]\s*([^\s；;，,]+)/); // 仓库根回退（实测部署缺陷：工作区根非 git 仓库时 cwd 探测失败，git/账本读取系统性失效）——部署可在 profile 写「仓库=<路径>」，编排器带 -C 重试解析
+  const mRepo = profile.match(/(?:仓库|repo)\s*[=：:]\s*([^\s；;，,（）()]+)/); // 仓库根回退（实测部署缺陷：工作区根非 git 仓库时 cwd 探测失败，git/账本读取系统性失效）——部署可在 profile 写「仓库=<路径>」，编排器带 -C 重试解析
   if (mRepo) {
     try {
       const tr2 = await world.run("git", ["-C", mRepo[1], "rev-parse", "--show-toplevel"], { timeoutMs: 60000 });
@@ -365,7 +368,7 @@ if (ledger === "") {
 }
 if (ledger !== "" && typeof args.rounds !== "number") log("提示：rounds 参数缺失（疑似续跑丢参）——轮数以账本承诺为准，请核对启动日志");
 let legacyLayout = false; // LoopMail 之前的布局（docs/workflow/，或中间布局 docs/ 下的 brief.md 与 boss_directives.md）——发现即要求总工先整体迁移再续跑；迁移是一次性转换，此后读写只走 LoopMail 路径，不留双轨回退
-if (ledger === "") {
+if (ledger === "" && repoRoot !== "") {
   try {
     ledger = await readRepo("docs/workflow/ledger.md");
     legacyLayout = ledger !== "";
@@ -373,7 +376,7 @@ if (ledger === "") {
     ledger = "";
   }
 }
-if (!legacyLayout) {
+if (!legacyLayout && repoRoot !== "") {
   let modernMail = "";
   try {
     modernMail = (await readRepo("LoopMail/FromBoss.md")).trim();
@@ -392,6 +395,7 @@ if (!legacyLayout) {
     }
   }
 }
+if (repoRoot === "") log("repoRoot 未解析——旧布局探测停用（防假迁移护栏，实测 P2：repoRoot 解析失败时工作区帧的远古遗留文件曾误触发整体迁移指令）");
 if (legacyLayout) log("检测到 LoopMail 之前的布局：开工前先整体迁移（一律 git mv，绝不删除）——工作文件移入 Agents/，简报→LoopMail/ToBoss.md、指令文件→LoopMail/FromBoss.md、评估报告并入 ToBoss 邮件后本体迁 Agents/；迁移是一次性转换，此后读写只走 LoopMail 路径");
 
 if (repoRoot !== "") repoDiscipline = "\n【仓库根纪律】本会话的工作目录未必是仓库根：开发仓库根是 " + repoRoot + "。git 命令一律写成 git -C \"" + repoRoot + "\" <子命令>（add/commit/log/reflog/status 全部如此）；读写仓库内文件一律用绝对路径（" + repoRoot + "/ 前缀）；绝不读写工作目录下的同名散落副本；不确定时先 git -C \"" + repoRoot + "\" status 核实。";
@@ -622,13 +626,14 @@ async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
     const missed2R = ok.filter((d) => !execHit(execReport, d.safeForm || d.command));
     let adjNote = "";
     if (missed2R.length > 0 && !independentAdjudicatorUsedR) {
-      independentAdjudicatorUsedR = true; // 每运行至多一次（robust §4.6 同款）
       phase("危险操作·独立终裁");
       const adjudicator = agent("危险操作独立终裁官", persona("你是危险操作独立终裁官：与申报人、裁决者、执行者均无上下文重叠的一次性只读核验者。绝不执行任何命令、绝不写入任何文件、绝不改动工作树——只读取证；结论只认证据（git log/reflog、文件系统存在性与内容、时间戳），拿不到证据就如实写「无法判定」。全程中文。", STRONG));
       const adjR = await adjudicator.ask<string>(
         "只读终裁：以下已批准的危险操作，执行回报两次均未逐字引用批准写法，编排器无法从回报确认其执行状态。逐条核验是否已实际执行且效果落盘（git log/reflog、文件系统存在性与内容、时间戳）：" + missed2R.map((d, i) => "(" + (i + 1) + ") 批准写法：" + (d.safeForm || d.command)).join("；") + "\n每条输出一行：「编号」已执行（证据）/未执行（证据）/无法判定（缺何证据），最后一行总结。绝不改写工作树。",
       );
-      adjNote = "独立终裁官只读核验：" + String(adjR || "").slice(0, 300);
+      const adjText = String(adjR || "").trim();
+      independentAdjudicatorUsedR = adjText !== ""; // 配额只在终裁真实发生时消耗（空/异常响应不消耗额度——robust §4.6 同款）
+      adjNote = "独立终裁官只读核验：" + (adjText === "" ? "无有效结论——视同无法判定，如实挂起" : adjText.slice(0, 300));
       log(adjNote);
     }
     const allOkR = ok.every((d) => execHit(execReport, d.safeForm || d.command));
@@ -745,11 +750,23 @@ for (let round = startRound; round <= rounds; round++) {
   }
   log("第 " + round + " 轮任务：" + cards.title + "；方案组合：" + (cards.proposals || []).join("、"));
 
-  phase("算法工程师开发自测");
-  let dev = await algo.ask<DevReport>(
-    "本轮任务卡：" + (cards.cards || []).join("；") + "\n" +
-    "开发并自测。纪律：端到端真实跑、数字注明口径、竞品保真对照；本轮选中的每个方案都必须得到充分验证（三级执行：MINI_PILOT/PILOT 只用于调试，主张只来自 FULL）；第 1 轮结束时必须已有至少一个来自完整对比的端到端数字。与已有工作对比前先建口径对照表（每家原始约定/数据集/指标定义）；表示或预处理假设先用标准工具做零成本锚点实验再决定是否建全量；每轮至少做一个边界实验（方法何时失效、参数多敏感），主张注明证据范围（数据集与条件）。如实报告 experiments（尝试数/跑通数），零结果入档并解释机制。",
-  );
+  phase("算法工程师开发自测"); // 逐卡串行开发（v0.7.1 方甲，老板拍板）：一张卡一个 ask——卡粒度纪律的机械半，拆了的卡不再被拼回一个问句（单 ask 过载=实测假死与超支根因）
+  let dev: DevReport = { summary: "", artifacts: [], numbers: [], experiments: "未报告", dangerRequests: [], leftover: "无" };
+  for (let ci = 0; ci < (cards.cards || []).length; ci++) {
+    const part = await algo.ask<DevReport>(
+      "任务卡 " + (ci + 1) + "/" + (cards.cards || []).length + "（本轮逐卡串行：每张卡一个 ask、只开发本卡——绝不把多类交付挤进一个 ask，单 ask 过载是实测假死与超支根因）：\n" + (cards.cards || [])[ci] + "\n" +
+      "开发并自测。纪律：端到端真实跑、数字注明口径、竞品保真对照；本轮选中的每个方案都必须得到充分验证（三级执行：MINI_PILOT/PILOT 只用于调试，主张只来自 FULL）；第 1 轮结束时必须已有至少一个来自完整对比的端到端数字。与已有工作对比前先建口径对照表（每家原始约定/数据集/指标定义）；表示或预处理假设先用标准工具做零成本锚点实验再决定是否建全量；每轮至少做一个边界实验（方法何时失效、参数多敏感），主张注明证据范围（数据集与条件）。如实报告 experiments（尝试数/跑通数），零结果入档并解释机制。",
+    );
+    dev = {
+      summary: (dev.summary !== "" ? dev.summary + "；" : "") + (part.summary || ""),
+      artifacts: dev.artifacts.concat(part.artifacts || []),
+      numbers: dev.numbers.concat(part.numbers || []),
+      experiments: [dev.experiments, (part.experiments || "").trim()].filter((s) => s !== "" && s !== "未报告").join("；") || "未报告",
+      dangerRequests: dev.dangerRequests.concat(part.dangerRequests || []),
+      leftover: [dev.leftover, (part.leftover || "").trim()].filter((s) => s !== "" && s !== "无").join("；") || "无",
+    };
+    log("任务卡 " + (ci + 1) + "/" + (cards.cards || []).length + " 完成：" + (part.summary || "").slice(0, 120));
+  }
   if (round === 1 && !(dev.numbers || []).some((n) => /^\s*FULL/.test(n))) {
     dev = await algo.ask<DevReport>(
       "第 1 轮必须以至少一个来自完整对比（FULL 级）的端到端数字收尾，禁止以最小对比代替。请现在补跑并返回 DevReport（numbers 填入该数字与口径，并以 FULL/PILOT/MINI_PILOT 开头注明层级，机械核查以 FULL 开头判定）；若确实无法做到，写明具名的阻断约束（数据/算力/时间窗）并保持 numbers 为空——该说明将记入账本并在评估报告如实呈现。",
@@ -1116,9 +1133,10 @@ for (let round = startRound; round <= rounds; round++) {
   }
 
   phase("审稿团评审");
+  const panelPool = Array.from({ length: 3 }, (_, i) => agent("审稿人-R" + round + "-" + (i + 1), barePersona(tiered ? STRONG : undefined))); // 轮顶预建名池（v0.7.1，模板内消化宿主显示缺陷）：编辑定 1–3、未用的闲置零开销——fan-out 内动态创建的代理在宿主面板不可见（实测），预建可见；每轮新建保留盲审新鲜性
   const settled = await Promise.allSettled(
     Array.from({ length: n }, (_, i) =>
-      agent("审稿人-r" + round + "-" + (i + 1), barePersona(tiered ? STRONG : undefined)).ask<Review>(
+      panelPool[i].ask<Review>(
         invite.brief + "\n\n你是相邻领域（与本研究方向相关但不重叠）的独立审稿人。评审只依据简报及其所指材料——不翻看简报之外的仓库内容、git 历史与账本（盲审纪律），只读不改任何文件：对稿件与证据映射提出尖锐质询（附证据出处），并给出下一轮迭代建议，给 severity。小心数字幻觉：好的数据表现不代表好的情况——严谨考虑稿件数字的含义是不是表面那么简单，支撑它的理论可能本身有错，而漂亮的数字会加固这一理论幻觉。如无法判断，如实说明。",
       ),
     ),
