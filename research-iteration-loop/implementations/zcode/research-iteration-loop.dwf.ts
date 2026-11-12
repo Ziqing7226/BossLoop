@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 科研迭代循环（v0.7.7）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3；实证类审稿质询只以证据闭环）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表——机制类主张须附区分性证据 + 含 canary 的 selfcheck 机械门禁 + 协议面指纹防评测面漂移，测试基建归其所有；失败三分类定流向）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
+description: 科研迭代循环（v0.7.8）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3；实证类审稿质询只以证据闭环）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表——机制类主张须附区分性证据 + 含 canary 的 selfcheck 机械门禁 + 协议面指纹防评测面漂移，测试基建归其所有；失败三分类定流向）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
 args:
   idea:
     type: string
@@ -197,7 +197,7 @@ const CHIEF_ZH = [
   "方案 Portfolio 是每轮动态的：每轮开始时你依据最新审稿意见重新选定 1–3 个方案（可新增、移除、替换；有得选时选满 3 个，不足时 1–2 个，至少 1 个）与竞品集合；本轮选中的每个方案都必须得到充分验证，禁止用最小对比冒充验证——最小对比会带偏结论。",
   "每轮规划：上一轮审稿意见逐条处置——要么转成本轮任务卡，要么给出基于存档工件的反驳；实证类质询（针对数字、实验或证据的）只能以证据闭环——无现成证据时新入档（新任务卡产出工件+映射行），有现成存档工件可释疑时指明该工件，纯措辞修订不算闭环；不许空口忽略。",
   "新颖性处理：若文献读者报告该想法已被做过，不要终止——把范围重定界到该方向上尚未解决的缺口，重新选定方案，跑满全部轮次。",
-  "git 写操作权限：只执行问句明示的 git add/commit；推送由编排器统一执行并核验——你在任何时刻都不执行 git push，也不执行 reset/rebase/tag 等其它写仓库的 git 操作。",
+  "git 写操作权限：只执行问句明示的 git add/commit；推送由编排器统一执行并核验——你在任何时刻都不执行 git push，也不执行 reset/rebase/tag 等其它写仓库的 git 操作。明示例外（本条之内）：任务卡或问句明示要求的 git mv 照做；危险操作条款下已获批准的写法按批准执行——例外之外本条绝对。",
   "老板反馈（LoopMail/FromBoss.md）：每轮发卡前你自己实时读该文件（老板运行中下达的指令，可能为空；编排器不再代读注入——脚本层读取在续跑/重放时返回陈旧快照，子代理直读天然新鲜）——逐条落实到本轮任务卡并把应用情况记入账本；与既有要求不一致时以老板最新指令为准并如实记录；新指令使已排产工作失效时，本轮任务卡以「作废重做」的显式决策开头。老板要暂停/打断本运行时会在 FromBoss.md 写下【老板停点】标记——检测到即停机回执（剩余轮次不再执行，评估报告如实呈现），绝不开工。【权源纪律】部署方（运行本工作流的人）是老板的秘书而非老板本人：仅标注【老板原话】的文本具老板效力，【秘书注】等展开性文本只是秘书的理解，冲突时一律以老板原话为准；拿不准哪句是老板原话的列入待答问题，绝不把秘书口径当老板裁定。",
   "诚实第一：数字必须可溯源到存档工件；不确定就说不确定；指令矛盾时如实升级提问。",
   "全程中文。",
@@ -210,7 +210,7 @@ const ALGO_ZH = [
   "测试冻结规则：测试工程师验证期间，你不修改被测实现（否则测试对象在漂移，结论无效）。此时你只做两件事：准备可复现包（环境/命令/随机种子/数据窗口），响应门禁失败。测试报告返回后再按裁决修复。",
   "长任务安全（硬约束）：逐批次/逐场景用独立子进程运行，结果立即落盘后退出释放内存；脚本内置内存护栏（超约物理内存 70–80% 主动终止并保存现场）；每步有超时与失败出口；数据集与既有产物只读，不删除不覆盖；生成的代码视为不可信，可行时优先在容器/受限网络中执行（containment 是降险不是保证）。",
   "上下文纪律：长命令输出重定向到文件后用 tail/grep 取摘要，不整屏阅读；参考材料只读相关节选；工具输出超长只取与判定相关的摘录。",
-  "git 写操作权限：只执行问句明示的 git add/commit；add 一律逐个显式路径（先 git status --porcelain 盘点），绝不 git add -A 与 git add -u（实测：-A 曾把构建残留与老板亲改文件收编进提交）；开局邮件「老板所有文件」节登记的文件绝不 add、绝不修改（除非任务卡明示）；你在任何时刻都不执行 git push，也不执行 reset/rebase/tag 等其它写仓库的 git 操作。",
+  "git 写操作权限：只执行问句明示的 git add/commit；add 一律逐个显式路径（先 git status --porcelain 盘点），绝不 git add -A 与 git add -u（实测：-A 曾把构建残留与老板亲改文件收编进提交）；开局邮件「老板所有文件」节登记的文件绝不 add、绝不修改（除非任务卡明示）；你在任何时刻都不执行 git push，也不执行 reset/rebase/tag 等其它写仓库的 git 操作。明示例外（本条之内）：任务卡或问句明示要求的 git mv 照做；危险操作条款下已获批准的写法按批准执行——例外之外本条绝对。",
   "印戳与运行日志产物命名唯一化：运行日志/印戳文件名必须含轮次与尝试序号（如 _r2tq_gate_run1.log），绝不覆写此前轮次或此前尝试的同名印戳——覆写即销毁门禁证据。",
   "破坏性操作铁律：删除数据集/覆盖既有产物/git reset --hard/git clean -fdx/force push/改写已推送历史，一律只申报不执行——写入 dangerRequests（命令、原因、影响范围），等总工程师裁决后按其批准的写法执行；执行后回报必须逐字引用实际执行的每条命令原文——编排器按批准写法做逐字/归一一致性核查，转述、概括、只报结果都算未确认。老板已预授权的操作同样必须申报，且批复出处写入 dangerRequests 的 reason（如「预授权出处：FromBoss 某节批复原文」），总工据此直接放行——预授权免的是重复请示，不是申报与核验。",
   "你无权向老板申请权限：内部升级链只有你→总工程师；总工否决的事项记账即可；确需老板决策的由总工汇总进《初步评估报告》待老板决策节——宿主的升级通道绝不是你的老板通道（它是宿主内建的：你是第一防线，绝不使用），技术死路与无法推进的问题一律走内部链交总工，由其决定记账挂起并在《初步评估报告》向老板呈现（研究循环无打断机制）；问句措辞含「请老板…」即越级。",
@@ -241,7 +241,7 @@ const TEST_ZH = [
   "破坏性操作判据：超出申报裁决清单的——数据集或既有产物被删/被覆盖、历史被改写、force 痕迹——标为严重问题并索要总工裁决记录；实验产物正常迭代替换不属此列。",
   "长上下文纪律：diff 或审查面偏大时，先盘变更清单、再对高风险区（逻辑改动、门禁相关、涉危险操作处）深读；verdict 的 coverage 字段必须写明深审了哪些、只略读了哪些——它写在知道问题在哪之前，日后问题落在略读区将以此对账。",
   "整读义务：本轮 diff 触及的每个文件必须完整阅读（含改动处前后文），绝不只读其中几段就下结论；略读只允许发生在本轮 diff 之外的区域，且必须在 coverage 中申报；长命令输出重定向到文件后 tail/grep 取摘要。",
-  "git 写操作权限：只执行问句明示的 git add/commit；你在任何时刻都不执行 git push，也不执行其它写仓库的 git 操作。",
+  "git 写操作权限：只执行问句明示的 git add/commit；你在任何时刻都不执行 git push，也不执行其它写仓库的 git 操作。明示例外（本条之内）：任务卡或问句明示要求的 git mv 照做；危险操作条款下已获批准的写法按批准执行——例外之外本条绝对。",
   "核验手段与换版纪律：文件级断言用路径过滤命令核验（git log --oneline -- <路径>、git diff --cached --name-only），绝不 grep git status --porcelain 的输出判定非 ASCII 路径——porcelain 八进制转义曾致「文件未提交」误判；台账/开局邮件版本字串升版时，依赖旧字串的断言（selfcheck 的 grep、版本比对）同一提交内同步更新——换版与断言面永不同轮脱节。",
   "每条裁决附证据。全程中文。",
 ].join("\n");
@@ -592,7 +592,7 @@ async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
   phase("危险操作·申报与裁决");
   const raw = await chief.ask<DangerReview>(
     "破坏性操作审核（你是强模型档裁决者，此判断不下放给老板）。申报人：算法工程师（廉价档）。逐条裁决：" + JSON.stringify(reqs) +
-    "。判断依据：影响范围能否精确界定、是否可逆、有无更窄更安全的等价写法（限定路径、先 dry-run、先备份、先列受影响清单）；默认 reject，能给安全写法用 approve-with-change 并写 safeForm，必要且安全才 approve。批准附条件：先备份保证可逆、失败即停；同一操作有界重试仍败就挂起（在账本记明并进入《初步评估报告》，不再尝试），绝不改用影响面更大的方案。执行层为固定 argv：含输出重定向（> 与 >>）、管道（|）、命令替换（$() 与反引号）或分号串联的写法在执行层跑不出来——绝不原样 approve：一律 reject，或 approve-with-change 给出拆分后的逐步可执行等价写法（如把 git show <ref>:<path> > <file> 拆为「先读原文件内容、再用文件写入工具落盘」两步，各自可归一命中）；批准一个执行层跑不出的形态＝执行确认永远缺失（实测 v0.7.2 P2：redirect 恢复命令两轮复发执行确认缺失）。请求 reason 中注明老板预授权批复出处（预授权随任务卡携带、申报时写入 reason）的：凭批复出处直接 approve（safeForm 取命令原文或批复限定写法，reason 保留出处）——预授权免的是重复请示与升级绕路，影响范围界定与批准写法核验照旧。仅当实验在无该操作时根本无法继续，才在 reason 中如实写明「实验受阻」，交由《初步评估报告》呈现（研究循环无打断机制）。返回 DangerReview（decisions 与请求逐条对应）。",
+    "。判断依据：影响范围能否精确界定、是否可逆、有无更窄更安全的等价写法（限定路径、先 dry-run、先备份、先列受影响清单）；默认 reject，能给安全写法用 approve-with-change 并写 safeForm，必要且安全才 approve。批准附条件：先备份保证可逆、失败即停；同一操作有界重试仍败就挂起（在账本记明并进入《初步评估报告》，不再尝试），绝不改用影响面更大的方案。执行层为固定 argv：含输出重定向（> 与 >>）、管道（|）、命令替换（$() 与反引号）或分号串联的写法在执行层跑不出来——绝不原样 approve：一律 reject，或 approve-with-change 给出拆分后的逐步可执行等价写法（如把 git show <ref>:<path> > <file> 拆为「先读原文件内容、再用文件写入工具落盘」两步，各自可归一命中）；批准一个执行层跑不出的形态＝执行确认永远缺失（实测 v0.7.2 P2：redirect 恢复命令两轮复发执行确认缺失）。请求 reason 中注明老板预授权批复出处（预授权随任务卡携带、申报时写入 reason）的：凭批复出处直接放行——批复写法可执行就 approve（safeForm 留空），批复写法含执行层跑不出的形态就按上一段固定 argv 条款给出拆分后的可执行等价写法 approve-with-change（reason 保留出处）——预授权免的是重复请示与升级绕路，影响范围界定与批准形态核验照旧。仅当实验在无该操作时根本无法继续，才在 reason 中如实写明「实验受阻」，交由《初步评估报告》呈现（研究循环无打断机制）。返回 DangerReview（decisions 与请求逐条对应）。",
   );
   let decisions = raw.decisions ?? [];
   const mismatched = decisions.length === reqs.length && reqs.some((r, i) => !decisions[i] || decisions[i].command !== r.command);
@@ -832,8 +832,8 @@ for (let round = startRound; round <= rounds; round++) {
     }
     const igR = await G(["ls-files", "--others", "--ignored", "--exclude-standard", "--", "*.png", "*.jpg", "*.jpeg", "*.svg", "*.webp", "*.gif"], 60000);
     for (const pI of (igR.stdout || "").split("\n").map((s) => s.trim())) {
-      // 被 .gitignore 的交付图只可能在老板面向的位置（仓库根或 docs/）——依赖目录与 Agents/ 不算交付
-      if (pI !== "" && isImgR(pI) && imageFilesR.indexOf(pI) < 0 && (pI.indexOf("/") < 0 || pI.indexOf("docs/") === 0)) imageFilesR.push(pI);
+      // 被 .gitignore 的交付图按老板面向位置检测——Agents/ 之外一律检测（落点契约允许按功能命名的目录）；Agents/ 内不算交付
+      if (pI !== "" && isImgR(pI) && imageFilesR.indexOf(pI) < 0 && pI.indexOf("Agents/") !== 0) imageFilesR.push(pI);
     }
   } catch {
     imgDetectOkR = false; // 检测失败必须如实披露，不得静默按无图处理
@@ -845,8 +845,9 @@ for (let round = startRound; round <= rounds; round++) {
     if (roundHead0 && repoRoot !== "") {
       const btR2 = await G(["ls-tree", "-r", "--name-only", roundHead0], 60000);
       const stR3 = await G(["status", "--porcelain"], 60000);
+      const dfR3 = await G(["diff", "--name-only", roundHead0, "HEAD"], 60000);
       const baseTreeR2 = new Set((btR2.stdout || "").split("\n").map((s) => s.trim()).filter((s) => s !== ""));
-      const changedR2 = new Set((stR3.stdout || "").split("\n").map((l) => l.trim().replace(/^(?:[MARTD?]{1,2}|\w+)\s+/, "").trim()));
+      const changedR2 = new Set(((dfR3.stdout || "") + "\n" + (stR3.stdout || "")).split("\n").map((l) => l.trim().replace(/^(?:[MARTD?]{1,2}|\w+)\s+/, "").trim()));
       histImgsR = imageFilesR.filter((p) => baseTreeR2.has(p) && !changedR2.has(p));
     }
   } catch { histImgsR = []; } // 不可得时保守退回全量并入（宁可多修，绝不漏修本轮交付物）
@@ -869,7 +870,7 @@ for (let round = startRound; round <= rounds; round++) {
     }
     let specH = 0;
     for (let i = 0; i < specAnchorR.length; i++) specH = (specH * 31 + specAnchorR.charCodeAt(i)) | 0; // 锚定不到规格表时 spec 分量为常数——常数键跨规格变更仍命中，本轮禁用复用（评审修复：宁可重审，绝不复用旧规格下的结论）
-    const vKeyR = vPartsR.join("|") + "|spec:" + specH;
+    const vKeyR = vPartsR.join("|") + "|spec:" + specH + "|hist:" + histImgsR.slice().sort().join(",");
     if (specAnchorR === "") log("视觉记忆化键的规格分量缺失（ToBoss 中锚定不到产物规格表）——本轮不复用视觉结论，重派审阅");
     if (specAnchorR !== "" && vKeyR === visualCacheKeyR) {
       visualNoteR = visualCacheNoteR + "（视觉结论复用：产物集合未变，未重派审阅）";
@@ -884,7 +885,8 @@ for (let round = startRound; round <= rounds; round++) {
     );
     if ((vvR.issues || []).length > 0 && histImgsR.length > 0) { // 机械分拣（实测 v0.7.2 P1）：历史产物缺陷不并入本轮问题清单，挂账披露
       const histNamesR = histImgsR.map((h) => h.split("/").pop() || h);
-      const histIssR = (vvR.issues || []).filter((x) => histNamesR.some((b) => String(x).indexOf(b) >= 0));
+      const curNamesR = imageFilesR.filter((p) => !histImgsR.includes(p)).map((p) => p.split("/").pop() || p);
+      const histIssR = (vvR.issues || []).filter((x) => histNamesR.some((b) => String(x).indexOf(b) >= 0) && !curNamesR.some((b) => String(x).indexOf(b) >= 0));
       if (histIssR.length > 0) {
         vvR.issues = (vvR.issues || []).filter((x) => histIssR.indexOf(x) < 0);
         histIssLedgerR = histIssR.map((x) => String(x)).join("；");
@@ -1213,7 +1215,7 @@ for (let round = startRound; round <= rounds; round++) {
   phase("总工程师·本轮存档");
   const head0 = await HEADR(); // 瞬态失败重试（B#25）——存档核验不再裸读
   const archived = await chief.ask<string>(
-    "把本轮记入 Agents/ledger.md（头部含仓库标识行" + (repoRoot ? "：" + repoRoot : "") + "与一行一轮的目录：本轮先更新目录行、再追加详情；审稿团 " + n + " 人中缺席 " + absentN + " 人）：任务/产出（" + (dev.summary || "").slice(0, 400) + "）/存档前 HEAD " + (head0 !== "" ? head0.slice(0, 7) : "空树或读取失败") + "/危险操作裁决（" + dangerLog + "）/测试（覆盖声明：" + (verdict.coverage || "").slice(0, 300) + "；视觉审阅：" + visualNoteR.slice(0, 200) + "；claim_map 豁免 " + (exemptCountR >= 0 ? "登记 " + exemptCountR + " 个数字" : "计数未核查——实质核查未完成") + "）/审稿（" + digest.slice(0, 1200) + "）/下轮方向。然后 " + GC + " add <本轮改动文件逐个显式路径> && " + GC + " commit（备份推送由编排器执行并核验，你不执行 push；向云端发布永远是老板的明确动作）。返回一句话。",
+    "把本轮记入 Agents/ledger.md（头部含仓库标识行" + (repoRoot ? "：" + repoRoot : "") + "与一行一轮的目录：本轮先更新目录行、再追加详情；审稿团 " + n + " 人中缺席 " + absentN + " 人）：任务/产出（" + (dev.summary || "").slice(0, 400) + "）/存档前 HEAD " + (head0 !== "" ? head0.slice(0, 7) : "空树或读取失败") + "/危险操作裁决（" + dangerLog + "）/测试（覆盖声明：" + (verdict.coverage || "").slice(0, 300) + "；视觉审阅：" + visualNoteR.slice(0, 200) + (histIssLedgerR !== "" ? "；历史产物挂账：" + histIssLedgerR.slice(0, 400) : "") + "；claim_map 豁免 " + (exemptCountR >= 0 ? "登记 " + exemptCountR + " 个数字" : "计数未核查——实质核查未完成") + "）/审稿（" + digest.slice(0, 1200) + "）/下轮方向。然后 " + GC + " add <本轮改动文件逐个显式路径> && " + GC + " commit（备份推送由编排器执行并核验，你不执行 push；向云端发布永远是老板的明确动作）。返回一句话。",
   );
   const head1 = await HEADR(); // 瞬态失败重试（B#25）——存档核验不再裸读
   let commitOk = head1 !== "" && head1 !== head0;
