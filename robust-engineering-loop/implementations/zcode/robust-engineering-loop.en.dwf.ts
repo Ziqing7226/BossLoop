@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Robust Engineering Loop (v0.7.3), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (the junior's rework budget escalates to the Senior Engineer; the Senior gets one delivery, an unsolved blocker is then skip-adjudicated by the Chief — recorded in the ledger and disclosed in ToBoss — and the run interrupts only when no bypass honors the boss's words' gist and the problem blocks the whole workflow); a round is pushed to the agreed remote only fully green or after an adjudicated skip (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
+description: Robust Engineering Loop (v0.7.6), English UI. Turns one verbatim requirement into a cold-start-verified delivery. The Chief records the requirement ledger and commits to N rounds (boss may lock); each round ships one local commit, then faces a cold-start gate (diff review, robustness suite, canary, zero-warning build, remote-CI carryover) — findings are reproduced before rework (misdiagnoses need evidence rebuttals) and amended into the round commit (the junior's rework budget escalates to the Senior Engineer; the Senior gets one delivery, an unsolved blocker is then skip-adjudicated by the Chief — recorded in the ledger and disclosed in ToBoss — and the run interrupts only when no bypass honors the boss's words' gist and the problem blocks the whole workflow); a round is pushed to the agreed remote only fully green or after an adjudicated skip (GitCoffer by default; append-only, never force). Resumes from the ledger; destructive operations follow a declared-ruled-executed trail, never handed to the boss; model tiering tiered/uniform.
 args:
   requirement:
     type: string
@@ -183,7 +183,7 @@ const CHIEF_EN = [
   "Opening brief (the first mail): after committing the round count and before starting work, write the opening brief as the first mail into LoopMail/ToBoss.md (at most one page, three parts only): what I intend to deliver (each tied to the sentence of the boss's words it answers, quote <=15 chars), how each item counts as passing (machine-checkable), and what I am unsure about (<=3 items, each with my default reading and what happens if it is wrong). Then start immediately — never idle waiting for the boss to look at it; the boss corrects it item by item the next morning.",
   "Ambiguity is a major-issue candidate: when the boss's words cannot be filled into the spec table (e.g. a number reads either as bin width or as axis range), do not pick one literal reading and proceed — quote the words verbatim in the brief's unsure section, or decide from whether the scope changes whether to interrupt.",
   "Three file classes (delivery discipline), bounded by location: docs/ holds formal content only — the deliverable bodies the boss's words name (REPORT.ipynb, the manuscript, method documents, reference originals); LoopMail/ is the boss–chief communication layer with exactly two legitimate files — ToBoss.md (the Chief's delivery-mail master file; the opening brief and the final brief are appended as mails, newest at the top; old mails are never modified; formal docs/ files are referenced by relative links as attachments) plus FromBoss.md (the boss's mid-run feedback, written by the boss, appended in order, never modified by the Chief); any other file appearing under LoopMail/ is judged first — files the boss placed get the FromBoss_ prefix and stay untouched (their content is never modified), stray agent-made products are put away per the delivery-tidying rules, and anything uncertain is treated as boss-placed; other boss-facing historical documents are merged into the ToBoss mail wording, then their bodies move to Agents/; everything under Agents/ is working scaffolding — the ledger, the requirement map, Agents/selfcheck.py, test and debug scripts, code superseded on the way to the final deliverable, falsified history, agent-facing docs. Delivery follows Occam's razor: tidying means git mv-ing scaffolding into Agents/, never deleting a file — deletion is the boss's move; the boss reads everything outside Agents/; if the boss has to open Agents/, the loop has failed.",
-  "Interrupt policy: major issues (infeasible requirement, scope-changing ambiguity, extending the round count, gate still red after " + ATTEMPT_MAX + " gate re-checks) -> interrupt the loop immediately; a destructive operation is not itself an interrupt trigger — it goes to the danger-clause ruling (junior declarations -> Senior Engineer; the Senior Engineer's own declarations in the escalation phase -> you), and only when the round still cannot proceed after the ruling do you interrupt and insert the interrupt report as an urgent mail at the top of LoopMail/ToBoss.md for the boss; minor issues (in-scope implementation details, tooling choices, ordering) -> decide yourself and log the decision. Scope, schedule, quality bar and budget are boss-level tradeoffs — you may not downgrade them to minor.",
+  "Interrupt policy: major issues (infeasible requirement, scope-changing ambiguity, extending the round count, gate still red after " + ATTEMPT_MAX + " gate re-checks and the Chief's skip adjudication found no viable bypass — a viable bypass is recorded-and-skipped with final-brief disclosure, and a criteria-misalignment deadlock never interrupts the boss (v0.7.2 field report P1)) -> interrupt the loop immediately; a destructive operation is not itself an interrupt trigger — it goes to the danger-clause ruling (junior declarations -> Senior Engineer; the Senior Engineer's own declarations in the escalation phase -> you), and only when the round still cannot proceed after the ruling do you interrupt and insert the interrupt report as an urgent mail at the top of LoopMail/ToBoss.md for the boss; minor issues (in-scope implementation details, tooling choices, ordering) -> decide yourself and log the decision. Scope, schedule, quality bar and budget are boss-level tradeoffs — you may not downgrade them to minor.",
   "Round planning: commit to N rounds with a one-line scope each before round 1 (a boss-locked rounds value is final — no adding or dropping); N is the minimum number of rounds that reaches every acceptance criterion — a small problem closable in one round commits exactly 1, never split arbitrarily: each extra round needs its own reason (it delivers an acceptable increment the previous round could not contain), stated per round in roundsOutline; each round re-plan from the ledger — last round's verdict, findings and rebuttals, remote-CI carryover and leftovers must all be disposed of; every work card traces to a requirement entry and embeds the ledger's verbatim sentence (R1/R2...); when last round's fix was contradicted by validation (later validation), this round's cards open with an explicit rollback-vs-fix-forward decision (rollback = restore the old behavior with a fresh normal commit, never rewriting history), evidence first — a contradicted fix is never stacked on; when a new boss directive invalidates already-scheduled work, the next round's cards open with an explicit invalidate-and-redo decision, logged honestly. Pre-authorized items (explicitly cleared by the boss's words or FromBoss, e.g. a class of deletion already ruled on) go into the matching work card with the ruling's source noted — the declaration is never waived (they still go into dangerRequests: the three-stage trail is the mechanical carrier of the authorization, never skipped because of the pre-approval), and the adjudicator releases directly on the provenance per the approved form: what is waived is re-petitioning the boss and the escalation detour, never the declaration, the ruling or the execution verification.",
   "Before issuing each round's cards, check the open questions in requirements.md: with unanswered items, the first card is the answer (including the artifact's form: raw or derived, whether a writer exists).",
   "Work cards that touch a boss requirement must embed the ledger's verbatim sentence from Agents/requirements.md (with its Rn) — never paraphrase from memory: a compressed phrase may serve only as the title, and the verbatim original travels with the card; every content word must survive the retelling — nouns (the object), verbs (the operation), quantifiers, negations, numbers; if any one changes the card is distorted, and when unsure copy the sentence in full. The boss's key content words are protocol words: cards, dev reports, test names and assertion comments, commit messages and documents all reuse the same words, never synonyms. Card-granularity discipline: one work card carries one class of acceptable deliverable (code/docs/data/figures are different classes) — development, rendering, documentation and the formal commit split into separate cards; one oversized card is the field-tested hang-and-burn root cause.",
@@ -209,6 +209,7 @@ const ALGO_EN = [
   "Context discipline: redirect long command output to a file and take summaries via tail/grep — never page through it; read only relevant excerpts of reference material (files touched by this round's diff are exempt — they fall under the tester's full-read duty); take only decision-relevant excerpts of oversized tool output.",
   "Git write scope: run only the git add/commit/amend an ask names; pushes are executed by the orchestrator — never push yourself, and never run reset/rebase/tag or other repository-writing git operations.",
   "Destructive-operation rule: rm -rf / deleting directories or data files / git reset --hard / git clean -fdx / force push / rewriting pushed history / overwriting others' artifacts are declared, never executed unilaterally — put them in dangerRequests (exact command, reason, blast radius) and wait for the Senior Engineer's ruling, then run exactly the approved form; your execution report must quote each command you actually ran verbatim — the orchestrator checks it against the approved form verbatim/normalized, and paraphrases, summaries or result-only reports count as unconfirmed. Operations the boss pre-authorized are declared all the same, with the provenance written into the dangerRequests reason (e.g. \"pre-authorized: the FromBoss ruling quoted on the card\"); the adjudicator releases directly on it — pre-authorization waives re-petitioning, never the declaration and the verification.",
+  "Stamp and run-log artifact names are unique (v0.7.2 field report P7): run-log/stamp file names must carry the round and attempt number (e.g. _r2_gate_run2.log); never overwrite a same-named stamp from an earlier round or attempt — overwriting destroys gate evidence.",
   "You run on the cheap tier as the junior engineer: rework attempts follow the orchestrator's gate budget (cold-start attempts are capped; the last attempt is reserved for one Senior delivery); when the budgeted iterations do not solve it, stop grinding — write up the minimal reproduction and a root-cause hypothesis and hand it to the Senior Engineer (strong tier).",
   "You have no authority to ask the boss for permissions: the internal escalation chain is you -> Senior Engineer -> Chief; what the Chief declines is recorded and done; what truly needs the boss goes into the Chief's decisions-for-the-boss list in the final brief — never raise a request to the boss through any ask or escalation channel (an ask whose wording says \"ask the boss...\" is over-escalation).",
 ].join("\n");
@@ -227,6 +228,7 @@ const VISUAL_EN = [
 
 const TEST_EN = [
   "You are the Test Engineer, cold-started: you work only from the diff (baseline..HEAD) and the repository itself, never from the author's narrative; nobody will hand you the dev report — author claims anchor a verifier, and this is by design.",
+  "Assertion discipline (v0.7.2 field report P6): mechanical assertions pin invariants — relative order, uniqueness, content self-attestation, protocolized semantics; never pin snapshot values that legal operations change (specific mail numbers, file names, one-shot counts) — a legal LoopMail top-insertion falsifies an assertion pinned to a 'first mail' snapshot; pinning a snapshot value is a self-built red gate.",
   "Diff review: review what actually changed, not what was claimed: new code, changed behavior, docs-vs-implementation consistency — and doc quality (professional, concise, free of redundant or duplicated information) is a finding when lacking; user-facing claims are audited too — every claim the diff introduces (README, docs, release notes) maps to a mechanism or a re-runnable check, and each number keeps one source.",
   "Full-read duty: every file touched by this round's diff must be read in full (including the context around the changes) — never conclude from a few paragraphs; skimming is allowed only for repository areas outside this round's diff and must be declared in coverage; for every deeply-read file, coverage states the checks actually performed with line anchors (file:line) for later reconciliation.",
   "Context discipline: redirect long command output to a file and take summaries via tail/grep; the full-read duty overrides excerpt reading for diff-touched files; take only decision-relevant excerpts of oversized tool output.",
@@ -252,7 +254,7 @@ const roundsArg = typeof args.rounds === "number" ? args.rounds : 0;
 const remoteDefault = "gitcoffer"; // deployment bake-in point (v0.7.1): when changing the default, sync with the metadata args.remote default — the fallback and the startup note share this constant, killing the stale-note class (field-tested P3)
 const remoteArg = typeof args.remote === "string" && args.remote !== "" ? args.remote : remoteDefault;
 if (requirement === "") log("Warning: the requirement argument is empty — an amendment resume may have dropped arguments; check this run's arguments; the final brief's requirement line will be missing");
-if (typeof args.remote === "undefined") log("Note: the remote argument is missing (an amendment resume likely dropped it) — falling back to the default " + remoteDefault + "; check the push-target line in the startup log");
+if (typeof args.remote === "undefined" && remoteDefault.length === 0) log("Note: the remote argument is missing (an amendment resume likely dropped it) — the script default is not baked in, so this run has no agreed push target; check the startup configuration");
 const profile = typeof args.profile === "string" ? args.profile : "";
 const focus = typeof args.focus === "string" ? args.focus : "";
 const PROFILE_LINE = (profile ? "\nProject constraints (mandatory, override defaults): " + profile : "") + "\nAlways respond in English.";
@@ -424,7 +426,6 @@ if (ledger === "") {
     /* probe failed — no extra information */
   }
 }
-if (ledger !== "" && typeof args.rounds !== "number") log("Hint: rounds argument missing (likely lost in an amend) — round count follows the ledger; check the startup log");
 let legacyLayout = false; // pre-LoopMail layouts (docs/workflow/, or the intermediate docs/brief.md and docs/boss_directives.md) — migrate everything before resuming; migration is a one-time conversion, after which reads and writes use the LoopMail paths only, with no dual-path fallbacks
 if (ledger === "" && repoRoot !== "") {
   try {
@@ -465,7 +466,7 @@ const G = (gitArgs: string[], timeoutMs = 120000): Promise<WorldRunResult> =>
   world.run("git", repoRoot !== "" ? ["-C", repoRoot, ...gitArgs] : gitArgs, { timeoutMs });
 try {
   const st = await G(["status", "--porcelain"], 60000);
-  if ((st.stdout || "").trim() !== "") log("Warning: working tree not clean — start from a clean tree; recorded honestly in the ledger");
+  if ((st.stdout || "").trim() !== "") log("Warning: working tree not clean — start from a clean tree; recorded honestly in the ledger (disposition path, v0.7.2 field report P12: historical leftovers already registered in the ledger/opening mail, and in-flight leftovers of an amendment resume, are a legal baseline — verify each against the ledger and continue, no tree cleaning needed; only unregistered new dirty files need handling first)");
 } catch {
   /* no git or not checkable: skip */
 }
@@ -555,7 +556,7 @@ let senior = agent("Senior Engineer", persona(ALGO_EN + SENIOR_EN + PROFILE_LINE
 async function adjudicateDanger(reqs: DangerRequest[], requester: string, requesterTier: string, byChief: boolean): Promise<DangerReview> {
   const askText =
     "Destructive-operation review. Requester: " + requester + " (" + requesterTier + "). Rule on each request:\n" + JSON.stringify(reqs) +
-    "\nJudge by: is the blast radius precisely bounded, is it reversible, is there a narrower safe equivalent (scoped path, dry-run first, back up first, list affected files first)? Reject by default; use approve-with-change with a safeForm when a safer equivalent exists; approve only when necessary and safe. Approval carries conditions: back up first so it is reversible, stop on failure; if bounded retries (2-3) still fail, park it (recorded in the ledger, no further attempts) rather than switching to a larger-blast-radius alternative. " +
+    "\nJudge by: is the blast radius precisely bounded, is it reversible, is there a narrower safe equivalent (scoped path, dry-run first, back up first, list affected files first)? Reject by default; use approve-with-change with a safeForm when a safer equivalent exists; approve only when necessary and safe. Approval carries conditions: back up first so it is reversible, stop on failure; if bounded retries (2-3) still fail, park it (recorded in the ledger, no further attempts) rather than switching to a larger-blast-radius alternative. " + "The execution layer is fixed-argv: forms with output redirection (> and >>), pipes (|), command substitution ($() and backticks) or semicolon chaining cannot run as-is — never approve such a form verbatim: reject it, or approve-with-change with a split, step-wise executable equivalent (e.g. split git show <ref>:<path> > <file> into 'read the file content' then 'write it with the file tool', each step individually matchable); approving a form the execution layer cannot run = the execution confirmation is missing forever (v0.7.2 field report P2: a redirect recovery command came back confirmation-missing in two consecutive rounds). " +
     "Requests whose reason notes the boss's pre-authorization provenance (pre-approvals travel on the work card and are written into the reason at declaration time): approve directly on the provenance (safeForm = the command as declared or the form the ruling scoped, keep the provenance in the reason) — pre-authorization waives re-petitioning and the escalation detour, never the blast-radius check or the approved-form verification." +
     "Never hand the decision back to the user: only when the round cannot proceed at all without the operation, say so and recommend an interrupt. Return DangerReview (decisions map one-to-one to the requests).";
   const raw = byChief
@@ -680,8 +681,15 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     break;
   }
   phase("Chief issues cards");
+  let fbFp = "FromBoss fingerprint: unreadable (LoopMail/FromBoss.md read failed — handled honestly)";
+  try {
+    const fbC = await readRepo("LoopMail/FromBoss.md");
+    let fh = 0;
+    for (let i = 0; i < fbC.length; i++) fh = (fh * 31 + fbC.charCodeAt(i)) | 0;
+    fbFp = "FromBoss fingerprint: fb" + (fh >>> 0).toString(16) + " (the boss-feedback must-arrive carrier, v0.7.2 field report P3: a resume cache matches on ask bytes — new boss feedback changes FromBoss's bytes and therefore this ask, so a full-replay fake resume is broken by the fingerprint)";
+  } catch { /* keep the unreadable wording */ }
   let cards = await chief.ask<RoundCards>(
-    "Round " + round + "/" + roundsTotal + ". Requirements live in Agents/requirements.md; planning basis:\n" + String(plan).slice(0, 4000) + "\n" +
+    "Round " + round + "/" + roundsTotal + ". Requirements live in Agents/requirements.md; planning basis:\n" + String(plan).slice(0, 4000) + "\n" + fbFp + "\n" +
     (knownMinors.length > 0 ? "[known minors on account] " + knownMinors.length + " unresolved minor(s) (never gate-blocking; the closing round must clear them) — this round's cards must dispose of each (fix) or state why it stays: " + knownMinors.join("; ") + "\n" : "") +
     (skippedBlockers.length > 0 ? "[Senior-unsolved skips] the following blockers are recorded and skipped per the boss ruling (unsolved after the Senior's single delivery; the Chief's bypass plan is in the ledger) — reopening one requires a card that opens with an explicit decision (reopen or accept the skip), never a silent retry: " + skippedBlockers.join("; ") + "\n" : "") +
     (round === roundsTotal ? "[Closing finalization] this round's cards must include a delivery-directory finalization card: inventory the delivery directories across the repository — (1) rename and merge by function (git mv; a deliverable the boss's own words named is never renamed — its mapping table goes into the final brief for the boss's decision; old mails are never edited — where a rename breaks a relative link in an earlier mail, never patch the old mail, list every broken link in the mapping table: old path → new path → affected mail); (2) process artifacts that are not deliverables, and every test/probe/debug script, are git mv-ed into Agents/ (test code lives under Agents/ only — the repo root and docs/ hold no test code; never deleted — deleting is the boss's move); (3) produce a directory readme (one line per directory: what it is, which checkpoint/requirement it serves) whose body lives in Agents/ (scaffolding), its content carried by the Chief into the final brief's deliverables section.\n" : "") +
@@ -725,6 +733,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     break;
   }
   // Card-to-ledger verbatim check (retelling-distortion defense, line-level): a card citing an Rn must fully contain that Rn's registered line from the ledger (with its Rn prefix, whitespace-normalized) — a flipped word inside the sentence, a borrowed sentence from another Rn, and bypasses via shared strings like paths are all caught; only lines that open with the Rn count as registered lines (index lines and cross-reference lines never pass; heading, list or emphasis decoration is fine); language-neutral, no character-count magic
+  let rnBackfill = (card: string): string => ""; // mechanical remedy for reconciliation gaps (v0.7.2 field report P5): the orchestrator embeds the missing ledger lines into the dev asks — the retelling-distortion defense does not idle when card faces come back incomplete
   let reqRawC = "";
   try {
     reqRawC = await readRepo("Agents/requirements.md");
@@ -750,6 +759,16 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       }
     };
     parseReq(reqRawC);
+    rnBackfill = (card: string): string => {
+      const citedB = Array.from(new Set(card.match(/\bR\d+\b/g) || []));
+      const cNormB = card.replace(/\s+/g, "");
+      const partsB: string[] = [];
+      for (const rnB of citedB) {
+        const linesB = linesByRn.get(rnB) || [];
+        if (linesB.length > 0 && !linesB.some((l) => cNormB.indexOf(l) >= 0)) partsB.push(rnB + " ledger line (mechanical remedy for the reconciliation gap — these verbatim words are the anchor; a distorted card face never changes the content-word baseline): " + linesB.join(" ∥ "));
+      }
+      return partsB.length > 0 ? "\n" + partsB.join("\n") : "";
+    };
     const verbatimOk = (card: string): boolean => {
       const c = card.replace(/\s+/g, "");
       const cited = Array.from(new Set(card.match(/\bR\d+\b/g) || []));
@@ -786,7 +805,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   for (let ci = 0; ci < (cards.cards || []).length; ci++) {
     const cardFirst = ci === 0;
     const part = await algo.ask<DevReport>(
-      "Round " + round + " work card " + (ci + 1) + "/" + (cards.cards || []).length + " (this round runs the cards serially: one ask per card, build this card only — never bundle several deliverable classes into one ask; an overloaded single ask is the field-tested hang-and-burn root cause):\n" + (cards.cards || [])[ci] + (cardFirst ? remoteCiBlock : "") +
+      "Round " + round + " work card " + (ci + 1) + "/" + (cards.cards || []).length + " (this round runs the cards serially: one ask per card, build this card only — never bundle several deliverable classes into one ask; an overloaded single ask is the field-tested hang-and-burn root cause):\n" + (cards.cards || [])[ci] + rnBackfill(String((cards.cards || [])[ci])) + (cardFirst ? remoteCiBlock : "") +
       "\nBuild this card only." + (cardFirst ? "" : " The round commit must already exist (the first card created it) — if HEAD carries no round commit, create it with a plain commit first, never land the --amend on the baseline commit.") + " Develop and update docs, then " + GC + " add each changed file by explicit path && " + GC + (cardFirst ? " commit (create the round commit, one-sentence message)" : " commit --amend --no-edit (fold into the round commit)") + ". Return DevReport (summary = one sentence on this card's output; requirementCoverage = the requirement ids this card covered; leftover = this card's leftovers, \"none\" when none; dangerRequests declare only, never execute).",
     );
     dev = {
@@ -938,6 +957,18 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     imageFiles = await detectImages();
     let visualOk = imageFiles.length === 0;
     visualNote = imageFiles.length === 0 ? (imgDetectOk ? "no image artifacts this round: not applicable" : "image-artifact detection failed — treated as no images, recorded honestly") : "not reviewed yet";
+    let histImgs: string[] = []; // criteria layering (v0.7.2 field report P1): historical artifact images left by earlier rounds — their presentation defects are ledgered without blocking, retired when the replacement lands
+    try {
+      if (baseline !== "" && repoRoot !== "") {
+        const btR = await G(["ls-tree", "-r", "--name-only", baseline], 60000);
+        const dfR = await G(["diff", "--name-only", baseline, "HEAD"], 60000);
+        const stR2 = await G(["status", "--porcelain"], 60000);
+        const baseTreeR = new Set((btR.stdout || "").split("\n").map((s) => s.trim()).filter((s) => s !== ""));
+        const changedR = new Set(((dfR.stdout || "") + "\n" + (stR2.stdout || "")).split("\n").map((l) => l.trim().replace(/^(?:[MARTD?]{1,2}|\w+)\s+/, "").trim()));
+        histImgs = imageFiles.filter((p) => baseTreeR.has(p) && !changedR.has(p));
+      }
+    } catch { histImgs = []; } // when the layering criterion is unavailable, fall back conservatively to full blocking (rather re-fix than miss this round's deliverable)
+
     let visualP: Node<VisualVerdict> | null = null;
     let vKey = "";
     let specKeyOk = true; // spec-hash readability (review fix): when unreadable the spec key component degrades to a constant — a constant key still hits across a spec change, so reuse is disabled this round
@@ -963,6 +994,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       } else {
         visualP = visualReviewer.ask<VisualVerdict>(
           "This round's task: " + cards.title + ". Spec: the artifact spec table in Agents/requirements.md. Open and review each image (repo-relative paths — open them by absolute path per the repository-root discipline):\n" + imageFiles.join("\n") +
+          (histImgs.length > 0 ? "\n[Criteria layering] the images below are historical artifacts left by earlier rounds (not changed this round) — their presentation defects go into the summary under a 历史挂账 prefix, not into issues (the orchestrator sorts them mechanically into the ledger; they are retired when the replacement lands); the rest of the images are this round's deliverables — review them in full: " + histImgs.join(", ") : "") +
           "\nissues carry spec violations and product defects only (wrong resolution/domain, wrong palette, rendering holes or broken images, large blanks or a handful of points, facts contradicting the claimed conclusion — each citing a spec row or reproducible evidence); presentation/information limits (elements the spec never asked for, a first frame that cannot show the difference, weak support) do not go into issues — put them in the summary under an 观感限制 prefix; note \"left for the boss to judge\" where the look is the boss's own eye. Return VisualVerdict (name the file and what you saw).",
         ); // not awaited: runs concurrently with the selfcheck; the verdict merges at the gate and is memoized — a mechanical-failure round pays for the review once
       }
@@ -1067,6 +1099,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
         vKey = await hashArtifacts(imgNow);
         vv = await visualReviewer.ask<VisualVerdict>(
           "This round's task: " + cards.title + ". Spec: the artifact spec table in Agents/requirements.md. Open and review each image (repo-relative paths — open them by absolute path per the repository-root discipline):\n" + imageFiles.join("\n") +
+          (histImgs.length > 0 ? "\n[Criteria layering] the images below are historical artifacts left by earlier rounds (not changed this round) — their presentation defects go into the summary under a 历史挂账 prefix, not into issues (the orchestrator sorts them mechanically into the ledger; they are retired when the replacement lands); the rest of the images are this round's deliverables — review them in full: " + histImgs.join(", ") : "") +
           "\nissues carry spec violations and product defects only (wrong resolution/domain, wrong palette, rendering holes or broken images, large blanks or a handful of points, facts contradicting the claimed conclusion — each citing a spec row or reproducible evidence); presentation/information limits (elements the spec never asked for, a first frame that cannot show the difference, weak support) do not go into issues — put them in the summary under an 观感限制 prefix; note \"left for the boss to judge\" where the look is the boss's own eye. Return VisualVerdict (name the file and what you saw).",
         );
         visualNote = vv.summary + ((vv.issues || []).length > 0 ? " | issues: " + (vv.issues || []).join("; ") : "");
@@ -1077,6 +1110,17 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
         visualNote = vv.summary + ((vv.issues || []).length > 0 ? " | issues: " + (vv.issues || []).join("; ") : "");
         visualOk = (vv.issues || []).length === 0;
         if (imgDetectOk) { visualCacheKey = vKey; visualCacheOk = visualOk; visualCacheNote = visualNote; }
+      }
+      if ((vv.issues || []).length > 0 && histImgs.length > 0) { // mechanical sort (v0.7.2 field report P1): historical-artifact defects leave the blocking list, ledgered for disclosure
+        const histNames = histImgs.map((h) => h.split("/").pop() || h);
+        const histIss = (vv.issues || []).filter((x) => histNames.some((b) => String(x).indexOf(b) >= 0));
+        if (histIss.length > 0) {
+          vv.issues = (vv.issues || []).filter((x) => histIss.indexOf(x) < 0);
+          visualNote = vv.summary + ((vv.issues || []).length > 0 ? " | issues: " + (vv.issues || []).join("; ") : "") + " | historical-artifact ledger (not blocking; retired when the replacement lands): " + histIss.join("; ");
+          visualOk = (vv.issues || []).length === 0;
+          if (imgDetectOk) { visualCacheOk = visualOk; visualCacheNote = visualNote; }
+          log("Visual criteria layering (field report P1): " + histIss.length + " historical-artifact (not changed this round) defect(s) ledgered without blocking — disclosed in the ledger and the final brief");
+        }
       }
       if (!visualOk) log("Visual review not passed: " + visualNote.slice(0, 300));
     }
@@ -1151,10 +1195,10 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     headA = headFix;
     rebuttedCount += (fix.rebutted || []).length;
     if (attempt === ATTEMPT_MAX) {
-      // The attempt budget is exhausted (boss's 2026-11-11 rule: at most 2 cold starts per round) — the last attempt's Senior delivery cannot get a cold-start recheck inside the budget: the boss's 2026-11-08 ruling engages immediately as skip adjudication (told honestly that the delivery went unverified); mechanical/visual reds without blockers interrupt honestly
-      if (seniorUsed && gateOpen() > 0) {
+      // The attempt budget is exhausted (boss's 2026-11-11 rule: at most 2 cold starts per round) — the last attempt's Senior delivery cannot get a cold-start recheck inside the budget: the boss's 2026-11-08 ruling engages immediately as skip adjudication (told honestly that the delivery went unverified); mechanical reds without blockers interrupt honestly (visual reds join the skip adjudication — a criteria-misalignment deadlock never interrupts the boss, v0.7.2 field report P1)
+      if (seniorUsed && (gateOpen() > 0 || !visualOk)) {
         const skipVerdictC = await chief.ask<{ bypass: string; interrupt: boolean }>(
-          "The Senior Engineer (strong tier) has made their single delivery this round (the attempt budget is exhausted, so this delivery went without a cold-start recheck — adjudicate on that honest basis); the following is the last recheck's unsolved-blocker list from before the Senior's rework (a snapshot — the Senior's actual fixes are per its digest below):\n" + JSON.stringify(openBlockers) + "\nMechanical state (this delivery went without a cold-start recheck — every check below is the current judgment): verdict.passed=" + verdict.passed + "; commitOk=" + commitOk + "; canary=" + (canary ? (canaryRun ? "yes (reported)" : "yes (CANARY line missing)") : "none") + "; requirement_map=" + (mapOk ? "valid" : "missing") + "; destructive-op trail consistent=" + (dangerConsistent ? "yes" : "no") + "; selfcheck exit=" + (canary ? exitCode : "not run") + "; red digest=" + capRedSummary(exitCode, gateOpen(), dangerConsistent, visualOk) + (lastFix ? "\nSenior rework digest: fixed[" + (lastFix.fixed || []).slice(0, 8).join("; ") + "] rebutted[" + (lastFix.rebutted || []).map((r) => (r && r.id ? r.id : "?")).join("; ") + "]" : "") + "\nBoss ruling: unsolved means skipped — adjudicate which path: (1) a bypass compatible with the boss's words' gist (Agents/requirements.md ledger is the authority) that lets the workflow continue → bypass = one sentence (it goes into the ledger honestly and is disclosed to the boss item by item in the final brief, never silently); (2) the problem blocks the whole workflow and every bypass violates the boss's words' gist → interrupt=true, this round interrupts to the boss. Return JSON {bypass, interrupt}.",
+          "The Senior Engineer (strong tier) has made their single delivery this round (the attempt budget is exhausted, so this delivery went without a cold-start recheck — adjudicate on that honest basis); the following is the last recheck's unsolved-blocker list from before the Senior's rework (a snapshot — the Senior's actual fixes are per its digest below):\n" + JSON.stringify(openBlockers) + (!visualOk ? "\nthe visual review did not pass (defects still belonging to this round's deliverables after criteria layering):\n" + visualNote.slice(0, 400) : "") + "\nMechanical state (this delivery went without a cold-start recheck — every check below is the current judgment): verdict.passed=" + verdict.passed + "; commitOk=" + commitOk + "; canary=" + (canary ? (canaryRun ? "yes (reported)" : "yes (CANARY line missing)") : "none") + "; requirement_map=" + (mapOk ? "valid" : "missing") + "; destructive-op trail consistent=" + (dangerConsistent ? "yes" : "no") + "; selfcheck exit=" + (canary ? exitCode : "not run") + "; red digest=" + capRedSummary(exitCode, gateOpen(), dangerConsistent, visualOk) + (lastFix ? "\nSenior rework digest: fixed[" + (lastFix.fixed || []).slice(0, 8).join("; ") + "] rebutted[" + (lastFix.rebutted || []).map((r) => (r && r.id ? r.id : "?")).join("; ") + "]" : "") + "\nBoss ruling: unsolved means skipped — adjudicate which path: (1) a bypass compatible with the boss's words' gist (Agents/requirements.md ledger is the authority) that lets the workflow continue → bypass = one sentence (it goes into the ledger honestly and is disclosed to the boss item by item in the final brief, never silently); (2) the problem blocks the whole workflow and every bypass violates the boss's words' gist → interrupt=true, this round interrupts to the boss. Return JSON {bypass, interrupt}.",
         );
         if (skipVerdictC.interrupt === true) {
           const irC = await chief.ask<string>(
@@ -1167,12 +1211,18 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
           gate = "interrupt (Senior-unsolved with no compatible bypass — Chief-adjudicated interrupt, report at the top of ToBoss)";
           break;
         }
-        if (!visualOk) { gate = "attempt budget exhausted (" + capRedSummary(exitCode, gateOpen(), dangerConsistent, visualOk) + ") — the Senior's delivery went unverified and the visual review did not pass; interrupting honestly"; break; }
+        if (!visualOk) { // the visual red joins the Chief's skip adjudication like blockers (v0.7.2 field report P1: a criteria-misalignment deadlock never goes to a boss interrupt) — the skip enters the ledger and the final brief
+          const visSkipN = "R" + round + " visual review failed (this round's deliverable defects after criteria layering): attempt budget exhausted, recorded and skipped — the Chief's bypass plan: " + String(skipVerdictC.bypass || "(the Chief gave no one-sentence plan; recorded honestly)").slice(0, 200);
+          skipNote = (skipNote === "" ? "" : skipNote + "; ") + visSkipN;
+          log(visSkipN);
+        }
         if (!dangerConsistent || !commitOk) { gate = "attempt budget exhausted (" + capRedSummary(exitCode, gateOpen(), dangerConsistent, visualOk) + ") — the destructive-op trail is inconsistent or the round commit never landed: a protocol-integrity breach cannot be recorded as a skip; interrupting honestly"; break; }
-        for (const f of openBlockers) skippedBlockers.push("R" + round + "|" + f.id + ": " + (f.evidence || "").slice(0, 100));
-        skipNote = (skipNote === "" ? "" : skipNote + "; ") + "R" + round + " " + openBlockers.map((f) => f.id).join("/") + ": attempt budget exhausted, the Senior's single delivery went unverified, recorded and skipped — the Chief's bypass plan: " + String(skipVerdictC.bypass || "(the Chief gave no one-sentence plan; recorded honestly)").slice(0, 200);
-        log(skipNote);
-        gate = "pass (attempt " + attempt + ", " + openBlockers.length + " blocker(s) recorded and skipped — the Senior's delivery went unverified (attempt budget exhausted), unre-checked mechanical state: " + capRedSummary(exitCode, gateOpen(), dangerConsistent, visualOk) + "; the bypass plan is in the ledger, mandatory disclosure in the final brief)";
+        if (openBlockers.length > 0) { // a visual-only red carries no blocker list — never append a redundant empty entry
+          for (const f of openBlockers) skippedBlockers.push("R" + round + "|" + f.id + ": " + (f.evidence || "").slice(0, 100));
+          skipNote = (skipNote === "" ? "" : skipNote + "; ") + "R" + round + " " + openBlockers.map((f) => f.id).join("/") + ": attempt budget exhausted, the Senior's single delivery went unverified, recorded and skipped — the Chief's bypass plan: " + String(skipVerdictC.bypass || "(the Chief gave no one-sentence plan; recorded honestly)").slice(0, 200);
+          log(skipNote);
+        }
+        gate = "pass (attempt " + attempt + ", " + openBlockers.length + " blocker(s) recorded and skipped" + (!visualOk ? "; visual review failed and ledgered as skipped" : "") + " — the Senior's delivery went unverified (attempt budget exhausted), unre-checked mechanical state: " + capRedSummary(exitCode, gateOpen(), dangerConsistent, visualOk) + "; the bypass plan is in the ledger, mandatory disclosure in the final brief)";
         break;
       }
       gate = "attempt budget exhausted (" + capRedSummary(exitCode, gateOpen(), dangerConsistent, visualOk) + ") — interrupting honestly";

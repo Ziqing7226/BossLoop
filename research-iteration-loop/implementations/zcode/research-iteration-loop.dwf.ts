@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 科研迭代循环（v0.7.3）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3；实证类审稿质询只以证据闭环）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表——机制类主张须附区分性证据 + 含 canary 的 selfcheck 机械门禁 + 协议面指纹防评测面漂移，测试基建归其所有；失败三分类定流向）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
+description: 科研迭代循环（v0.7.6）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3；实证类审稿质询只以证据闭环）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表——机制类主张须附区分性证据 + 含 canary 的 selfcheck 机械门禁 + 协议面指纹防评测面漂移，测试基建归其所有；失败三分类定流向）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
 args:
   idea:
     type: string
@@ -211,6 +211,7 @@ const ALGO_ZH = [
   "长任务安全（硬约束）：逐批次/逐场景用独立子进程运行，结果立即落盘后退出释放内存；脚本内置内存护栏（超约物理内存 70–80% 主动终止并保存现场）；每步有超时与失败出口；数据集与既有产物只读，不删除不覆盖；生成的代码视为不可信，可行时优先在容器/受限网络中执行（containment 是降险不是保证）。",
   "上下文纪律：长命令输出重定向到文件后用 tail/grep 取摘要，不整屏阅读；参考材料只读相关节选；工具输出超长只取与判定相关的摘录。",
   "git 写操作权限：只执行问句明示的 git add/commit；add 一律逐个显式路径（先 git status --porcelain 盘点），绝不 git add -A 与 git add -u（实测：-A 曾把构建残留与老板亲改文件收编进提交）；开局邮件「老板所有文件」节登记的文件绝不 add、绝不修改（除非任务卡明示）；你在任何时刻都不执行 git push，也不执行 reset/rebase/tag 等其它写仓库的 git 操作。",
+  "印戳与运行日志产物命名唯一化（实测 v0.7.2 P7）：运行日志/印戳文件名必须含轮次与尝试序号（如 _r2tq_gate_run1.log），绝不覆写此前轮次或此前尝试的同名印戳——覆写即销毁门禁证据。",
   "破坏性操作铁律：删除数据集/覆盖既有产物/git reset --hard/git clean -fdx/force push/改写已推送历史，一律只申报不执行——写入 dangerRequests（命令、原因、影响范围），等总工程师裁决后按其批准的写法执行；执行后回报必须逐字引用实际执行的每条命令原文——编排器按批准写法做逐字/归一一致性核查，转述、概括、只报结果都算未确认。老板已预授权的操作同样必须申报，且批复出处写入 dangerRequests 的 reason（如「预授权出处：FromBoss 某节批复原文」），总工据此直接放行——预授权免的是重复请示，不是申报与核验。",
   "你无权向老板申请权限：内部升级链只有你→总工程师；总工否决的事项记账即可；确需老板决策的由总工汇总进《初步评估报告》待老板决策节——宿主的升级通道绝不是你的老板通道（它是宿主内建的：你是第一防线，绝不使用），技术死路与无法推进的问题一律走内部链交总工，由其决定记账挂起并在《初步评估报告》向老板呈现（研究循环无打断机制）；问句措辞含「请老板…」即越级。",
   "实验三级执行纪律：每个新实验先 MINI_PILOT（冒烟，验证代码能跑通与内存量级）→ PILOT（小数据核对正确性）→ FULL（正式协议的完整对比）。调试只看 PILOT 及以前；所有入档数字与主张只来自 FULL——禁止拿最小对比的结果冒充验证结论。在 DevReport.experiments 字段如实统计尝试数/跑通数（含死在调试阶段的）。",
@@ -225,6 +226,7 @@ const VISUAL_ZH = [
 
 const TEST_ZH = [
   "你是测试工程师：代码审查、正确性 roundtrip（含对抗输入）、跨场景泛化、扰动稳定性。",
+  "断言纪律（实测 v0.7.2 P6）：机械断言钉不变式——相对序、唯一性、内容段自证、协议化语义；绝不钉会被合法操作改动的快照量（具体邮件号、文件名、一次性计数）——LoopMail 合法头插新邮件即证伪钉死「首封」的快照态断言，断言写快照量＝自造红门。",
   "独立性铁律：只读被测实现，绝不修改它——你动手修，验证就变成自我服务、不再独立。你只写自检与映射表。",
   "先读 LoopMail/ToBoss.md 开局邮件（逐句清点/要求与验收标准/产物规格表/待答问题/老板所有文件）：验收按规格表的合格判据，而不是只验结构（文件生成了、图非空、颜色合规）；「老板所有文件」节登记的文件，老板本人的改动是授权行为——绝不列为未授权修改类问题（改动若与要求相悖，如实升级提问而不是改判归属）。",
   "验收以开局邮件「要求与验收标准」节的老板原话为唯一准绳，不以任何卡面转述为准；发现转述失真（卡面/文档与原话的实词不一致）列入问题清单并定性「转述失真」。",
@@ -271,7 +273,7 @@ const remoteDefault = "gitcoffer"; // 部署烤入点（v0.7.1）：改缺省时
 const remoteArg = typeof args.remote === "string" && args.remote !== "" ? args.remote : remoteDefault;
 const visualOn = String(args.visualReview ?? "auto").toLowerCase() !== "off"; // 老板级视觉审阅豁免开关（工程循环同款；实测 D10：豁免令未随副本携带，白烧 2.4M tokens 重审）——off=图像产物照常检测列报但不派审阅员，如实记录
 if (idea === "") log("警告：idea 参数为空——续跑修正可能丢失参数，请核对本次运行参数");
-if (typeof args.remote === "undefined") log("提示：remote 参数缺失（疑似续跑丢参）——按默认 " + remoteDefault + " 探测，请核对启动日志的「推送目标」行");
+if (typeof args.remote === "undefined" && remoteDefault.length === 0) log("提示：remote 参数缺失（疑似续跑丢参）——脚本缺省未烤入，本轮无推送目标约定，请核对启动配置");
 if (!visualOn) log("老板已设 visualReview=off：视觉审阅豁免——图像产物照常检测列报，但不派审阅员（如实记录进账本与评估报告）");
 const PROFILE_LINE = profile ? "\n项目级约束（必须遵守，高于默认做法）：" + profile : "";
 
@@ -366,7 +368,6 @@ if (ledger === "") {
     /* 探测失败则无补充信息 */
   }
 }
-if (ledger !== "" && typeof args.rounds !== "number") log("提示：rounds 参数缺失（疑似续跑丢参）——轮数以账本承诺为准，请核对启动日志");
 let legacyLayout = false; // LoopMail 之前的布局（docs/workflow/，或中间布局 docs/ 下的 brief.md 与 boss_directives.md）——发现即要求总工先整体迁移再续跑；迁移是一次性转换，此后读写只走 LoopMail 路径，不留双轨回退
 if (ledger === "" && repoRoot !== "") {
   try {
@@ -469,7 +470,7 @@ async function resolvePushTargetR(): Promise<{ target: string; note: string }> {
 }
 try {
   const st = await G(["status", "--porcelain"], 60000);
-  if ((st.stdout || "").trim() !== "") log("警告：工作树不干净——请从干净工作树开始；已如实记入账本");
+  if ((st.stdout || "").trim() !== "") log("警告：工作树不干净——请从干净工作树开始；已如实记入账本（处置路径，实测 v0.7.2 P12：账本/开局邮件已登记的历史弃件与断点续跑在途弃件属合法基线——逐个与账本核对后继续，无须清树；未登记的新脏文件才须先处置）");
 } catch {
   /* 无 git 或无法检查：跳过 */
 }
@@ -590,7 +591,7 @@ async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
   phase("危险操作·申报与裁决");
   const raw = await chief.ask<DangerReview>(
     "破坏性操作审核（你是强模型档裁决者，此判断不下放给老板）。申报人：算法工程师（廉价档）。逐条裁决：" + JSON.stringify(reqs) +
-    "。判断依据：影响范围能否精确界定、是否可逆、有无更窄更安全的等价写法（限定路径、先 dry-run、先备份、先列受影响清单）；默认 reject，能给安全写法用 approve-with-change 并写 safeForm，必要且安全才 approve。批准附条件：先备份保证可逆、失败即停；同一操作有界重试仍败就挂起（在账本记明并进入《初步评估报告》，不再尝试），绝不改用影响面更大的方案。请求 reason 中注明老板预授权批复出处（预授权随任务卡携带、申报时写入 reason）的：凭批复出处直接 approve（safeForm 取命令原文或批复限定写法，reason 保留出处）——预授权免的是重复请示与升级绕路，影响范围界定与批准写法核验照旧。仅当实验在无该操作时根本无法继续，才在 reason 中如实写明「实验受阻」，交由《初步评估报告》呈现（研究循环无打断机制）。返回 DangerReview（decisions 与请求逐条对应）。",
+    "。判断依据：影响范围能否精确界定、是否可逆、有无更窄更安全的等价写法（限定路径、先 dry-run、先备份、先列受影响清单）；默认 reject，能给安全写法用 approve-with-change 并写 safeForm，必要且安全才 approve。批准附条件：先备份保证可逆、失败即停；同一操作有界重试仍败就挂起（在账本记明并进入《初步评估报告》，不再尝试），绝不改用影响面更大的方案。执行层为固定 argv：含输出重定向（> 与 >>）、管道（|）、命令替换（$() 与反引号）或分号串联的写法在执行层跑不出来——绝不原样 approve：一律 reject，或 approve-with-change 给出拆分后的逐步可执行等价写法（如把 git show <ref>:<path> > <file> 拆为「先读原文件内容、再用文件写入工具落盘」两步，各自可归一命中）；批准一个执行层跑不出的形态＝执行确认永远缺失（实测 v0.7.2 P2：redirect 恢复命令两轮复发执行确认缺失）。请求 reason 中注明老板预授权批复出处（预授权随任务卡携带、申报时写入 reason）的：凭批复出处直接 approve（safeForm 取命令原文或批复限定写法，reason 保留出处）——预授权免的是重复请示与升级绕路，影响范围界定与批准写法核验照旧。仅当实验在无该操作时根本无法继续，才在 reason 中如实写明「实验受阻」，交由《初步评估报告》呈现（研究循环无打断机制）。返回 DangerReview（decisions 与请求逐条对应）。",
   );
   let decisions = raw.decisions ?? [];
   const mismatched = decisions.length === reqs.length && reqs.some((r, i) => !decisions[i] || decisions[i].command !== r.command);
@@ -672,8 +673,15 @@ for (let round = startRound; round <= rounds; round++) {
     break;
   }
   phase("总工程师·布置本轮任务卡");
+  let fbFp = "FromBoss 指纹：不可读（LoopMail/FromBoss.md 读取失败——如实处理）";
+  try {
+    const fbC = await readRepo("LoopMail/FromBoss.md");
+    let fh = 0;
+    for (let i = 0; i < fbC.length; i++) fh = (fh * 31 + fbC.charCodeAt(i)) | 0;
+    fbFp = "FromBoss 指纹：fb" + (fh >>> 0).toString(16) + "（老板反馈必达载体，实测 v0.7.2 P3：续跑缓存按问句字节匹配——老板新反馈改变 FromBoss 字节即改变本问句，全量回放假续跑被指纹击穿）";
+  } catch { /* 读取失败保持不可读文案 */ }
   let cards = await chief.ask<WorkCards>(
-    "第 " + round + "/" + rounds + " 轮。idea：" + idea + "\n" +
+    "第 " + round + "/" + rounds + " 轮。idea：" + idea + "\n" + fbFp + "\n" +
     (round === rounds ? "【收官定稿】本轮任务卡必含一张「交付目录定稿」卡：全仓盘点交付目录——①按功能重命名归并（git mv；老板原话点名的交付物本体不改名，其目录映射表写入《初步评估报告》待老板决策——旧邮件永不删改：重命名若使此前邮件的相对链接断链，绝不回改旧邮件，断链逐条列入映射表：旧路径→新路径→受影响邮件）；②非交付物的过程产物与全部测试/探针/调试脚本 git mv 进 Agents/（测试代码一律 Agents/，仓库根与 docs/ 不放任何 test 代码；绝不删除——删除是老板的动作）；③产出目录说明书（每个目录一句：是什么、对应哪个要求条目）本体存 Agents/（脚手架），其内容并入《初步评估报告》的交付物清单表述（与收尾整理②同款表述，绝不自创新节名）。\n" : "") +
   (round === 1 ? "调研结论：" + survey.summary : "上一轮审稿意见与你的规划：" + plan) + "\n" +
   "注意：方案 Portfolio 每轮由你重新选定（可新增/移除/替换，≤3 且 ≥1）；本轮选中的每个方案都要充分验证；proposals 字段列出本轮选定的 1–3 个方案名。\n" +
@@ -695,6 +703,7 @@ for (let round = startRound; round <= rounds; round++) {
     log("第 " + round + " 轮方案组合仍不合规（" + (cards.proposals || []).length + " 个），如实记录并继续");
   }
   // 卡面-开局邮件逐字对拍（转述失真防线，句级）：引用了 Rn 的卡必须完整内嵌开局邮件中该 Rn 的登记行（含 Rn 前缀，空白规约后逐字比对）——句内翻词、跨 Rn 借句、借路径等公共字符串旁路全部拦下；登记行只认以 Rn 开头的行（目录行/交叉引用行不算，标题/列表/强调装饰不碍）；语言中立、无字符数魔数
+  let rnBackfill = (card: string): string => ""; // 对拍缺口的机械补救（实测 v0.7.2 P5）：缺口的开局邮件登记行由编排器补嵌进开发问句——转述失真防线在卡面写不全时不空转
   let reqRawC = "";
   try {
     reqRawC = await readRepo("LoopMail/ToBoss.md");
@@ -720,6 +729,16 @@ for (let round = startRound; round <= rounds; round++) {
       }
     };
     parseReq(reqRawC);
+    rnBackfill = (card: string): string => {
+      const citedB = Array.from(new Set(card.match(/\bR\d+\b/g) || []));
+      const cNormB = card.replace(/\s+/g, "");
+      const partsB: string[] = [];
+      for (const rnB of citedB) {
+        const linesB = linesByRn.get(rnB) || [];
+        if (linesB.length > 0 && !linesB.some((l) => cNormB.indexOf(l) >= 0)) partsB.push(rnB + " 开局邮件登记行（对拍缺口机械补救——以下原句为准绳，卡面转述失真不改变实词基准）：" + linesB.join(" ∥ "));
+      }
+      return partsB.length > 0 ? "\n" + partsB.join("\n") : "";
+    };
     const verbatimOk = (card: string): boolean => {
       const c = card.replace(/\s+/g, "");
       const cited = Array.from(new Set(card.match(/\bR\d+\b/g) || []));
@@ -754,7 +773,7 @@ for (let round = startRound; round <= rounds; round++) {
   let dev: DevReport = { summary: "", artifacts: [], numbers: [], experiments: "未报告", dangerRequests: [], leftover: "无" };
   for (let ci = 0; ci < (cards.cards || []).length; ci++) {
     const part = await algo.ask<DevReport>(
-      "任务卡 " + (ci + 1) + "/" + (cards.cards || []).length + "（本轮逐卡串行：每张卡一个 ask、只开发本卡——绝不把多类交付挤进一个 ask，单 ask 过载是实测假死与超支根因）：\n" + (cards.cards || [])[ci] + "\n" +
+      "任务卡 " + (ci + 1) + "/" + (cards.cards || []).length + "（本轮逐卡串行：每张卡一个 ask、只开发本卡——绝不把多类交付挤进一个 ask，单 ask 过载是实测假死与超支根因）：\n" + (cards.cards || [])[ci] + rnBackfill(String((cards.cards || [])[ci])) + "\n" +
       "开发并自测。纪律：端到端真实跑、数字注明口径、竞品保真对照；本轮选中的每个方案都必须得到充分验证（三级执行：MINI_PILOT/PILOT 只用于调试，主张只来自 FULL）；第 1 轮结束时必须已有至少一个来自完整对比的端到端数字。与已有工作对比前先建口径对照表（每家原始约定/数据集/指标定义）；表示或预处理假设先用标准工具做零成本锚点实验再决定是否建全量；每轮至少做一个边界实验（方法何时失效、参数多敏感），主张注明证据范围（数据集与条件）。如实报告 experiments（尝试数/跑通数），零结果入档并解释机制。",
     );
     dev = {
@@ -819,6 +838,18 @@ for (let round = startRound; round <= rounds; round++) {
     imgDetectOkR = false; // 检测失败必须如实披露，不得静默按无图处理
   }
   let visualNoteR = imageFilesR.length === 0 ? (imgDetectOkR ? "本轮无图像产物：不适用" : "图像产物检测失败——按无图处理，如实记录") : "尚未审阅";
+  let histImgsR: string[] = []; // 判据分层（实测 v0.7.2 P1）：此前轮次存档遗留的历史产物图像——呈现缺陷挂账不并入问题清单，替代品落地时一并消除
+  let histIssLedgerR = ""; // 历史产物挂账披露面（入账本与评估报告——披露绝不只留编排器日志）
+  try {
+    if (roundHead0 && repoRoot !== "") {
+      const btR2 = await G(["ls-tree", "-r", "--name-only", roundHead0], 60000);
+      const stR3 = await G(["status", "--porcelain"], 60000);
+      const baseTreeR2 = new Set((btR2.stdout || "").split("\n").map((s) => s.trim()).filter((s) => s !== ""));
+      const changedR2 = new Set((stR3.stdout || "").split("\n").map((l) => l.trim().replace(/^(?:[MARTD?]{1,2}|\w+)\s+/, "").trim()));
+      histImgsR = imageFilesR.filter((p) => baseTreeR2.has(p) && !changedR2.has(p));
+    }
+  } catch { histImgsR = []; } // 不可得时保守退回全量并入（宁可多修，绝不漏修本轮交付物）
+
   if (imageFilesR.length > 0 && !visualOn) {
     visualNoteR = "老板豁免视觉审阅（visualReview=off）——图像产物照常列报，视觉结论以老板亲验为准（如实记录）";
     log("视觉审阅已豁免（visualReview=off）——如实记录");
@@ -847,9 +878,19 @@ for (let round = startRound; round <= rounds; round++) {
     phase("视觉审阅图像产物");
     const vvR = await visualReviewer.ask<VisualVerdict>(
       "本轮任务：" + cards.title + "。规格见 LoopMail/ToBoss.md 开局邮件的产物规格表。逐张打开并审阅以下图像（相对工作区路径）：\n" + imageFilesR.join("\n") +
+      (histImgsR.length > 0 ? "\n【判据分层】以下为此前轮次存档遗留的历史产物图像（非本轮改动）——其呈现缺陷写进 summary 并加「历史挂账：」前缀，不进 issues（编排器机械分拣挂账，替代品落地时一并消除）；其余图像＝本轮交付物，全量审：" + histImgsR.join("、") : "") +
       "\nissues 只收规格违反/产物缺陷（分辨率或定义域错、色板错、渲染空洞或坏图、大片空白或极少数据点、与所声称结论矛盾的事实错误——每条引用规格表条目或可复现证据）；观感/信息量限制（规格未要求的元素缺席、首帧看不出差异、支撑弱）不进 issues，写进 summary 并加「观感限制：」前缀；观感属老板亲验范围的注明「留老板亲验」。返回 VisualVerdict（问题写清文件名与你看到的现象）。",
     );
-    visualNoteR = vvR.summary + ((vvR.issues || []).length > 0 ? "｜问题：" + (vvR.issues || []).join("；") : "");
+    if ((vvR.issues || []).length > 0 && histImgsR.length > 0) { // 机械分拣（实测 v0.7.2 P1）：历史产物缺陷不并入本轮问题清单，挂账披露
+      const histNamesR = histImgsR.map((h) => h.split("/").pop() || h);
+      const histIssR = (vvR.issues || []).filter((x) => histNamesR.some((b) => String(x).indexOf(b) >= 0));
+      if (histIssR.length > 0) {
+        vvR.issues = (vvR.issues || []).filter((x) => histIssR.indexOf(x) < 0);
+        histIssLedgerR = histIssR.map((x) => String(x)).join("；");
+        log("视觉判据分层（实测 P1）：历史产物（非本轮改动）缺陷 " + histIssR.length + " 条挂账，不并入本轮问题清单——账本与评估报告披露");
+      }
+    }
+    visualNoteR = vvR.summary + ((vvR.issues || []).length > 0 ? "｜问题：" + (vvR.issues || []).join("；") : "") + (histIssLedgerR !== "" ? "｜历史产物挂账（不阻塞，替代品落地时消除）：" + histIssLedgerR : "");
     visualCacheKeyR = vKeyR; visualCacheNoteR = visualNoteR;
     visualCacheIssuesR = (vvR.issues || []).map((x) => "【视觉】" + x);
     if ((vvR.issues || []).length > 0) {
