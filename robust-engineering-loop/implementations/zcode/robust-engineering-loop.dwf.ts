@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 鲁棒工程循环（v0.7.1）：把一句开发要求变成经过冷启动对抗验证的实现。总工建要求台账（老板原话逐字）并承诺 N 轮（老板可锁定）；每轮开发+文档单笔提交 → 冷启动门禁（diff 审查、鲁棒性测试、canary、零警告构建、上一轮 remote CI 结转）→ 先复现再返修（误诊须证据反驳）、amend 并入本轮提交（初级返修预算用尽升级高级工程师；高级一次交付，未解经总工绕过裁决记账跳过并在最终简报向老板披露，无可行绕过且影响整个工作流才打断；全绿或经裁决记账跳过才推送）；门禁全绿或经总工裁决记账跳过后才推送约定 remote（默认 GitCoffer，append-only 永不 force）；账本断点续跑；破坏性操作申报-裁决-执行三段核验、绝不转交用户；模型分档 tiered/uniform。
+description: 鲁棒工程循环（v0.7.2）：把一句开发要求变成经过冷启动对抗验证的实现。总工建要求台账（老板原话逐字）并承诺 N 轮（老板可锁定）；每轮开发+文档单笔提交 → 冷启动门禁（diff 审查、鲁棒性测试、canary、零警告构建、上一轮 remote CI 结转）→ 先复现再返修（误诊须证据反驳）、amend 并入本轮提交（初级返修预算用尽升级高级工程师；高级一次交付，未解经总工绕过裁决记账跳过并在最终简报向老板披露，无可行绕过且影响整个工作流才打断；全绿或经裁决记账跳过才推送）；门禁全绿或经总工裁决记账跳过后才推送约定 remote（默认 GitCoffer，append-only 永不 force）；账本断点续跑；破坏性操作申报-裁决-执行三段核验、绝不转交用户；模型分档 tiered/uniform。
 args:
   requirement:
     type: string
@@ -210,14 +210,14 @@ const ALGO_ZH = [
   "修复纪律三则：层归因先于修复——动手前用能判别的证据钉住缺陷所在层/组件，不做「以防万一」的跨层修复，无法归因就如实上报；诊断必须可证伪——指名能推翻它的实验，不可证伪的解释只是猜测，不能作为改动依据，失败现场的直接观察优先于理论；参照锚定——存在参考实现（上游/先行实现）时先对照其行为层再下结论，偏离参考要么在账本说明理由要么对齐。",
   "上下文纪律：长命令输出重定向到文件后用 tail/grep 取摘要，不整屏阅读；参考材料只读相关节选（本轮 diff 触及的文件不适用节选规则——那些按测试的整读义务处理）；工具输出超长只取与判定相关的摘录。",
   "git 写操作权限：只执行问句明示的 git add/commit/amend；git push 由编排器统一执行——你在任何时刻都不执行 push，也不执行 reset/rebase/tag 等其它写仓库的 git 操作。",
-  "破坏性操作铁律：rm -rf / 删除目录或数据文件 / git reset --hard / git clean -fdx / force push / 改写已推送历史 / 覆盖他人产物，一律只申报不执行——写入 dangerRequests（命令原文、原因、影响范围），等高级工程师裁决后按其批准的写法执行；执行后回报必须逐字引用实际执行的每条命令原文——编排器按批准写法做逐字/归一一致性核查，转述、概括、只报结果都算未确认。老板已预授权的操作同样必须申报（批复出处随卡携带，裁决者据此直接放行）——预授权免的是重复请示，不是申报与核验。",
+  "破坏性操作铁律：rm -rf / 删除目录或数据文件 / git reset --hard / git clean -fdx / force push / 改写已推送历史 / 覆盖他人产物，一律只申报不执行——写入 dangerRequests（命令原文、原因、影响范围），等高级工程师裁决后按其批准的写法执行；执行后回报必须逐字引用实际执行的每条命令原文——编排器按批准写法做逐字/归一一致性核查，转述、概括、只报结果都算未确认。老板已预授权的操作同样必须申报，且批复出处写入 dangerRequests 的 reason（如「预授权出处：FromBoss 某节批复原文」），裁决者据此直接放行——预授权免的是重复请示，不是申报与核验。",
   "你无权向老板申请权限：内部升级链只有你→高级工程师→总工；总工否决的事项记账即可；确需老板决策的由总工汇总进《最终简报》待老板决策清单——绝不通过任何问句或升级通道直接向老板提出请求（问句措辞含「请老板…」即越级）。",
   "全程中文。",
 ].join("\n");
 
 const SENIOR_ZH = [
   "你是高级工程师（升级通道，强模型档）：初级算法工程师的返修预算用尽后，问题升级到你手上。先读门禁输出与账本定位根因，一次修对而不是绕症状；修复同样 amend 并入本轮提交，遵守算法工程师的全部纪律。",
-  "你同时是破坏性操作的裁决者之一：裁决初级工程师申报的删除/覆盖/改写历史操作——能否精确界定影响范围、是否可逆、有无更窄更安全的等价写法（限定路径、dry-run 先行、先备份、先列受影响清单）；默认拒绝，能给安全写法就用 approve-with-change 并写明 safeForm，必要且安全才 approve（升级阶段你自己申报的操作由总工裁决，你不能裁决自己的申报）。",
+  "你同时是破坏性操作的裁决者之一：裁决初级工程师申报的删除/覆盖/改写历史操作——能否精确界定影响范围、是否可逆、有无更窄更安全的等价写法（限定路径、dry-run 先行、先备份、先列受影响清单）；默认拒绝，能给安全写法就用 approve-with-change 并写明 safeForm，必要且安全才 approve（升级阶段你自己申报的操作由总工裁决，你不能裁决自己的申报）。预授权申报（reason 注明批复出处）凭出处直接放行——免的是重复请示，不是影响范围界定与批准写法核验。",
   "这个裁决不下放给老板：只有整轮任务在无该操作时根本无法继续（必须重建索引、必须清掉损坏产物）才建议总工走打断流程；日常删除绝不去打扰用户。若确属阻塞性问题（要求矛盾、环境不可用），如实说明并建议打断上报。",
   "全程中文。",
 ].join("\n");
@@ -561,6 +561,7 @@ async function adjudicateDanger(reqs: DangerRequest[], requester: string, reques
   const askText =
     "破坏性操作审核。申报人：" + requester + "（" + requesterTier + "）。逐条裁决以下请求：\n" + JSON.stringify(reqs) +
     "\n判断依据：影响范围能否精确界定、是否可逆、有无更窄更安全的等价写法（限定路径、dry-run 先行、先备份、先列出受影响清单）。默认 reject；能给安全写法时用 approve-with-change 并在 safeForm 写明；必要且安全才 approve。批准附条件：先备份保证可逆、失败即停；同一操作有界重试（2–3 次）仍败就挂起（在账本记明、不再尝试），绝不改用影响面更大的替代方案。" +
+    "请求 reason 中注明老板预授权批复出处（预授权随任务卡携带、申报时写入 reason）的：凭批复出处直接 approve（safeForm 取命令原文或批复限定写法，reason 保留出处）——预授权免的是重复请示与升级绕路，影响范围界定与批准写法核验照旧。" +
     "绝不把判断交回用户：仅当整轮任务在无该操作时根本无法继续，才在 reason 中写明并建议打断。返回 DangerReview（decisions 与请求逐条对应）。";
   const raw = byChief
     ? await chief.ask<DangerReview>(askText)
@@ -721,7 +722,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
   }
   if ((cards.cards || []).length === 0) {
     log("第 " + round + " 轮任务卡为空且未声明完工——按打断处理（如实记录）");
-    const ir0 = await chief.ask<string>("任务卡为空又未完工，属规划异常：写明原因到 Agents/ledger.md 并 " + GC + " add <本轮改动文件逐个显式路径> && " + GC + " commit，返回一句话。");
+    const ir0 = await chief.ask<string>("任务卡为空又未完工，属规划异常：写明原因到 Agents/ledger.md 并 " + GC + " add <本轮改动文件逐个显式路径> && " + GC + " commit，返回一句话。" + ((cards.remoteCiIssues || []).length > 0 ? "（上一轮 remote CI 结转必修项 " + cards.remoteCiIssues.length + " 条随本条转入账本遗留，绝不在空卡轮静默蒸发：" + cards.remoteCiIssues.join("；") + "）" : ""));
     finalVerdict = { verdict: "interrupted", requirementOutcomes: [], deviations: [], summary: "", deliverables: [], state: ir0, decisionList: ["总工未能在第 " + round + " 轮发出任务卡"], advice: "规划异常，请老板介入" };
     ungatedHead = true; // 规划异常打断收尾绝不推送（账本提交未过门禁）
     interrupted = true;
@@ -790,7 +791,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     const cardFirst = ci === 0;
     const part = await algo.ask<DevReport>(
       "第 " + round + " 轮任务卡 " + (ci + 1) + "/" + (cards.cards || []).length + "（本轮逐卡串行：每张卡一个 ask、只开发本卡——绝不把多类交付挤进一个 ask，单 ask 过载是实测假死与超支根因）：\n" + (cards.cards || [])[ci] + (cardFirst ? remoteCiBlock : "") +
-      "\n只开发本卡。开发并更新相关文档，然后 " + GC + " add <本轮改动文件逐个显式路径> && " + GC + (cardFirst ? " commit（创建本轮提交，信息一句话）" : " commit --amend --no-edit（并入本轮提交）") + "。返回 DevReport（summary=本卡一句话产出；requirementCoverage=本卡覆盖的要求编号；leftover=本卡遗留，无则「无」；dangerRequests 只申报不执行）。",
+      (cardFirst ? "\n只开发本卡。" : "\n只开发本卡。本轮提交必须已存在（首卡已创建）——发现 HEAD 上没有本轮提交时先按普通 commit 补建，绝不把 --amend 落到 baseline 提交上。") + "开发并更新相关文档，然后 " + GC + " add <本轮改动文件逐个显式路径> && " + GC + (cardFirst ? " commit（创建本轮提交，信息一句话）" : " commit --amend --no-edit（并入本轮提交）") + "。返回 DevReport（summary=本卡一句话产出；requirementCoverage=本卡覆盖的要求编号；leftover=本卡遗留，无则「无」；dangerRequests 只申报不执行）。",
     );
     dev = {
       summary: (dev.summary !== "" ? dev.summary + "；" : "") + (part.summary || ""),

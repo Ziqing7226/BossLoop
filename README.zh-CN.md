@@ -4,7 +4,7 @@
 
 **为老板干活的 AI 团队循环，有界、对抗验证，并向你如实汇报。**
 
-[![Version](https://img.shields.io/badge/version-v0.7.1-blue)](CITATION.cff)
+[![Version](https://img.shields.io/badge/version-v0.7.2-blue)](CITATION.cff)
 [![License](https://img.shields.io/badge/license-CC%20BY%204.0%20%2F%20Apache--2.0-green)](LICENSE)
 ![已在 ZCode 验证](https://img.shields.io/badge/%E5%B7%B2%E5%9C%A8%20ZCode%20%E9%AA%8C%E8%AF%81-orange)
 [![English](https://img.shields.io/badge/docs-English-blue)](README.md)
