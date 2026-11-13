@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Research Iteration Loop (v0.7.8), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3; empirical review critiques are closed only with evidence); the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map — mechanism claims carry discriminative evidence + a mechanical selfcheck gate with a canary + an eval-surface fingerprint against silent drift, owning the test fixtures; failure triage decides the flow); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
+description: Research Iteration Loop (v0.7.9), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3; empirical review critiques are closed only with evidence); the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map — mechanism claims carry discriminative evidence + a mechanical selfcheck gate with a canary + an eval-surface fingerprint against silent drift, owning the test fixtures; failure triage decides the flow); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
 args:
   idea:
     type: string
@@ -184,7 +184,7 @@ const CHIEF_EN = [
   "Opening brief (the first mail): after scoping and before round 1 starts, write it as the first mail into LoopMail/ToBoss.md (at most one page, five mandatory sections): (1) sentence inventory — every sentence of the boss's words (idea, focus, LoopMail/FromBoss.md) split and marked fulfilled-as-Rn / not-applicable-with-reason / needs-clarification; (2) requirements and acceptance criteria — the boss's words verbatim numbered (R1/R2…) with interpretation and machine-checkable pass criteria, every item registered; (3) artifact spec table — for each deliverable this round (figure, table, report, manuscript section) its axis, domain, units and pass criteria (machine-checkable), with every number and format word in the boss's words landing on a row; each deliverable also carries its landing contract — which function-named directory it lands in (round numbers/dates/stage numbers never enter boss-facing directory names — round numbers live only in the ledger); probes, intermediate data and debug output always land under Agents/; (4) open questions — every interrogative sentence logged (text, when logged, answer status); (5) boss-owned files — every file the boss declared personally owned or edited registered one by one (the LoopMail mail files are on the list by default; files named in the boss's verbatim words or in FromBoss are registered one by one): the boss's own edits there are authorized acts, not defects — never modified, never swept into any agent commit unless a card says so; at most 3 unsure points, each with a default reading and the cost of misreading. Then start working immediately — never idle waiting for the boss to look at it.",
   "The reading of the boss's words must be self-consistent and capture the gist; what you cannot pin down, never guess — carry the boss's words verbatim (quoted, marked unsure) in the brief; the engineers may resolve them during development or testing. Verbatim fidelity is not semantic fidelity: copying the words while misreading the meaning is the most dangerous failure; when the boss's words cannot be filled into the spec table (e.g. a number reads either as bin width or as axis range), do not pick one literal reading.",
   "Before planning each round, check the open questions: with unanswered items, the first card is the answer (a cheap answer that directly shapes the boss's judgement).",
-  "Work cards that touch the boss's words must embed the verbatim sentence from the opening mail's requirements section (with its Rn) — never paraphrase from memory: a compressed phrase may serve only as the title; content words (nouns/verbs/quantifiers/negations/numbers) survive one by one, and when unsure copy the sentence in full. The boss's key content words are protocol words: cards, dev reports, test and assertion comments, commit messages and the manuscript all reuse the same words, never synonyms. Card-granularity discipline: one work card carries one class of acceptable deliverable (code/data/figures/manuscript sections are different classes) — experiments, rendering, writing and archiving split into separate cards; one oversized card is the field-tested hang-and-burn root cause. Items the boss pre-authorized (explicitly cleared in the boss's words or FromBoss, e.g. a class of deletion/download already ruled on) go into the matching work card with the ruling's provenance noted — the declaration and the three-segment trail are never waived (the provenance rides into dangerRequests' reason at declaration time), and the Chief releases directly on the provenance: what is waived is re-petitioning, never the blast-radius check or the approved-form verification. Foundation first (the boss's 2026-11-13 teaching, hard rule): order work cards base-first — the first card makes the minimal end-to-end comparison really run (the staged MINI_PILOT→PILOT run-through is the base); optimization and added complexity come after the base is verified, and complexity stacks only on a verified base.",
+  "Work cards that touch the boss's words must embed the verbatim sentence from the opening mail's requirements section (with its Rn) — never paraphrase from memory: a compressed phrase may serve only as the title; content words (nouns/verbs/quantifiers/negations/numbers) survive one by one, and when unsure copy the sentence in full. The boss's key content words are protocol words: cards, dev reports, test and assertion comments, commit messages and the manuscript all reuse the same words, never synonyms. Card-granularity discipline: one work card carries one class of acceptable deliverable (code/data/figures/manuscript sections are different classes) — experiments, rendering, writing and archiving split into separate cards; one oversized card is the field-tested hang-and-burn root cause. Items the boss pre-authorized (explicitly cleared in the boss's words or FromBoss, e.g. a class of deletion/download already ruled on) go into the matching work card with the ruling's provenance noted — the declaration and the three-segment trail (declared → ruled → executed per the approved form and verified against a verbatim execution report) are never waived (the provenance rides into dangerRequests' reason at declaration time), and the Chief releases directly on the provenance: what is waived is re-petitioning, never the blast-radius check or the approved-form verification. Foundation first (the boss's 2026-11-13 teaching, hard rule): order work cards base-first — the first card makes the minimal end-to-end comparison really run (the staged MINI_PILOT→PILOT run-through is the base); optimization and added complexity come after the base is verified, and complexity stacks only on a verified base.",
   "Occam's razor: autonomous decisions lean toward adding things (modules, proposals, metrics) — every complexity-increasing decision must state the value it buys, or it is not taken; such a decision never lives only in the ledger — it goes into the Preliminary Evaluation Report's autonomous-decision list.",
   "Three file classes (delivery discipline), bounded by location: docs/ holds formal content only — the deliverable bodies the boss's words name, the manuscript, reference originals; LoopMail/ is the boss–chief communication layer with exactly two legitimate files — ToBoss.md (the delivery-mail master file; the opening brief and the evaluation report are appended as mails, newest at the top; old mails are never modified; formal docs/ files are referenced by relative links as attachments) plus FromBoss.md (the boss's mid-run feedback, written by the boss, appended in order, never modified by the Chief); any other file appearing under LoopMail/ is judged first — files the boss placed get the FromBoss_ prefix and stay untouched (their content is never modified), stray agent-made products are put away per the delivery-tidying rules, and anything uncertain is treated as boss-placed; other boss-facing historical documents are merged into the ToBoss mail wording, then their bodies move to Agents/; everything under Agents/ is working scaffolding — the ledger, maps, Agents/selfcheck.py, test and debug scripts, code superseded on the way to the final deliverable, falsified history, agent-facing docs. Tidying means git mv-ing scaffolding into Agents/, never deleting a file — deletion is the boss's move; the boss reads everything outside Agents/; if the boss has to open Agents/, the loop has failed.",
   "The proposal portfolio is re-selected every round: at the start of each round pick 1-3 proposals from the latest reviews (add, drop or replace; fill up to 3 when choices exist, 1-2 otherwise, never 0) and the competitor set; every proposal selected this round must be fully validated - a minimal comparison passed off as validation is forbidden because it biases conclusions.",
@@ -554,7 +554,9 @@ if (intakeMissingR.length > 0) {
   await checkIntakeR();
   log(intakeMissingR.length === 0 ? "Intake completeness: passed after repair" : "Intake completeness still missing: " + intakeMissingR.join("; ") + " — recorded honestly, continuing");
 }
+let roundsOverrunR = false; // disclosure promise must have a consumer (family audit #2): the flag rides the evaluation ask
 let round1FullMissing = false; // the round-1 FULL-missing flag (feeds the researcher ban and the evaluation report)
+let gateNumbersR: string[] = []; // numbers from the gate-loop rework instances (triageDev) — dev ∪ fixDev ∪ gate is the full judgment face
 let branchR = "main";
 try {
   const b = await G(["rev-parse", "--abbrev-ref", "HEAD"], 60000);
@@ -568,7 +570,7 @@ if (branchR === "HEAD") {
 }
 const rawResumeR = Math.round(survey.resumeFrom);
 if (!Number.isFinite(rawResumeR) || rawResumeR < 0) log("Warning: resumeFrom invalid (" + String(survey.resumeFrom) + ") — treated as 0 (recorded honestly)");
-if (Number.isFinite(rawResumeR) && rawResumeR > rounds) log("Warning: ledger/Chief report " + rawResumeR + " rounds done, above this run's committed total of " + rounds + " — this run will execute no rounds; the evaluation report must state this anomaly to the boss");
+if (Number.isFinite(rawResumeR) && rawResumeR > rounds) { roundsOverrunR = true; log("Warning: ledger/Chief report " + rawResumeR + " rounds done, above this run's committed total of " + rounds + " — this run will execute no rounds; the evaluation report must state this anomaly to the boss"); } // disclosure promise must have a consumer (family audit #2): the flag injects into the evaluation ask
 const startRound = Number.isFinite(rawResumeR) && rawResumeR >= 0 ? Math.max(1, Math.min(rounds + 1, rawResumeR + 1)) : 1;
 if (startRound > 1) log("Ledger shows " + (startRound - 1) + " round(s) done; resuming at round " + startRound);
 
@@ -578,7 +580,7 @@ let editor = agent("Editor", persona(EDITOR_EN + PROFILE_LINE, STRONG)); // stro
 let reader = agent("Reference Reader", persona(READER_EN + PROFILE_LINE, STRONG)); // strong tier
 // The four hands are re-instantiated every round (B#27): reassigned at the top of the round loop — the checkpoint is the ledger, not anyone's conversation memory; the Chief is a resident fixed-name instance since v0.6.9 (see its creation line)
 
-let visualCacheKeyR = ""; // visual-verdict memoization (field defect 7): key = artifact-content set + an anchor on the opening mail's spec table (lastIndexOf — the bottom-most occurrence is this run's opening mail; family audit #1 fixed the mis-anchored tail slice) — a spec change invalidates the cache; no round in the key (it would never hit; reused across rounds)
+let visualCacheKeyR = ""; // visual-verdict memoization (field defect 7): key = artifact-content set + an anchor on the opening mail's spec table (indexOf — the topmost occurrence is this run's opening mail; on a multi-run repository lastIndexOf would anchor to the oldest run) — a spec change invalidates the cache; no round in the key (it would never hit; reused across rounds)
 let visualCacheNoteR = "";
 let visualCacheIssuesR: string[] = [];
 let independentAdjudicatorUsedR = false; // the independent adjudicator runs at most once per run (robust §4.6 same shape: one-shot, read-only, final)
@@ -628,7 +630,7 @@ async function dangerFlow(reqs: DangerRequest[]): Promise<string> {
     let adjNote = "";
     if (missed2R.length > 0 && !independentAdjudicatorUsedR) {
       phase("Destructive ops: independent final adjudication");
-      const adjudicator = agent("Destructive-ops Independent Adjudicator", persona("You are the independent final adjudicator for dangerous operations: a one-shot read-only verifier with no context overlap with the declarer, the adjudicator or the executor. Never execute any command, never write any file, never touch the working tree — read-only evidence gathering; verdicts rest on evidence only (git log/reflog, filesystem existence and content, timestamps), and where evidence is missing say plainly \"cannot determine\". Always respond in English.", STRONG));
+      const adjudicator = agent("Destructive-ops Independent Adjudicator", persona("You are the independent final adjudicator for dangerous operations: a one-shot read-only verifier with no context overlap with the declarer, the adjudicator or the executor. Never execute any command, never write any file, never touch the working tree — read-only evidence gathering; verdicts rest on evidence only (git log/reflog, filesystem existence and content, timestamps), and where evidence is missing say plainly \"cannot determine\". Always respond in English." + PROFILE_LINE, STRONG)); // project constraints ride every role (SPEC §8) — a read-only identity has no blind-review surface
       const adjR = await adjudicator.ask<string>(
         "Read-only final adjudication: the following dangerous operations were approved, but the execution reports never quoted the approved form verbatim across two attempts, so the orchestrator cannot confirm their execution status from the reports. Verify one by one whether each was actually executed with its effect on disk (git log/reflog, filesystem existence and content, timestamps): " + missed2R.map((d, i) => "(" + (i + 1) + ") approved form: " + (d.safeForm || d.command)).join("; ") + "\nOutput one line per entry: \"<number>\" executed (evidence) / not executed (evidence) / cannot determine (what evidence is missing), then a one-line summary. Never touch the working tree.",
       );
@@ -750,10 +752,10 @@ for (let round = startRound; round <= rounds; round++) {
     };
     const noRn = (cards.cards || []).filter((c) => !/\bR\d+\b/.test(c));
     let paraphrased = (cards.cards || []).filter((c) => /\bR\d+\b/.test(c) && !verbatimOk(c));
-    if (noRn.length > 0) log("Round " + round + " has " + noRn.length + " card(s) without an Rn reference — a violation of the carding discipline (every card traces to a requirement entry); recorded honestly");
-    if (paraphrased.length > 0) {
+    if (noRn.length > 0) log("Round " + round + " has " + noRn.length + " card(s) without an Rn reference — cards that touch none of the boss's words must state 无对应 Rn：理由 (no corresponding Rn: reason); unstated, it is a violation of the carding discipline; recorded honestly");
+    if (paraphrased.length + noRn.length > 0) {
       cards = await chief.ask<WorkCards>(
-        "Card-to-opening-mail check failed (retelling-distortion defense, line-level): these cards cite an Rn but do not fully contain that Rn's registered line from the opening mail — the card's paraphrase may have changed content words (object/operation/quantifier/negation/numbers):\n" + paraphrased.map((c) => "- " + c.slice(0, 80)).join("\n") + "\nRewrite these cards: copy the registered line for the cited Rn from LoopMail/ToBoss.md verbatim into the card (with its Rn prefix; a compressed phrase only as the title) and return every other field unchanged (keep the title and proposals unchanged); if the opening mail itself is missing the original words, complete the mail first, marking each backfilled registered line with \"(backfilled)\" at its end so a backfill stays distinguishable from an original registration. Return WorkCards.",
+        "Card-to-opening-mail check failed (retelling-distortion defense, line-level): " + (paraphrased.length > 0 ? "these cards cite an Rn but do not fully contain that Rn's registered line from the opening mail — the card's paraphrase may have changed content words (object/operation/quantifier/negation/numbers):\n" + paraphrased.map((c) => "- " + c.slice(0, 80)).join("\n") + "\n" : "") + (noRn.length > 0 ? "these cards carry no Rn at all — without an Rn they bypass the verbatim check; every card must trace to a requirement entry:\n" + noRn.map((c) => "- " + c.slice(0, 80)).join("\n") + "\n" : "") + "Rewrite the cards above: copy the registered line for the cited Rn from LoopMail/ToBoss.md verbatim into the card (with its Rn prefix; a compressed phrase only as the title) and return every other field unchanged (keep the title and proposals unchanged); a genuine infrastructure card unrelated to any requirement is rewritten to reference the requirement it serves, and a truly standalone one states 无对应 Rn：理由 (no corresponding Rn: reason) honestly; if the opening mail itself is missing the original words, complete the mail first, marking each backfilled registered line with \"(backfilled)\" at its end so a backfill stays distinguishable from an original registration. Return WorkCards.",
       );
       // the rewrite path may backfill registrations — re-read and rebuild the snapshot so honestly backfilled lines can pass this round's recheck (a remediation path must converge, review #4)
       let reqRaw2 = "";
@@ -813,7 +815,7 @@ for (let round = startRound; round <= rounds; round++) {
   let imgDetectOkR = true; // whether image detection succeeded (failure must be disclosed — the true-equivalent port of the engineering loop's v0.5.4 fixes)
   let imageFilesR: string[] = (verdict.artifacts || []).filter((p) => isImgR(p));
   try {
-    const stR = await G(["status", "--porcelain"], 60000);
+    const stR = await G(["status", "--porcelain", "--untracked-files=all"], 60000); // porcelain folds a new untracked directory into one line — without expansion the images inside it are missed wholesale
     for (const line of (stR.stdout || "").split("\n")) {
       const tR = line.trim();
       if (tR.length < 4) continue;
@@ -846,7 +848,7 @@ for (let round = startRound; round <= rounds; round++) {
       const stR3 = await G(["status", "--porcelain"], 60000);
       const dfR3 = await G(["diff", "--name-only", roundHead0, "HEAD"], 60000);
       const baseTreeR2 = new Set((btR2.stdout || "").split("\n").map((s) => s.trim()).filter((s) => s !== ""));
-      const changedR2 = new Set(((dfR3.stdout || "") + "\n" + (stR3.stdout || "")).split("\n").map((l) => l.trim().replace(/^(?:[MARTD?]{1,2}|\w+)\s+/, "").trim()));
+      const changedR2 = new Set((stR3.stdout || "").split("\n").map((l) => l.trim().replace(/^(?:[MARTD?]{1,2}|\w+)\s+/, "").trim()).concat((dfR3.stdout || "").split("\n").map((s) => s.trim()).filter((s) => s !== ""))); // diff lines carry no status prefix — the porcelain strip regex would mangle paths with spaces
       histImgsR = imageFilesR.filter((p) => baseTreeR2.has(p) && !changedR2.has(p));
     }
   } catch { histImgsR = []; } // when unavailable, fall back conservatively to merging everything (rather over-fix than miss this round's deliverable)
@@ -862,7 +864,7 @@ for (let round = startRound; round <= rounds; round++) {
     let specAnchorR = "";
     try {
       const tbSpecR = await readRepo("LoopMail/ToBoss.md");
-      const kSpecR = Math.max(tbSpecR.lastIndexOf("产物规格表"), tbSpecR.lastIndexOf("Artifact spec table")); // mails prepend, so lastIndexOf = the bottom-most occurrence = this run's opening-mail spec table (family audit #1: a tail slice anchors to the PREVIOUS run's old mails from the second run on, and a spec change would never invalidate the cache)
+      const kSpecR = Math.max(tbSpecR.indexOf("产物规格表"), tbSpecR.indexOf("Artifact spec table")); // mails prepend, so the topmost occurrence is this run's opening-mail spec table (a multi-run repository accumulates old mails below — lastIndexOf would anchor to the oldest run; the key resets per run, the anchor only needs within-run stability pointing at this run's spec)
       specAnchorR = kSpecR >= 0 ? tbSpecR.slice(kSpecR, kSpecR + 2500) : "";
     } catch {
       specAnchorR = "";
@@ -1112,6 +1114,7 @@ for (let round = startRound; round <= rounds; round++) {
         (attempt === 2 ? "[Escalation] The previous fix did not resolve it. You are the strong-tier repair instance: locate the root cause first and fix it in one move." : "") +
         "Fix instructions ruled by the Test Engineer (you must not edit Agents/selfcheck.py or claim_map.md):\n" + t.slice(0, 2000) + "\nExecute and return DevReport.",
       );
+      gateNumbersR = gateNumbersR.concat(triageDev.numbers || []);
       if ((triageDev.dangerRequests || []).length > 0) {
         dangerLog = (dangerLog === "none" ? "" : dangerLog + "; ") + await dangerFlow(triageDev.dangerRequests);
       }
@@ -1131,9 +1134,9 @@ for (let round = startRound; round <= rounds; round++) {
   }
   if (fixes.length > 0) {
     fixDev = await algo.ask<DevReport>("Execute fixes and extra experiments: " + fixes.join("; ") + "\nReproduce each one on this round's code first: a stale entry (older line numbers, already fixed, not reproducible now) is discarded with a note — never code against it. Return DevReport.");
-    if (round1FullMissing && (fixDev.numbers || []).some((n) => /^\s*FULL/.test(n))) {
+    if (round1FullMissing && ((fixDev.numbers || []).concat(gateNumbersR)).some((n) => /^\s*FULL/.test(n))) { // gateNumbersR: numbers produced by the gate-loop rework instances belong to the judgment face too
       round1FullMissing = false;
-      log("The round-1 FULL end-to-end number was produced during the fix phase (fixDev) — the FULL-missing ban is lifted (family audit #7: dev union fixDev is the full verdict surface; an ask must not assert facts its own fixDev contradicts)");
+      log("The round-1 FULL end-to-end number was produced during the fix/rework phase (fixDev ∪ gate) — the FULL-missing ban is lifted (family audit #7: dev ∪ fixDev ∪ gate is the full verdict surface; an ask must not assert facts its own numbers contradict)");
     }
     if ((fixDev.dangerRequests || []).length > 0) {
       dangerLog = (dangerLog === "none" ? "" : dangerLog + "; ") + await dangerFlow(fixDev.dangerRequests);
@@ -1184,9 +1187,10 @@ for (let round = startRound; round <= rounds; round++) {
       ),
     ),
   );
-  const readerRev = await reader.ask<Review>(
+  let readerRev: Review | null = null;
+  try { readerRev = await reader.ask<Review>(
     "Review after reading the references (materials: the manuscript summary, the cited references including the docs/refs/ paper library, and web search — not the ledger, git history or other workspace content). Manuscript summary: " + paper.slice(0, 500) + "\nVerify citations and narrative, check for missed recent work, ask questions, propose iterations. Beware number hallucination: a good-looking number is not a good outcome — scrutinize whether what a manuscript number means is really as simple as it appears; the theory behind it may itself be wrong, and the flattering number reinforces that illusion. nearestWorks is mandatory: the 3 closest works and the difference dimension.",
-  );
+  ); } catch { log("The literature reader is absent or failed — recorded honestly as absent, not counted in the review tally (same absence semantics as the panel)"); }
   // Absent-reviewer honesty: an absence is not a minor review — no fabricated severity; the digest marks it explicitly and the ledger carries the count
   const absentN = settled.filter((s) => s.status !== "fulfilled").length;
   if (absentN > 0) log("Review panel absent " + absentN + "/" + n + " — absences are excluded from the severity tally, recorded honestly in the ledger (re-invite next round)");
@@ -1194,7 +1198,7 @@ for (let round = startRound; round <= rounds; round++) {
   for (const s of settled) {
     if (s.status === "fulfilled") reviews.push(s.value);
   }
-  reviews.push(readerRev);
+  if (readerRev !== null) reviews.push(readerRev);
   const digest = settled
     .map((s, i) => {
       const label = "Reviewer-" + (i + 1);
@@ -1204,10 +1208,12 @@ for (let round = startRound; round <= rounds; round++) {
         "\n- Issues: " + (r.issues.join("; ") || "none") + "\n- Iteration: " + (r.iteration.join("; ") || "none") +
         (r.nearestWorks && r.nearestWorks.length > 0 ? "\n- Closest works: " + r.nearestWorks.join("; ") : "");
     })
-    .concat([
+    .concat(readerRev !== null ? [
       "[Reference Reader | " + readerRev.severity + "] " + readerRev.summary +
         "\n- Issues: " + (readerRev.issues.join("; ") || "none") + "\n- Iteration: " + (readerRev.iteration.join("; ") || "none") +
         (readerRev.nearestWorks && readerRev.nearestWorks.length > 0 ? "\n- Closest works: " + readerRev.nearestWorks.join("; ") : ""),
+    ] : [
+      "[Reference Reader | absent] the senior literature reader did not complete a review — recorded honestly as absent, not counted in the review tally",
     ])
     .join("\n\n");
 
@@ -1324,6 +1330,7 @@ let evalResult = await chief.ask<EvalReport>(
   "The boss's words verbatim (idea): " + idea + (focus ? "\nThis run's focus: " + focus: "") + "\n" +
   resumeNote + (bossStopR ? "Boss stop point: planned " + rounds + " rounds, executed " + rows.length + " before stopping (the boss wrote a 【老板停点】 marker in FromBoss). " : rounds + " rounds complete — hard stop. ") + "The latest round's reviews (earlier rounds live in the ledger's rows):\n" + plan.slice(0, 6000) + "\n" +
   "Round records: " + JSON.stringify(rows) + "\n" +
+  (roundsOverrunR ? "[Round overrun] the ledger/Chief report shows more rounds done than this run committed — this run executed no rounds; the anomaly is disclosed to the boss in this report.\n" : "") +
   (startRound > 1 ? "[Evidence scope] This run resumed at round " + startRound + ": the reviews and round records above cover this run's rounds only — the report must state its evidence scope explicitly, never letting the boss believe it covers all rounds.\n" : "") +
   (bossStopR ? "[Boss stop point receipt] the boss wrote a 【老板停点】 marker in LoopMail/FromBoss.md: the run stopped with rounds remaining — the report must quote the stop words verbatim and receipt them to the boss (done/not done, decision points), never silently.\n" : "") +
   (visualOn ? "" : "[Visual-review exemption] the boss set visualReview=off for this run (image artifacts were detected and listed but not independently reviewed) — the report must disclose this exemption honestly, never silently.\n") +

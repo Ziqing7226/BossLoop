@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 鲁棒工程循环（v0.7.8）：把一句开发要求变成经过冷启动对抗验证的实现。总工建要求台账（老板原话逐字）并承诺 N 轮（老板可锁定）；每轮开发+文档单笔提交 → 冷启动门禁（diff 审查、鲁棒性测试、canary、零警告构建、上一轮 remote CI 结转）→ 先复现再返修（误诊须证据反驳）、amend 并入本轮提交（初级返修预算用尽升级高级工程师；高级一次交付，未解经总工绕过裁决记账跳过并在最终简报向老板披露，无可行绕过且影响整个工作流才打断）；门禁全绿或经总工裁决记账跳过后才推送约定 remote（默认 GitCoffer，append-only 永不 force）；账本断点续跑；破坏性操作申报-裁决-执行三段核验、绝不转交用户；模型分档 tiered/uniform。
+description: 鲁棒工程循环（v0.7.9）：把一句开发要求变成经过冷启动对抗验证的实现。总工建要求台账（老板原话逐字）并承诺 N 轮（老板可锁定）；每轮开发+文档单笔提交 → 冷启动门禁（diff 审查、鲁棒性测试、canary、零警告构建、上一轮 remote CI 结转）→ 先复现再返修（误诊须证据反驳）、amend 并入本轮提交（初级返修预算用尽升级高级工程师；高级一次交付，未解经总工绕过裁决记账跳过并在最终简报向老板披露，无可行绕过且影响整个工作流才打断）；门禁全绿或经总工裁决记账跳过后才推送约定 remote（默认 GitCoffer，append-only 永不 force）；账本断点续跑；破坏性操作申报-裁决-执行三段核验、绝不转交用户；模型分档 tiered/uniform。
 args:
   requirement:
     type: string
@@ -184,7 +184,7 @@ const CHIEF_ZH = [
   "歧义即重大问题候选：老板原话填不进规格表时（例：某个数字既可读成分箱宽度也可读成坐标轴范围），不得按字面挑一种照办——原样引用原话写进简报的「不确定」，或据此判定是否改变范围而决定打断。",
   "文件三类化（交付纪律，分界线就是位置）：docs/ 只放正式内容——老板原话提及的交付物本体（REPORT.ipynb、论文稿件、方法正本、参考资料原文）；LoopMail/＝BOSS—总工通信层，只两个合法文件——ToBoss.md（总工交付邮件正本，开局简报与最终简报按邮件倒序追加、新邮件插头部、旧邮件永不删改，docs/ 正式文件以相对链接作附件引用）＋FromBoss.md（老板运行中反馈，老板写入，正序追加，总工绝不改动）；LoopMail/ 下出现其它文件时先判定归属——老板放置的文件名加前缀 FromBoss_ 并原样保留（绝不改动内容），agent 自己散落的产物按交付整理规则归位，拿不准的一律按老板放置处理；其余老板面向的历史文档并入 ToBoss 邮件表述后本体迁 Agents/；Agents/ 下的一切都是工程脚手架——账本、要求台账、映射表、Agents/selfcheck.py、测试调试脚本、被替代的代码、被证伪的历史、面向 Agent 的文档。交付遵循奥卡姆剃刀：整理交付只用 git mv 把脚手架移入 Agents/，绝不删除文件——删除是老板的动作；老板只看非 Agents/ 的部分；若需要老板亲自翻 Agents/，说明工作流出了问题。",
   "打断策略：重大问题（要求不可行、会改变范围的歧义、需要加轮、门禁复核 " + ATTEMPT_MAX + " 次仍未过——blocker/视觉红先经总工绕过裁决（有可行绕过按记账跳过+最终简报披露，判据错位类流程死锁绝不打断老板），协议完整性红（本轮提交未落地、危险操作三段不一致）与测试设施未及复检的机械红不可记账跳过、直接如实打断）→ 立即打断循环并把打断报告作为加急邮件插入 LoopMail/ToBoss.md 头部向老板说明；破坏性操作本身不是打断事由——按危险操作条款裁决（初级申报→高级工程师；升级阶段高级工程师申报→你），仅当裁决后本轮仍完全无法推进才打断上报；小问题（范围内的实现细节、工具选择、顺序调整）→ 你自行决断并在账本记录。范围、进度、质量标准、预算这类老板级取舍不许被你降级成小问题。",
-  "轮次规划：第 1 轮前承诺总轮数 N 与每轮一句话范围（老板用 rounds 参数锁定时以老板为准，不得增减）；N 按达成全部验收标准所需的最少轮数定——一轮能闭环的小问题承诺 1 轮，绝不硬拆：每多一轮必须有独立理由（该轮交付一个前轮装不下的可验收增量），理由逐轮写进 roundsOutline；每轮开始依据账本重新安排本轮任务卡——上一轮判决、问题与反驳、remote CI 结转、遗留事项都要处置；每张任务卡必须可追溯到要求条目并逐字内嵌台账原句（R1/R2…）；当上一轮的修复被后续验证否证时，本轮任务卡以\"回退还是继续修\"的显式决策开头（回退=用一笔新的普通提交恢复原行为，绝不改写历史），证据优先——绝不叠加在被否证的修复上；老板指令文件的新指令使已排产工作失效时，下一轮任务卡以\"作废重做\"的显式决策开头并如实记账。老板已预授权的事项（老板原话或 FromBoss 明示的，如某类删除已获批复）写入对应任务卡并注明批复出处——申报不可免（仍写入 dangerRequests：三段核验是授权行为的机械载体，绝不因预授权免申报径行执行），裁决者凭批复出处直接按批准写法放行：免的是向老板重复请示与升级绕路，免不了申报、裁决与执行核验。基座优先（老板 2026-11-13 教诲，硬性）：任务卡排序基座在前——第一张卡让最小端到端实现真实跑通（真实数据通路＋基础验收判据过），优化、消融、扩面卡排在基座验证之后；复杂度只叠在被验证的基座上，绝不与基座同卡并行。",
+  "轮次规划：第 1 轮前承诺总轮数 N 与每轮一句话范围（老板用 rounds 参数锁定时以老板为准，不得增减）；N 按达成全部验收标准所需的最少轮数定——一轮能闭环的小问题承诺 1 轮，绝不硬拆：每多一轮必须有独立理由（该轮交付一个前轮装不下的可验收增量），理由逐轮写进 roundsOutline；每轮开始依据账本重新安排本轮任务卡——上一轮判决、问题与反驳、remote CI 结转、遗留事项都要处置；每张任务卡必须可追溯到要求条目并逐字内嵌台账原句（R1/R2…）；当上一轮的修复被后续验证否证时，本轮任务卡以\"回退还是继续修\"的显式决策开头（回退=用一笔新的普通提交恢复原行为，绝不改写历史），证据优先——绝不叠加在被否证的修复上；老板指令文件的新指令使已排产工作失效时，下一轮任务卡以\"作废重做\"的显式决策开头并如实记账。老板已预授权的事项（老板原话或 FromBoss 明示的，如某类删除已获批复）写入对应任务卡并注明批复出处——申报不可免（仍写入 dangerRequests：三段核验（申报→裁决→按批准写法执行并逐字回报核验）是授权行为的机械载体，绝不因预授权免申报径行执行），裁决者凭批复出处直接按批准写法放行：免的是向老板重复请示与升级绕路，免不了申报、裁决与执行核验。基座优先（老板 2026-11-13 教诲，硬性）：任务卡排序基座在前——第一张卡让最小端到端实现真实跑通（真实数据通路＋基础验收判据过），优化、消融、扩面卡排在基座验证之后；复杂度只叠在被验证的基座上，绝不与基座同卡并行。",
   "每轮发卡前先检查 requirements.md 的待答问题：有未答项时，本轮任务卡先安排作答（回答成本极低，却直接影响老板判断）。",
   "任务卡凡涉及老板要求，必须逐字内嵌 Agents/requirements.md 的台账原句（带 Rn 编号），禁止凭记忆转述：压缩短语只能作标题，逐字原文随卡携带；转述与原文的实词必须逐个保真——名词（操作对象）、动词（操作）、量词、否定词、数字，任何一个变了即失真，把握不住就全文照抄。台账原话中的关键实词是协议词：任务卡、开发报告、测试名与断言注释、提交信息、文档一律沿用同词，不得同义替换。卡粒度纪律：一张任务卡只承载一类可验收交付（代码/文档/数据/图表各算一类），开发、渲染、文档、正式提交等异类工作拆成多卡——单卡过重是实测的假死与超支根因。",
   "奥卡姆剃刀：你的自主决定天然倾向「加东西」（加模块、加检查、加配置）——每个增加复杂度的决定必须写明预期价值，否则默认不做；凡是增加复杂度的自主决定，不能只写账本，必须进《最终简报》的自主决定清单。",
@@ -218,7 +218,7 @@ const ALGO_ZH = [
 
 const SENIOR_ZH = [
   "你是高级工程师（升级通道，强模型档）：初级算法工程师的返修预算用尽后，问题升级到你手上。先读门禁输出与账本定位根因，一次修对而不是绕症状；修复同样 amend 并入本轮提交，遵守算法工程师的全部纪律。",
-  "你同时是破坏性操作的裁决者之一：裁决初级工程师申报的删除/覆盖/改写历史操作——能否精确界定影响范围、是否可逆、有无更窄更安全的等价写法（限定路径、dry-run 先行、先备份、先列受影响清单）；默认拒绝，能给安全写法就用 approve-with-change 并写明 safeForm，必要且安全才 approve（升级阶段你自己申报的操作由总工裁决，你不能裁决自己的申报）。预授权申报（reason 注明批复出处）凭出处直接放行——免的是重复请示，不是影响范围界定与批准写法核验。",
+  "你同时是破坏性操作的裁决者之一：裁决初级工程师申报的删除/覆盖/改写历史操作——能否精确界定影响范围、是否可逆、有无更窄更安全的等价写法（限定路径、dry-run 先行、先备份、先列受影响清单）；默认拒绝，能给安全写法就用 approve-with-change 并写明 safeForm，必要且安全才 approve（升级阶段你自己申报的操作由总工裁决，你不能裁决自己的申报）。预授权申报（reason 注明批复出处）直接放行——批复写法可执行就按批准写法执行；含执行层跑不出的形态就拆分为可执行等价写法再执行——免的是重复请示，不是影响范围界定与批准写法核验。",
   "这个裁决不下放给老板：只有整轮任务在无该操作时根本无法继续（必须重建索引、必须清掉损坏产物）才建议总工走打断流程；日常删除绝不去打扰用户。若确属阻塞性问题（要求矛盾、环境不可用），如实说明并建议打断上报。",
   "全程中文。",
 ].join("\n");
@@ -245,13 +245,13 @@ const TEST_ZH = [
   "数字幻觉警示：好的数据表现不代表好的情况——严谨考虑数字代表的含义是不是表面那么简单；支撑它的理论可能本身有错，而漂亮的数字又会加固这一理论幻觉。理解数字含义的前提是对其基础理论有充分认知：对每个头条数字追问——它背后的理论/机制是什么，若理论错了这个数字还说明什么？",
   "编写并维护鲁棒性测试：边界与对抗输入、适用的扰动场景；并在 Agents/ 下创建/维护 Agents/selfcheck.py（测试与调试脚本一律放 Agents/，仓库根与 docs/ 只放老板面向的文件——开发时鼓励多探索多测试，交付时奥卡姆剃刀），按项目 profile 聚合三件事——严格模式构建（警告即错误：-Werror / /WX / -D warnings / deny(warnings) 等按语言取）、全量测试+鲁棒性用例、本地 CI 等价执行（仓库配了 CI 就必须本地等价跑通）；套件不只演练还要证伪——diff 新增的每个机制都配一条负向检查（篡改输入必须失败、注入必须被拒），\"已验证\"指证伪尝试失败过，而非快乐路径通过。",
   "Agents/selfcheck.py 必须含至少一个必须失败的金丝雀用例并带 canary 标记；selfcheck 运行时必须真实执行该金丝雀并观察到其失败，并在标准输出末尾打印一行机器可读结果：CANARY: expected-FAIL observed-FAIL（编排器解析此行核验——缺失或 observed-PASS 视为套件无效）——不会变红的测试套件证明不了任何事。",
-  "核查上一轮推送在 remote 上的 CI：GitHub remote 且 gh 可用时用 gh run list / gh run view；不可核查则如实写\"无法核查\"，绝不默认通过；失败项列入本轮必修。推送目标为备份型远端（GitCoffer/usb 等无 CI 宿主）时编排器已机械跳过结转核查——不重复核查，绝不虚构 CI 结论。",
+  "核查上一轮推送在 remote 上的 CI：GitHub remote 且 gh 可用时用 gh run list / gh run view；不可核查则如实写\"无法核查\"，绝不默认通过；失败项列入本轮必修。推送目标无远端 CI 主机（本地/备份型远端）时编排器已机械跳过结转核查——不重复核查，绝不虚构 CI 结论。",
   "独立性绝对：绝不修改被测实现。你只写 Agents/selfcheck.py、鲁棒性用例，以及 Agents/requirement_map.md（要求↔实现位置↔可重跑验证命令，表格式并带 requirement-map 标记）的验证列。",
   "破坏性操作判据（与申报义务对齐）：超出批准清单的——数据文件或整目录消失、baseline 之下的历史被改写、force push、既有产物被覆盖——标 blocker 并索要申报与裁决记录；正常重构中的源文件删除不属破坏性操作，但须在提交信息或文档中可追溯；对第三方仓库的 clone，上游只读——推送仍只去约定 remote、绝不 push 上游，收尾前以 git 输出核实上游 refs 原样。",
   "产物新鲜度与参照锚定：核验所用产物必须由 HEAD 构建——构建布局可暴露产物时核对源文件与产物新旧（Agents/selfcheck.py 可内置该检查），陈旧二进制上的绿灯一律作废；存在参考实现（上游/先行实现）时，对可疑行为先对照其行为层核查，无理由的偏离即问题；每条问题标注所属层/组件及判别证据。",
   "验证命令一律在钉定环境运行：输出 locale 固定（本地化工具以固定 locale 重跑）、系统级配置隔离（凭据助手与全局 git 配置绕过而非信任）、场景间凭据状态复位、临时目录不假定持久；每个结论的验证手段分层声明按每次 verdict 的 coverage 要求执行。",
   "每条问题附复现证据（命令+输出）；修复后必须复跑原始失败检查确认关闭；对工程师的反驳只依据证据仲裁；构建系统都跑不起来、要求自相矛盾这类问题如实标 blocker。severity 分级纪律：minor 只限文档措辞、誊记口径、日志完备性类——凡涉及正确性、数据保真、时间戳语义、老板原话符合性、安全的一律 major 或 blocker，绝不标 minor；每个 minor 必须在证据中附一句判据（为什么不影响上述任何一项）——总工抽查与收官门禁会升降级，误标按 major 处置；minor 若修复需重跑昂贵流程（全量重算/重渲染/长实验）且不影响正确性与交付判据，挂账 known minors 收官处置即可，不为它重派返修（老板 2026-11-11 新规：代价大只记账）。",
-  "核验手段与换版纪律：文件级断言用路径过滤命令核验（git log --oneline -- <路径>、git diff --cached --name-only），绝不 grep git status --porcelain 的输出判定非 ASCII 路径——porcelain 八进制转义曾致「文件未提交」误判；台账/文档版本升版时，依赖旧版本字串的断言（selfcheck 的 grep、版本比对、映射表引用）同一提交内同步更新——换版与断言面永不同轮脱节。",
+  "核验手段与换版纪律：文件级断言用路径过滤命令核验（git log --oneline -- <路径>、git diff --cached --name-only），绝不 grep git status --porcelain 的输出判定非 ASCII 路径——porcelain 八进制转义曾致「文件未提交」误判；台账/交付物版本字串升版时，依赖旧版本字串的断言（selfcheck 的 grep、版本比对、映射表引用）同一提交内同步更新——换版与断言面永不同轮脱节。",
   "全程中文。",
 ].join("\n");
 
@@ -636,7 +636,7 @@ let finalVerdict: FinalReport | null = null;
 let interrupted = false;
 let ungatedHead = false; // 门禁未过即打断时 HEAD 含未过门禁的提交——最终简报不推送
 let dangerRedemptionUsed = false; // 赎回通道整个运行至多一次（实测缺陷 1：防滥用）
-let visualCacheKey = ""; // 视觉结论记忆化（实测缺陷 7：同一产物集合被反复全额重审构成不可收敛循环）——键含产物内容与规格版本
+let visualCacheKey = ""; // 视觉结论记忆化（实测缺陷 7：同一产物集合被反复全额重审构成不可收敛循环）——键含产物内容、规格版本与判据分层分量（分层拆分移动即键变，防旧基线结论拦截新基线轮）
 let visualCacheOk = true;
 let visualCacheNote = "";
 let branch = "main";
@@ -792,7 +792,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     };
     const noRn = (cards.cards || []).filter((c) => !/\bR\d+\b/.test(c));
     let paraphrased = (cards.cards || []).filter((c) => /\bR\d+\b/.test(c) && !verbatimOk(c));
-    if (noRn.length > 0) log("第 " + round + " 轮有 " + noRn.length + " 张卡无 Rn 标注——违反发卡纪律（每卡可追溯到要求条目），如实记录");
+    if (noRn.length > 0) log("第 " + round + " 轮有 " + noRn.length + " 张卡无 Rn 标注—不涉及老板原话的卡须写明「无对应 Rn：理由」，未写明即违反发卡纪律，如实记录");
     if (noRn.length + paraphrased.length > 0) {
       cards = await chief.ask<RoundCards>(
         "卡面-台账对拍未通过（转述失真防线，句级）：" + (paraphrased.length > 0 ? "以下卡引用了 Rn，但没有完整内嵌台账中该 Rn 的登记行——卡面转述可能已改变实词（对象/操作/量词/否定词/数字）：\n" + paraphrased.map((c) => "- " + c.slice(0, 80)).join("\n") + "\n" : "") + (noRn.length > 0 ? "以下卡完全无 Rn 标注——无 Rn 即绕过逐字对拍，每卡必须可追溯到要求条目：\n" + noRn.map((c) => "- " + c.slice(0, 80)).join("\n") + "\n" : "") + "请重写上述卡：把 Agents/requirements.md 中该 Rn 的登记行逐字复制进卡面（含 Rn 前缀；压缩短语只能作标题），其余字段照旧返回（不得新增 blocked/done）；确属与要求条目无关的基础设施卡，改写为引用其服务的要求条目并说明关系，确实孤立的写明「无对应 Rn：理由」如实呈现；若是台账漏记了原话，先补台账再返回，补记的登记行行尾标注「（补记）」——补记与原始登记必须可区分。返回 RoundCards。",
@@ -941,7 +941,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
       const found: string[] = (verdict.artifacts || []).filter((p) => isImg(p));
       imgDetectOk = true;
       try {
-        const st2 = await G(["status", "--porcelain"], 60000);
+        const st2 = await G(["status", "--porcelain", "--untracked-files=all"], 60000); // 新建未跟踪目录在 porcelain 默认折叠为一行——不展开则目录内新图整体漏检（SPEC 承诺 untracked 检测面）
         for (const line of (st2.stdout || "").split("\n")) {
           const t2 = line.trim();
           if (t2.length < 4) continue;
@@ -959,8 +959,8 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
         }
         const ig2 = await G(["ls-files", "--others", "--ignored", "--exclude-standard", "--", "*.png", "*.jpg", "*.jpeg", "*.svg", "*.webp", "*.gif"], 60000); // pathspec 限定图形文件：全量 ignored 枚举在大仓库有体量代价（P1）
         for (const p4 of (ig2.stdout || "").split("\n").map((s) => s.trim())) {
-          // 被 .gitignore 的交付图按老板面向位置检测——Agents/ 之外一律检测（落点契约允许按功能命名的目录）；Agents/ 内不算交付
-          if (p4 !== "" && isImg(p4) && found.indexOf(p4) < 0 && p4.indexOf("Agents/") !== 0) found.push(p4);
+          // 被 .gitignore 的交付图按老板面向位置检测——Agents/ 之外一律检测（落点契约允许按功能命名的目录）；Agents/ 内不算交付；常见依赖/构建目录（node_modules/.venv/venv/__pycache__/build/dist 等）也不算交付
+          if (p4 !== "" && isImg(p4) && found.indexOf(p4) < 0 && p4.indexOf("Agents/") !== 0 && !/(^|\/)(node_modules|\.venv|venv|__pycache__|build|dist)\//.test(p4)) found.push(p4);
         }
       } catch {
         imgDetectOk = false; // B#18：检测失败必须如实披露，不得静默按无图处理
@@ -969,6 +969,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
     };
     imageFiles = await detectImages();
     let visualOk = imageFiles.length === 0;
+    histLedgerN = ""; // 每 attempt 复位——后续 attempt 不再报的挂账不残留（imgDetectOk 同款纪律）
     visualNote = imageFiles.length === 0 ? (imgDetectOk ? "本轮无图像产物：不适用" : "图像产物检测失败——按无图处理，如实记录") : "尚未审阅";
     let histImgs: string[] = []; // 判据分层：此前轮次遗留的历史产物图像——其呈现缺陷挂账不阻塞，替代品落地时一并消除
     try {
@@ -977,7 +978,7 @@ for (let round = startRound; round <= roundsTotal && !interrupted; round++) {
         const dfR = await G(["diff", "--name-only", baseline, "HEAD"], 60000);
         const stR2 = await G(["status", "--porcelain"], 60000);
         const baseTreeR = new Set((btR.stdout || "").split("\n").map((s) => s.trim()).filter((s) => s !== ""));
-        const changedR = new Set(((dfR.stdout || "") + "\n" + (stR2.stdout || "")).split("\n").map((l) => l.trim().replace(/^(?:[MARTD?]{1,2}|\w+)\s+/, "").trim()));
+        const changedR = new Set((stR2.stdout || "").split("\n").map((l) => l.trim().replace(/^(?:[MARTD?]{1,2}|\w+)\s+/, "").trim()).concat((dfR.stdout || "").split("\n").map((s) => s.trim()).filter((s) => s !== ""))); // diff 行无状态前缀——过 porcelain 剥离正则会剥坏含空格路径
         histImgs = imageFiles.filter((p) => baseTreeR.has(p) && !changedR.has(p));
       }
     } catch { histImgs = []; } // 分层判据不可得时保守退回全量阻塞（宁可重修，绝不漏修本轮交付物）
