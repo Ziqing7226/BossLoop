@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Research Iteration Loop (v0.7.10), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3; empirical review critiques are closed only with evidence); the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map — mechanism claims carry discriminative evidence + a mechanical selfcheck gate with a canary + an eval-surface fingerprint against silent drift, owning the test fixtures; failure triage decides the flow); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; model tiering tiered/uniform.
+description: Research Iteration Loop (v0.8.0), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3; empirical review critiques are closed only with evidence); the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map — mechanism claims carry discriminative evidence + a mechanical selfcheck gate with a canary + an eval-surface fingerprint against silent drift, owning the test fixtures; failure triage decides the flow); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; completion-gated blind review (intermediate rounds run the engineering gate plus a lightweight novelty scan); response-doctrine self-check (fixes are closed by confirmed responses; red lines never close by re-scoping or reporting); model tiering tiered/uniform.
 args:
   idea:
     type: string
@@ -119,6 +119,17 @@ interface Invite {
   brief: string;
 }
 
+interface ConfirmOutcome {
+  /** One-sentence verdict */
+  summary: string;
+  /** Item-by-item confirmation: issue -> does the response hold (accepted=false means unresolved) */
+  confirmations: { issue: string; accepted: boolean; note: string }[];
+  /** Fixes that could not be measured and were judged fixed by reasoning only (recorded honestly; majors/blockers ride the evaluation report's disclosure) */
+  unverified: { issue: string; severity: "minor" | "major" | "blocker"; note: string }[];
+  /** Every response confirmed and no red line unresolved */
+  passed: boolean;
+}
+
 interface Review {
   /** One-sentence verdict */
   summary: string;
@@ -167,6 +178,8 @@ interface RoundRow {
 
 interface EvalReport {
   verdict: "continue" | "pivot" | "stop";
+  /** Waiting on the boss: items needing a boss decision / approval / input, one plain-language line each (empty when none); the report presents them as a standalone section */
+  bossBlockers: string[];
   /** Expected success: a qualitative judgement expressed as a number, not a calibrated probability; must cite the experiment-mortality trend and the novelty check (say so) */
   successOdds: string;
   novelty: string;
@@ -227,7 +240,7 @@ const ALGO_EN = [
 ].join("\n");
 
 const VISUAL_EN = [
-  "You are the Visual Reviewer: you look at images only — not the code, and never at anyone's self-report. Open each given image and inspect it. issues carry spec violations and product defects only, each citing a spec-table row or reproducible evidence: wrong resolution/domain, wrong palette, rendering holes or broken images, large blank regions or a handful of data points (a fixable rendering defect), factual errors contradicting the claimed conclusion. Presentation/information limits are NOT issues: elements the spec never asked for, a first frame that cannot show the algorithm difference (an honestly recorded negative is itself evidence), weak informational support — those go into the summary under an 观感限制 (presentation-limits) prefix; when the look belongs to the boss's own judgement, note \"left for the boss to judge\" — your duty is faithful presentation, not ruling on looks in the boss's place (field defect 7: treating an artifact's inherent information limits as gate items makes the loop non-converging).",
+  "You are the Visual Reviewer: you look at images only — not the code, and never at anyone's self-report. Open each given image and inspect it. issues carry spec violations and product defects only, each citing a spec-table row or reproducible evidence: wrong resolution/domain, wrong palette, rendering holes or broken images, large blank regions or a handful of data points (a fixable rendering defect), factual errors contradicting the claimed conclusion. Presentation/information limits are NOT issues: elements the spec never asked for, a first frame that cannot show the algorithm difference (an honestly recorded negative is itself evidence), weak informational support — those go into the summary under a presentation-limits prefix; when the look belongs to the boss's own judgement, note \"left for the boss to judge\" — your duty is faithful presentation, not ruling on looks in the boss's place (field defect 7: treating an artifact's inherent information limits as gate items makes the loop non-converging).",
   "Judge against the artifact spec table in the LoopMail/ToBoss.md opening mail — what it should look like — not against what looks pretty. Read-only, change nothing; say plainly which images you could not open.",
   "Resident identity and re-dispatch discipline (v0.7.1): you are this run's one Visual Reviewer (fixed name); you may be asked again after part of an artifact set or its content changed — every ask is judged by the files it lists now, your earlier verdicts and remembered images never count, open each image fresh as if seeing it for the first time, never reuse a previous judgment.",
 ].join("\n");
@@ -596,6 +609,10 @@ let visualCacheIssuesR: string[] = [];
 let independentAdjudicatorUsedR = false; // the independent adjudicator runs at most once per run (robust §4.6 same shape: one-shot, read-only, final)
 let dangerUnverifiedNote = ""; // entries still not verbatim-closed after re-confirmation and adjudication (mechanically injected into the evaluation report, never silently)
 const rows: RoundRow[] = [];
+const dispositionsR: string[] = []; // v0.8.0 dispositioned-issues register: reviewers may overturn but never re-raise answered items empty-handed (carried in the review asks)
+const unverifiedNotesR: string[] = []; // v0.8.0 response doctrine: fixes that could not be measured (minors ledgered; majors/blockers ride the evaluation report's mandatory disclosure to the boss)
+const confirmRejectsR: string[] = []; // v0.8.0 response doctrine: responses rejected by the checker (disclosed honestly in the evaluation report)
+let reviewSkippedR = 0; // v0.8.0 completion gating: rounds run without blind review (the report must state the review scope explicitly)
 let plan = "Round " + startRound + ": follow the survey (proposals: " + survey.proposals.join(", ") + "; competitors: " + survey.competitors.join(", ") + ")";
 
 /** Destructive operations: declare -> strong-tier Chief rules -> run exactly as approved; returns the ruling log for the ledger. Covers the initial build AND the fix paths. */
@@ -666,6 +683,7 @@ let protocolDriftNote = ""; // disclosure injection when eval-surface drift is d
 let evalSurfaceLieNote = ""; // disclosure injection when the fingerprint is lying (set once, not per round)
 let misunderstandingNote = ""; // misunderstandings escalated by the Chief (awaiting the boss's answer) — the report's boss-decision section must list each one
 let bossStopR = false; // the boss-stop marker hit (FromBoss 【老板停点】 — a boss-level stop must land in a mechanism with a receipt, field finding D25)
+let bossReviewOrderR = false; // the boss-ordered-review marker hit (FromBoss 【老板审稿】 — the boss may order blind review on an incomplete intermediate round)
 for (let round = startRound; round <= rounds; round++) {
   const roundHead0 = await HEADR(); // the HEAD where this round starts: the baseline for the image detection's diff source (same as the engineering loop)
   algo = agent("Algorithm Engineer-R" + round, persona(ALGO_EN + PROFILE_LINE, CHEAP));
@@ -677,6 +695,7 @@ for (let round = startRound; round <= rounds; round++) {
   try {
     bossNote = (await readRepo("LoopMail/FromBoss.md")).trim();
     bossStopR = bossNote.includes("【老板停点】"); // mechanical boss-stop detection (on a resume this read may be stale — the Chief's own fresh read is the backstop)
+    bossReviewOrderR = bossNote.includes("【老板审稿】"); // mechanical detection of a boss-ordered review (same round-top read)
   } catch {
     bossNote = "";
   }
@@ -762,10 +781,10 @@ for (let round = startRound; round <= rounds; round++) {
     };
     const noRn = (cards.cards || []).filter((c) => !/\bR\d+\b/.test(c));
     let paraphrased = (cards.cards || []).filter((c) => /\bR\d+\b/.test(c) && !verbatimOk(c));
-    if (noRn.length > 0) log("Round " + round + " has " + noRn.length + " card(s) without an Rn reference — cards that touch none of the boss's words must state 无对应 Rn：理由 (no corresponding Rn: reason); unstated, it is a violation of the carding discipline; recorded honestly");
+    if (noRn.length > 0) log("Round " + round + " has " + noRn.length + " card(s) without an Rn reference — cards that touch none of the boss's words must state 'no corresponding Rn: reason'; unstated, it is a violation of the carding discipline; recorded honestly");
     if (paraphrased.length + noRn.length > 0) {
       cards = await chief.ask<WorkCards>(
-        "Card-to-opening-mail check failed (retelling-distortion defense, line-level): " + (paraphrased.length > 0 ? "these cards cite an Rn but do not fully contain that Rn's registered line from the opening mail — the card's paraphrase may have changed content words (object/operation/quantifier/negation/numbers):\n" + paraphrased.map((c) => "- " + c.slice(0, 80)).join("\n") + "\n" : "") + (noRn.length > 0 ? "these cards carry no Rn at all — without an Rn they bypass the verbatim check; every card must trace to a requirement entry:\n" + noRn.map((c) => "- " + c.slice(0, 80)).join("\n") + "\n" : "") + "Rewrite the cards above: copy the registered line for the cited Rn from LoopMail/ToBoss.md verbatim into the card (with its Rn prefix; a compressed phrase only as the title) and return every other field unchanged (keep the title and proposals unchanged); a genuine infrastructure card unrelated to any requirement is rewritten to reference the requirement it serves, and a truly standalone one states 无对应 Rn：理由 (no corresponding Rn: reason) honestly; if the opening mail itself is missing the original words, complete the mail first, marking each backfilled registered line with \"(backfilled)\" at its end so a backfill stays distinguishable from an original registration. Return WorkCards.",
+        "Card-to-opening-mail check failed (retelling-distortion defense, line-level): " + (paraphrased.length > 0 ? "these cards cite an Rn but do not fully contain that Rn's registered line from the opening mail — the card's paraphrase may have changed content words (object/operation/quantifier/negation/numbers):\n" + paraphrased.map((c) => "- " + c.slice(0, 80)).join("\n") + "\n" : "") + (noRn.length > 0 ? "these cards carry no Rn at all — without an Rn they bypass the verbatim check; every card must trace to a requirement entry:\n" + noRn.map((c) => "- " + c.slice(0, 80)).join("\n") + "\n" : "") + "Rewrite the cards above: copy the registered line for the cited Rn from LoopMail/ToBoss.md verbatim into the card (with its Rn prefix; a compressed phrase only as the title) and return every other field unchanged (keep the title and proposals unchanged); a genuine infrastructure card unrelated to any requirement is rewritten to reference the requirement it serves, and a truly standalone one states 'no corresponding Rn: reason' honestly; if the opening mail itself is missing the original words, complete the mail first, marking each backfilled registered line with \"(backfilled)\" at its end so a backfill stays distinguishable from an original registration. Return WorkCards.",
       );
       // the rewrite path may backfill registrations — re-read and rebuild the snapshot so honestly backfilled lines can pass this round's recheck (a remediation path must converge, review #4)
       let reqRaw2 = "";
@@ -891,8 +910,8 @@ for (let round = startRound; round <= rounds; round++) {
     phase("Visual review of image artifacts");
     const vvR = await visualReviewer.ask<VisualVerdict>(
       "This round's task: " + cards.title + ". Spec: the artifact spec table in the LoopMail/ToBoss.md opening mail. Open and review each image (workspace-relative paths):\n" + imageFilesR.join("\n") +
-      (histImgsR.length > 0 ? "\n[Criteria layering] the images below are historical artifacts left by earlier rounds' archives (not changed this round) — their presentation defects go into the summary under a 历史挂账 prefix, not into issues (the orchestrator sorts them mechanically into the ledger; they are retired when the replacement lands); the rest of the images are this round's deliverables — review them in full: " + histImgsR.join(", ") : "") +
-      "\nissues carry spec violations and product defects only (wrong resolution/domain, wrong palette, rendering holes or broken images, large blanks or a handful of points, facts contradicting the claimed conclusion — each citing a spec row or reproducible evidence); presentation/information limits do not go into issues — put them in the summary under an 观感限制 prefix; note \"left for the boss to judge\" where the look is the boss's own eye. Return VisualVerdict (name the file and what you saw).",
+      (histImgsR.length > 0 ? "\n[Criteria layering] the images below are historical artifacts left by earlier rounds' archives (not changed this round) — their presentation defects go into the summary under a historical-ledger prefix, not into issues (the orchestrator sorts them mechanically into the ledger; they are retired when the replacement lands); the rest of the images are this round's deliverables — review them in full: " + histImgsR.join(", ") : "") +
+      "\nissues carry spec violations and product defects only (wrong resolution/domain, wrong palette, rendering holes or broken images, large blanks or a handful of points, facts contradicting the claimed conclusion — each citing a spec row or reproducible evidence); presentation/information limits do not go into issues — put them in the summary under a presentation-limits prefix; note \"left for the boss to judge\" where the look is the boss's own eye. Return VisualVerdict (name the file and what you saw).",
     );
     if ((vvR.issues || []).length > 0 && histImgsR.length > 0) { // mechanical sort (v0.7.2 field report P1): historical-artifact defects do not join this round's issue list, ledgered for disclosure
       const histNamesR = histImgsR.map((h) => h.split("/").pop() || h);
@@ -1057,6 +1076,7 @@ for (let round = startRound; round <= rounds; round++) {
   }
   if (!canary) log("Gate has no canary marker (a must-fail control case is required)");
   let gate = "";
+  let confirmNoteR = ""; // v0.8.0 response-confirmation outcome (rows.test and the evaluation disclosure face)
   let interpIsPy3 = false;
   for (let attempt = 1; attempt <= 3; attempt++) {
     let exitCode = -1;
@@ -1152,10 +1172,45 @@ for (let round = startRound; round <= rounds; round++) {
       dangerLog = (dangerLog === "none" ? "" : dangerLog + "; ") + await dangerFlow(fixDev.dangerRequests);
     }
   }
+  if ((verdict.issues || []).length > 0) {
+    // Response confirmation (the boss's 2026-11-15 response doctrine): the checker continues its own context — judge the responses and the delta only, never a full re-review
+    phase("Tester: response confirmation");
+    const confirmR = await tester.ask<ConfirmOutcome>(
+      "Response confirmation (no full re-review): your verdict's issue list for this round and the dispositions are below. Judge each response in turn — a fix closes only when you re-run the corresponding check and measure the closure (when it cannot be measured and was judged fixed by reasoning only, record it in unverified honestly, never claimed as measured; major/blocker fixes without measured confirmation ride the evaluation report's mandatory disclosure to the boss); a re-scoping or a ledger-report passes only when the reasoning holds; a rebuttal is arbitrated on evidence only — sound, withdraw the issue; unsound, keep it as a new defect. Red lines = document contradicts facts, the work fails this round's task requirement, a serious bug, contradiction of the boss's words, data fidelity, security (the single exception: a boss-words contradiction whose ambiguity originates in the boss's own words and is registered under the ambiguity discipline may close by re-scope/report); a re-scope or a report never closes a red line otherwise: only a fix [measured] or an evidence-backed rebuttal closes them. New defects are raised honestly as usual (in the confirmations' notes).\nIssue list: " + JSON.stringify(verdict.issues || []) + "\nDispositions (fixes = the fix path; escalations = re-scope/report; when this round has neither, the issues ride the next round's portfolio re-selection): " + JSON.stringify({ fixes: fixes, escalations: escR }) + (fixes.length > 0 ? "\nFix report digest: " + JSON.stringify({ summary: fixDev.summary, numbers: fixDev.numbers, experiments: fixDev.experiments }) : "") + "\nReturn ConfirmOutcome.",
+    );
+    for (const c of confirmR.confirmations || []) dispositionsR.push("Issue: " + String(c.issue || "").slice(0, 100) + " -> " + (c.accepted ? "response confirmed" : "response rejected: " + String(c.note || "").slice(0, 120)));
+    for (const u of confirmR.unverified || []) {
+      const uNoteR = "Round " + round + "|" + String(u.issue || "").slice(0, 80) + " (" + u.severity + "): " + (u.note || "").slice(0, 120);
+      unverifiedNotesR.push(uNoteR);
+      log(u.severity === "minor" ? "Fix unverified (ledgered): " + uNoteR : "Fix unverified (major): " + uNoteR + " — rides the evaluation report's mandatory disclosure to the boss");
+    }
+    for (const c of (confirmR.confirmations || []).filter((x) => !x.accepted)) confirmRejectsR.push("Round " + round + " issue: " + String(c.issue || "").slice(0, 80) + " — " + String(c.note || "").slice(0, 120));
+    confirmNoteR = confirmR.passed ? "; response confirmation: passed" : "; response confirmation: not fully passed (unresolved items disclosed in the evaluation report)";
+    log("Round " + round + " response confirmation: " + (confirmR.passed ? "passed" : "not fully passed — disclosed honestly"));
+  }
 
+  // Completion gating (the boss's 2026-11-15 ruling: blind review starts only after the paper work and the experiments are complete; hard stop / boss stop = the completion boundary)
+  phase("Chief: completion judgment");
+  let reviewDueR = round === rounds || bossStopR || bossReviewOrderR;
+  let completionBasisR = "";
+  if (!reviewDueR) {
+    const compR = await chief.ask<{ complete: boolean; basis: string }>(
+      "Completion judgment (against the artifact spec table and the acceptance criteria in the opening mail at the top of LoopMail/ToBoss.md): at this round's close, is the paper work AND the experiments fully complete? complete=true means every deliverable's acceptance criteria are met — never treat \"could polish further\" as incomplete, and never call unmet criteria complete. basis: one line of reasoning.",
+    );
+    reviewDueR = compR.complete === true;
+    completionBasisR = (compR.basis || "").slice(0, 160);
+    log("Completion judgment (round " + round + "): " + (reviewDueR ? "complete — blind review starts" : "incomplete (" + completionBasisR + ") — blind review and the full manuscript revision are skipped; a lightweight novelty scan runs"));
+  }
+  let paper = "";
+  let digest = "";
+  let reviews: Review[] = [];
+  let noveltyScanR = "";
+  let nR = 0;
+  let absentNR = 0;
+  if (reviewDueR) {
   phase("Researcher: revise manuscript");
-  const paper = await researcher.ask<string>(
-    "Engineering and testing are done; this is your only revision window this round." + (round === 1 && round1FullMissing ? "[Prohibition] Round 1 has no FULL end-to-end number — the manuscript must not claim validation; mark the affected claims as unverified.\n" : "") + "Dev report: " + JSON.stringify(dev) +
+  paper = await researcher.ask<string>(
+    "Engineering and testing are done; this is your only revision window this round." + (round > 1 ? "\nEarlier rounds' results live in Agents/ledger.md's rows (per-round dev/experiments/review fields) — the full-manuscript revision must cover every round's results, not just this round's." : "") + (round === 1 && round1FullMissing ? "[Prohibition] Round 1 has no FULL end-to-end number — the manuscript must not claim validation; mark the affected claims as unverified.\n" : "") + "Dev report: " + JSON.stringify(dev) +
     "\nFix / extra-experiment report (its new numbers are equally citable): " + JSON.stringify(fixDev) + "\nTest verdict: " + verdict.summary +
     "\nRevise docs/paper_draft.md truthfully: only mapped numbers, [TODO] for gaps. Return a short revision summary.",
   );
@@ -1172,6 +1227,7 @@ for (let round = startRound; round <= rounds; round++) {
     "Extract keywords, decide reviewer count (1-3), and write the tight brief (manuscript + evidence map + targeted questions, never the whole repo). Return Invite.",
   );
   const n = Math.max(1, Math.min(3, Math.round(invite.count)));
+  nR = n;
   // Blind-review leak scan (mechanical): the reviewer brief must not carry the operator's identity — on a hit it goes back to the editor for one stripping pass
   let identityScan = "";
   try {
@@ -1193,23 +1249,24 @@ for (let round = startRound; round <= rounds; round++) {
   const settled = await Promise.allSettled(
     Array.from({ length: n }, (_, i) =>
       panelPool[i].ask<Review>(
-        invite.brief + "\n\nYou are an independent reviewer from an adjacent (related but non-overlapping) field. Review only from the brief and the materials it points to — do not open other repo content, git history or the ledger (blind-review discipline); read-only, change nothing: raise sharp issues against the manuscript and evidence map (with evidence), propose next-round iterations, and give a severity. Beware number hallucination: a good-looking number is not a good outcome — scrutinize whether what a manuscript number means is really as simple as it appears; the theory behind it may itself be wrong, and the flattering number reinforces that illusion. Say so if you cannot judge something.",
+        invite.brief + "\n\nYou are an independent reviewer from an adjacent (related but non-overlapping) field. Review only from the brief and the materials it points to — do not open other repo content, git history or the ledger (blind-review discipline); read-only, change nothing: " + (dispositionsR.length > 0 ? "\n[Dispositioned-issues register] issues dispositioned in earlier rounds with their responses — overturn one if the response does not hold (with fresh evidence); never re-raise an answered item empty-handed:\n" + dispositionsR.slice(-8).join("\n") : "") + "raise sharp issues against the manuscript and evidence map (with evidence), propose next-round iterations, and give a severity. Beware number hallucination: a good-looking number is not a good outcome — scrutinize whether what a manuscript number means is really as simple as it appears; the theory behind it may itself be wrong, and the flattering number reinforces that illusion. Say so if you cannot judge something.",
       ),
     ),
   );
   let readerRev: Review | null = null;
   try { readerRev = await reader.ask<Review>(
-    "Review after reading the references (materials: the manuscript summary, the cited references including the docs/refs/ paper library, and web search — not the ledger, git history or other workspace content). Manuscript summary: " + paper.slice(0, 500) + "\nVerify citations and narrative, check for missed recent work, ask questions, propose iterations. Beware number hallucination: a good-looking number is not a good outcome — scrutinize whether what a manuscript number means is really as simple as it appears; the theory behind it may itself be wrong, and the flattering number reinforces that illusion. nearestWorks is mandatory: the 3 closest works and the difference dimension.",
+    "Review after reading the references (materials: the manuscript summary, the cited references including the docs/refs/ paper library, and web search — not the ledger, git history or other workspace content). " + (dispositionsR.length > 0 ? "\n[Dispositioned-issues register] issues dispositioned in earlier rounds with their responses — overturn one if the response does not hold (with fresh evidence); never re-raise an answered item empty-handed:\n" + dispositionsR.slice(-8).join("\n") : "") + "Manuscript summary: " + paper.slice(0, 500) + "\nVerify citations and narrative, check for missed recent work, ask questions, propose iterations. Beware number hallucination: a good-looking number is not a good outcome — scrutinize whether what a manuscript number means is really as simple as it appears; the theory behind it may itself be wrong, and the flattering number reinforces that illusion. nearestWorks is mandatory: the 3 closest works and the difference dimension.",
   ); } catch { log("The literature reader is absent or failed — recorded honestly as absent, not counted in the review tally (same absence semantics as the panel)"); }
   // Absent-reviewer honesty: an absence is not a minor review — no fabricated severity; the digest marks it explicitly and the ledger carries the count
   const absentN = settled.filter((s) => s.status !== "fulfilled").length;
+  absentNR = absentN;
   if (absentN > 0) log("Review panel absent " + absentN + "/" + n + " — absences are excluded from the severity tally, recorded honestly in the ledger (re-invite next round)");
-  const reviews: Review[] = [];
+  reviews = [];
   for (const s of settled) {
     if (s.status === "fulfilled") reviews.push(s.value);
   }
   if (readerRev !== null) reviews.push(readerRev);
-  const digest = settled
+  digest = settled
     .map((s, i) => {
       const label = "Reviewer-" + (i + 1);
       if (s.status !== "fulfilled") return "[" + label + " | absent] this reviewer did not finish — review coverage is incomplete; absences are excluded from the tally";
@@ -1226,11 +1283,21 @@ for (let round = startRound; round <= rounds; round++) {
       "[Reference Reader | absent] the senior literature reader did not complete a review — recorded honestly as absent, not counted in the review tally",
     ])
     .join("\n\n");
+  } else {
+    // Intermediate round: lightweight novelty scan (the guardrail the boss accepted on 2026-11-15) — no review, so a scoop is not discovered too late
+    noveltyScanR = await researcher.ask<string>(
+      "Lightweight novelty scan (no review, do not read the manuscript in full): on the evidence of this round's proposals and results, search the web and the docs/refs/ paper library — does any published work substantially overlap this work? Answer in two or three sentences: no overlap / suspected overlap (title + difference dimension); say \"unsure\" honestly when unsure.",
+    );
+    reviewSkippedR++;
+    digest = "[Round " + round + " ran without blind review] completion judgment: incomplete" + (completionBasisR !== "" ? " (" + completionBasisR + ")" : "") + ". Engineering gate: " + gate + ". Novelty scan: " + noveltyScanR.slice(0, 200);
+    log("Round " + round + " skips blind review and the full manuscript revision (completion judgment: incomplete) — the lightweight novelty scan is done");
+  }
 
   phase("Chief: archive round");
   const head0 = await HEADR(); // retried on transient failure (B#25) — archive verification never bare-reads
+  const reviewArchR = reviewDueR ? "review panel of " + nR + " with " + absentNR + " absent" : "this round ran without blind review (completion judgment: incomplete; engineering gate: " + gate.slice(0, 60) + "; the lightweight novelty scan ran)";
   const archived = await chief.ask<string>(
-    "Record this round in Agents/ledger.md (head carries the repository identity line" + (repoRoot ? ": " + repoRoot: "") + " and a one-line-per-round index: update this round's index line first, then append the detail; review panel of " + n + " with " + absentN + " absent) — task/build (" + (dev.summary || "").slice(0, 400) + ")/HEAD before archive " + (head0 !== "" ? head0.slice(0, 7) : "empty tree / unreadable") + "/destructive-operation ruling (" + dangerLog + ")/test (coverage statement: " + (verdict.coverage || "").slice(0, 300) + "; visual review: " + visualNoteR.slice(0, 200) + (histIssLedgerR !== "" ? "; historical-artifact ledger: " + histIssLedgerR.slice(0, 400) : "") + "; claim_map exemptions " + (exemptCountR >= 0 ? "counted: " + exemptCountR: "not audited — the substance check did not complete") + ")/reviews (" + digest.slice(0, 1200) + ")/next direction. Then " + GC + " add each changed file by explicit path && " + GC + " commit (the backup push is executed and verified by the orchestrator — you never push; publishing to the cloud is always the boss's explicit action). Return one sentence.",
+    "Record this round in Agents/ledger.md (head carries the repository identity line" + (repoRoot ? ": " + repoRoot: "") + " and a one-line-per-round index: update this round's index line first, then append the detail; " + reviewArchR + ") — task/build (" + (dev.summary || "").slice(0, 400) + ")/HEAD before archive " + (head0 !== "" ? head0.slice(0, 7) : "empty tree / unreadable") + "/destructive-operation ruling (" + dangerLog + ")/test (coverage statement: " + (verdict.coverage || "").slice(0, 300) + "; visual review: " + visualNoteR.slice(0, 200) + (histIssLedgerR !== "" ? "; historical-artifact ledger: " + histIssLedgerR.slice(0, 400) : "") + "; claim_map exemptions " + (exemptCountR >= 0 ? "counted: " + exemptCountR: "not audited — the substance check did not complete") + ")/reviews (" + digest.slice(0, 1200) + ")/next direction. Then " + GC + " add each changed file by explicit path && " + GC + " commit (the backup push is executed and verified by the orchestrator — you never push; publishing to the cloud is always the boss's explicit action). Return one sentence.",
   );
   const head1 = await HEADR(); // retried on transient failure (B#25) — archive verification never bare-reads
   let commitOk = head1 !== "" && head1 !== head0;
@@ -1271,7 +1338,7 @@ for (let round = startRound; round <= rounds; round++) {
   log("Round " + round + " backup push: " + pushStateR);
 
   const rank: Record<string, number> = { minor: 1, major: 2, blocker: 3 };
-  const worst = reviews.reduce((a, b) => (rank[b.severity] > rank[a.severity] ? b : a));
+  const worst = reviews.length > 0 ? reviews.reduce((a, b) => (rank[b.severity] > rank[a.severity] ? b : a)) : null;
   const nextDirection = reviews.flatMap((r) => r.iteration).slice(0, 3).join("; ");
   rows.push({
     round,
@@ -1279,9 +1346,9 @@ for (let round = startRound; round <= rounds; round++) {
     portfolio: (cards.proposals || []).join(", "),
     dev: dev.summary + (fixDev !== dev ? " (incl. fixes)" : ""),
     experiments: [dev.experiments, fixDev !== dev ? fixDev.experiments : ""].filter((s) => s && s !== "none").join("; ") || "not reported",
-    test: gate,
-    review: "[" + worst.severity + "] " + worst.summary,
-    next: nextDirection.slice(0, 200),
+    test: gate + confirmNoteR,
+    review: worst !== null ? "[" + worst.severity + "] " + worst.summary : "[not reviewed] " + reviewArchR.slice(0, 160),
+    next: worst !== null ? nextDirection.slice(0, 200) : noveltyScanR.slice(0, 200),
   });
   report(rows[rows.length - 1], "rounds");
   plan = digest;
@@ -1341,6 +1408,9 @@ let evalResult = await chief.ask<EvalReport>(
   resumeNote + (bossStopR ? "Boss stop point: planned " + rounds + " rounds, executed " + rows.length + " before stopping (the boss wrote a 【老板停点】 marker in FromBoss). " : rounds + " rounds complete — hard stop. ") + "The latest round's reviews (earlier rounds live in the ledger's rows):\n" + plan.slice(0, 6000) + "\n" +
   "Round records: " + JSON.stringify(rows) + "\n" +
   (roundsOverrunR ? "[Round overrun] the ledger/Chief report shows more rounds done than this run committed — this run executed no rounds; the anomaly is disclosed to the boss in this report.\n" : "") +
+  (reviewSkippedR > 0 ? "[Review scope] " + reviewSkippedR + " round(s) of this run ran without blind review (completion judgment: incomplete; the engineering gate ran as usual) — the report must state that blind review covers the reviewed rounds only, never letting the boss believe every round faced the review panel.\n" : "") +
+  (unverifiedNotesR.length > 0 ? "[Fixes without measured confirmation] the fixes for the issues below could not be measured and were judged fixed by reasoning only — disclose to the boss as facts, never as solved (a major/blocker fix without measured confirmation counts as unconfirmed): " + unverifiedNotesR.join("; ") + "\n" : "") +
+  (confirmRejectsR.length > 0 ? "[Responses not confirmed] the dispositions below were rejected by the checker — present the issues and the rejected responses honestly: " + confirmRejectsR.join("; ") + "\n" : "") +
   (startRound > 1 ? "[Evidence scope] This run resumed at round " + startRound + ": the reviews and round records above cover this run's rounds only — the report must state its evidence scope explicitly, never letting the boss believe it covers all rounds.\n" : "") +
   (bossStopR ? "[Boss stop point receipt] the boss wrote a 【老板停点】 marker in LoopMail/FromBoss.md: the run stopped with rounds remaining — the report must quote the stop words verbatim and receipt them to the boss (done/not done, decision points), never silently.\n" : "") +
   (visualOn ? "" : "[Visual-review exemption] the boss set visualReview=off for this run (image artifacts were detected and listed but not independently reviewed) — the report must disclose this exemption honestly, never silently.\n") +
@@ -1356,7 +1426,7 @@ let evalResult = await chief.ask<EvalReport>(
   "Write the Preliminary Evaluation Report: verdict (continue/pivot/stop), expected success with reasoning that cites the experiment-mortality trend and the reader's novelty check, plus an explicit note that it is a qualitative judgement expressed numerically rather than a calibrated probability, novelty grounded in the 3 closest works, impact, points to watch if continued (each annotated with the evidence scope of the claim it concerns — datasets and conditions), " +
   "questionAnswers (question text -> direct answer -> where the evidence is; when asked where something lives, answer the form too — raw or derived, whether a writer exists), autonomousDecisions (decision -> reason -> consequence if rejected -> Occam self-assessment \"adds complexity vs simplifies\"; any complexity-increasing decision must be here, never only in the ledger), " +
   "deferred and declined fixed sections (each item with its reason — a recorded deferral is a decision, not an omission; a declined idea is not re-proposed next run; fill both fields faithfully, empty arrays when none), reviewerQuotes (verbatim, never paraphrased), deviations from the boss's requirements explained one by one (deviations: deviation + reason + the alternative chosen; empty array when none), process lessons (processLessons: each = rule + why + scope; lessons the boss adopts persist and load with the next run, a disproven lesson is marked superseded), and one line of advice including a decision list of things only the boss can do (accounts, data, resources). " +
-  "Reconciliation close-out (internal affair): mark every Rn from the opening mail's sentence inventory as delivered/partial/undelivered -> where the evidence is, into the ledger's closing chapter and the reconciliation column of Agents/claim_map.md — never as a reconciliation table in the boss's mail; an \"implemented\" without an entry does not count. This report is a decision-layer document and is appended as a new mail at the top of LoopMail/ToBoss.md (the 2026-11-05 boss mail system: ToBoss.md is the Chief's delivery-mail master file — new mails go at the top, appended in reverse order, old mails are never modified; docs/ holds formal content such as the manuscript and REPORT.ipynb; formal files are referenced in mails by links as attachments; writing discipline (the boss's words of 2026-11-05, hard rules): the art of de-redundancy — report the minimum, fastest for the boss to grasp the main line and the whole, no jargon piles (gloss jargon on first use), nothing contrary to fact (numbers and conclusions quote command output and the artifact manifest only), no code-segment or path dumps (evidence pointers listed in one section, no paths in the body)): no process narrative (which attempt went green, how many reworks, how many review comments — that is the ledger), one conclusion sentence at the top of each section, each item stated once, aiming at two pages or less. At closing, tidy the delivery (2026-11-05 boss rules, hard; sweep the whole repository for historical redundancy first — including leftovers from earlier rounds and runs — then move, with git mv only, never deleting — deleting files is the boss's move): (1) code AND documents the final deliverable does not need (experiment scripts, superseded implementation versions, drafts and intermediate reports — historical redundancy, code and documents alike) -> git mv straight into Agents/; (2) an AI-generated document that has become history -> merge only the content worth adopting into the deliverables wording of the newest ToBoss mail, its body counting as historical redundancy -> git mv into Agents/; (3) docs/ keeps formal content only (the manuscript and its kin); the repo root and docs/ pile up no working files; (4) files the boss wrote or supplied (LoopMail/FromBoss.md, the docs/refs/ paper library) stay as they are, and what the boss wrote is never modified; (5) any file under LoopMail/ other than ToBoss.md/FromBoss.md is judged case by case — boss-placed files get the FromBoss_ prefix and stay untouched, stray agent-made products are put away per (1)/(2), and anything uncertain is treated as boss-placed; the working scaffolding (ledger, maps, Agents/selfcheck.py, test and debug scripts, falsified history) all lives under Agents/. Append the mail to LoopMail/ToBoss.md, " + GC + " add each changed file by explicit path && " + GC + " commit.",
+  "Reconciliation close-out (internal affair): mark every Rn from the opening mail's sentence inventory as delivered/partial/undelivered -> where the evidence is, into the ledger's closing chapter and the reconciliation column of Agents/claim_map.md — never as a reconciliation table in the boss's mail; an \"implemented\" without an entry does not count. This report is a decision-layer document and is appended as a new mail at the top of LoopMail/ToBoss.md (the 2026-11-05 boss mail system: ToBoss.md is the Chief's delivery-mail master file — new mails go at the top, appended in reverse order, old mails are never modified; docs/ holds formal content such as the manuscript and REPORT.ipynb; formal files are referenced in mails by links as attachments). The report opens with the direct answer to the boss's idea (verbatim): one plain-language conclusion sentence first (worth pursuing / pivot / stop + why), then the sections; the report carries a standalone \"waiting on the boss\" section (bossBlockers: each item needing a boss decision / approval / input stated plainly — what it is + why it waits on the boss + the options; \"none\" when nothing waits). Writing discipline (the boss's words of 2026-11-05 + the expression discipline of 2026-11-15, hard rules): the art of de-redundancy — report the minimum, fastest for the boss to grasp the main line and the whole; internal terms and ids either stay out of the mail or carry a plain-language gloss on first use (a bare id like \"M36 three-way finalization\" is the violation example); nothing contrary to fact (numbers and conclusions quote command output and the artifact manifest only); no code-segment or path dumps (evidence pointers listed in one section, no paths in the body); each point is stated completely in exactly one place — never a \"see above / see section X\" cross-reference; prefer simple sentences, grammatically clean and unambiguous; speak with the nouns of the boss's own words. No process narrative (which attempt went green, how many reworks, how many review comments — that is the ledger), one conclusion sentence at the top of each section, each item stated once, aiming at two pages or less. Write links as clickable, boss-reachable forms (resolving from LoopMail/ and pointing at existing files). Before it lands, self-check it once (one revision pass, never a rewrite loop): the opening sentence answers the boss's question directly; the waiting-on-the-boss section stands alone and is clear; no unglossed internal terms; every link is clickable and points at an existing file; simple sentences throughout, no cross-references. At closing, tidy the delivery (2026-11-05 boss rules, hard; sweep the whole repository for historical redundancy first — including leftovers from earlier rounds and runs — then move, with git mv only, never deleting — deleting files is the boss's move): (1) code AND documents the final deliverable does not need (experiment scripts, superseded implementation versions, drafts and intermediate reports — historical redundancy, code and documents alike) -> git mv straight into Agents/; (2) an AI-generated document that has become history -> merge only the content worth adopting into the deliverables wording of the newest ToBoss mail, its body counting as historical redundancy -> git mv into Agents/; (3) docs/ keeps formal content only (the manuscript and its kin); the repo root and docs/ pile up no working files; (4) files the boss wrote or supplied (LoopMail/FromBoss.md, the docs/refs/ paper library) stay as they are, and what the boss wrote is never modified; (5) any file under LoopMail/ other than ToBoss.md/FromBoss.md is judged case by case — boss-placed files get the FromBoss_ prefix and stay untouched, stray agent-made products are put away per (1)/(2), and anything uncertain is treated as boss-placed; the working scaffolding (ledger, maps, Agents/selfcheck.py, test and debug scripts, falsified history) all lives under Agents/. Append the mail to LoopMail/ToBoss.md, " + GC + " add each changed file by explicit path && " + GC + " commit.",
 );
 let evalOnDisk = "";
 try {
@@ -1372,6 +1442,42 @@ if (!evalOnDisk.slice(0, 2000).includes("Preliminary Evaluation Report")) {
     evalOnDisk = "";
   }
   if (!evalOnDisk.slice(0, 2000).includes("Preliminary Evaluation Report")) log("The report is still not on disk after the repair ask — recorded honestly");
+}
+// Mail mechanical pre-check (v0.8.0 ruling 4=B: mechanize whatever a machine can decide) — clickable links, forbidden items, the waiting-on-the-boss section in place; one repair pass, never a loop
+{
+  const mailHeadP = evalOnDisk.slice(0, 9000);
+  const violationsP: string[] = [];
+  const linkReP = /\[[^\]]+\]\(([^)\s]+)\)/g;
+  let lmP: RegExpExecArray | null = linkReP.exec(mailHeadP);
+  while (lmP !== null) {
+    const tP = lmP[1];
+    if (!/^https?:\/\//i.test(tP)) {
+      const candsP = [tP.replace(/^\.\//, ""), tP.replace(/^(\.\.\/)+/, "")];
+      let okP = false;
+      for (const cP of candsP) {
+        try { await readRepo("LoopMail/" + cP); okP = true; break; } catch { /* next candidate */ }
+        try { await readRepo(cP); okP = true; break; } catch { /* next candidate */ }
+      }
+      if (!okP) violationsP.push("dead link (click does not resolve): " + tP);
+    }
+    lmP = linkReP.exec(mailHeadP);
+  }
+  if (mailHeadP.indexOf("Agents/") >= 0) violationsP.push("the mail body carries an internal Agents/ path");
+  if (/Process lessons/i.test(mailHeadP)) violationsP.push("the mail carries a process-lessons section (moved out of the mail, into the ledger)");
+  if (mailHeadP.indexOf("Waiting on the boss") < 0) violationsP.push("the report lacks a standalone \"Waiting on the boss\" section (write \"none\" when nothing waits)");
+  if (violationsP.length > 0) {
+    await chief.ask<string>(
+      "Mail mechanical pre-check failed (one revision pass — revise, land, commit; never a rewrite loop):\n" + violationsP.join("\n") + "\nRevise the mail at the top of LoopMail/ToBoss.md per the evaluation-report writing discipline, " + GC + " add each changed file by explicit path && " + GC + " commit, return one sentence.",
+    );
+    let recheckP = "";
+    try { recheckP = await readRepo("LoopMail/ToBoss.md"); } catch { recheckP = ""; }
+    const stillP = recheckP.slice(0, 9000);
+    const residualP: string[] = [];
+    if (stillP.indexOf("Agents/") >= 0) residualP.push("an Agents/ path is still in the body");
+    if (/Process lessons/i.test(stillP)) residualP.push("a process-lessons section is still present");
+    if (stillP.indexOf("Waiting on the boss") < 0) residualP.push("the \"Waiting on the boss\" section is still missing");
+    log(residualP.length === 0 ? "Mail mechanical pre-check: passed after revision" : "Mail pre-check residuals (recorded honestly): " + residualP.join("; "));
+  } else log("Mail mechanical pre-check: passed");
 }
 // Question guard (mechanical): questions in the boss's words with no answer in the report count as a missed requirement — answer once, then record honestly
 const askedQ = ((idea + " " + focus + " " + closingBossNoteR).match(/？|\?/g) || []).length;
@@ -1425,19 +1531,16 @@ const md = [
   "## If continued, watch for",
   ...evalResult.risks.map((r) => "- " + r),
   "",
+  "## Waiting on the boss",
+  (evalResult.bossBlockers && evalResult.bossBlockers.length > 0) ? evalResult.bossBlockers.map((d) => "- " + d) : ["- none"],
+  "",
   "## Your questions, answered",
   (evalResult.questionAnswers && evalResult.questionAnswers.length > 0) ? evalResult.questionAnswers.map((x) => "- \u201c" + x.q + "\u201d -> " + x.a + " (evidence: " + x.evidence + ")") : ["- none (no questions this run)"],
   "",
   "## Autonomous decisions (please confirm or overturn)",
   (evalResult.autonomousDecisions && evalResult.autonomousDecisions.length > 0) ? evalResult.autonomousDecisions.map((x) => "- " + x.decision + " | why: " + x.reason + " | if rejected: " + x.ifRejected + " | Occam: " + x.occam) : ["- none"],
   "",
-  "## Deferred",
-  (evalResult.deferred && evalResult.deferred.length > 0) ? evalResult.deferred.map((d) => "- " + d.item + " (reason: " + d.reason + ")") : ["- none"],
-  "",
-  "## Declined",
-  (evalResult.declined && evalResult.declined.length > 0) ? evalResult.declined.map((d) => "- " + d.item + " (reason: " + d.reason + ")") : ["- none"],
-  "",
-  "## Reviewer verdicts, verbatim",
+  "## Reviewer quotes",
   ...evalResult.reviewerQuotes.map((q) => "> " + q),
   "",
   "## Advice",
@@ -1445,9 +1548,6 @@ const md = [
   "",
   "## Deviations",
   (evalResult.deviations && evalResult.deviations.length > 0) ? evalResult.deviations.map((d) => "- " + d) : ["- none"],
-  "",
-  "## Process lessons",
-  (evalResult.processLessons && evalResult.processLessons.length > 0) ? evalResult.processLessons.map((d) => "- " + d) : ["- none"],
   "",
   "---",
   "Note: the success figure is a qualitative judgement expressed numerically, not a calibrated probability; reviewer verdicts are quoted unedited and may disagree with the overall verdict.",

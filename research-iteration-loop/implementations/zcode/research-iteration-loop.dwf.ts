@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: 科研迭代循环（v0.7.10）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3；实证类审稿质询只以证据闭环）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表——机制类主张须附区分性证据 + 含 canary 的 selfcheck 机械门禁 + 协议面指纹防评测面漂移，测试基建归其所有；失败三分类定流向）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；模型分档 tiered/uniform。
+description: 科研迭代循环（v0.8.0）：从一个粗糙想法出发，N 轮有界迭代判断它值不值得深挖。每轮：总工依据最新审稿重组方案组合（1–3；实证类审稿质询只以证据闭环）→ 算法工程师三级执行（数字只出自 FULL 级端到端对比）→ 测试工程师独立验证（claim→evidence 映射表——机制类主张须附区分性证据 + 含 canary 的 selfcheck 机械门禁 + 协议面指纹防评测面漂移，测试基建归其所有；失败三分类定流向）→ 修复补充 → 研究员修订稿件 → 编辑盲审（相邻领域审稿人 + 通读文献的资深读者，每轮新颖性核查与实验死亡率入档）；N 轮硬停出《初步评估报告》，账本断点续跑；破坏性操作只申报、强档总工裁决后按批准执行，不转交用户；盲审完工门控（中间轮工程门禁+轻量查新）；自检回复制（修复后确认回复，红线不可用重定界或上报绕过）；模型分档 tiered/uniform。
 args:
   idea:
     type: string
@@ -119,6 +119,17 @@ interface Invite {
   brief: string;
 }
 
+interface ConfirmOutcome {
+  /** 一句话总评 */
+  summary: string;
+  /** 逐条确认：问题→回复是否说得过去（accepted=false 即未解决） */
+  confirmations: { issue: string; accepted: boolean; note: string }[];
+  /** 修复无法实测、只在逻辑上判断已修复的条目（如实记账；major/blocker 机械注入评估报告披露） */
+  unverified: { issue: string; severity: "minor" | "major" | "blocker"; note: string }[];
+  /** 全部回复被确认且无未解红线 */
+  passed: boolean;
+}
+
 interface Review {
   /** 一句话总评 */
   summary: string;
@@ -168,6 +179,8 @@ interface RoundRow {
 interface EvalReport {
   /** 总判断 */
   verdict: "继续" | "转向" | "停止";
+  /** 卡在老板的环节：需要老板决策/批复/提供的事项逐条白话（无则空数组）；报告单独成节呈现 */
+  bossBlockers: string[];
   /** 预期成功率：定性判断的数值化表达，非校准概率（须注明这一点与推理依据） */
   successOdds: string;
   /** 创新性评估 */
@@ -597,6 +610,10 @@ let visualCacheIssuesR: string[] = [];
 let independentAdjudicatorUsedR = false; // 独立终裁官每运行至多一次（robust §4.6 同款：一次性、只读、终局）
 let dangerUnverifiedNote = ""; // 再确认+终裁后仍未逐字闭合的执行条目（机械注入评估报告披露，绝不静默）
 const rows: RoundRow[] = [];
+const dispositionsR: string[] = []; // v0.8.0 已处置问题登记：审稿人可推翻但不空手重提（随盲审问句下发）
+const unverifiedNotesR: string[] = []; // v0.8.0 回复制：修复无法实测的条目（minor 记账；major/blocker 机械注入评估报告向老板披露）
+const confirmRejectsR: string[] = []; // v0.8.0 回复制：被检查者否决的回复（随评估报告如实披露）
+let reviewSkippedR = 0; // v0.8.0 完工门控：未开启盲审的轮数（评估报告必须显式注明盲审覆盖范围）
 let plan = "第 " + startRound + " 轮：按调研结论执行（方案：" + survey.proposals.join("、") + "；竞品：" + survey.competitors.join("、") + "）";
 
 /** 破坏性操作：申报→强档总工裁决→按批准执行；返回裁决日志（入账本）。初始开发与修复/补充实验路径都走这里 */
@@ -667,6 +684,7 @@ let protocolDriftNote = ""; // 协议面漂移检出时的披露注入（与 cla
 let evalSurfaceLieNote = ""; // 协议面指纹失真时的披露注入（只置一次，防逐轮重复）
 let misunderstandingNote = ""; // 总工升级的理解分歧（待老板答复）——评估报告待老板决策节必须逐条列出
 let bossStopR = false; // 老板停点标记命中（FromBoss【老板停点】——老板级停点必须落机制回执，实测 D25）
+let bossReviewOrderR = false; // 老板令开盲审标记命中（FromBoss【老板审稿】——老板可命令对未完工的中间轮开启审稿）
 for (let round = startRound; round <= rounds; round++) {
   const roundHead0 = await HEADR(); // 本轮起点 HEAD：图像检测 diff 源的基线（工程循环同款）
   algo = agent("算法工程师-R" + round, persona(ALGO_ZH + PROFILE_LINE, CHEAP));
@@ -678,6 +696,7 @@ for (let round = startRound; round <= rounds; round++) {
   try {
     bossNote = (await readRepo("LoopMail/FromBoss.md")).trim();
     bossStopR = bossNote.includes("【老板停点】"); // 编排器机械停点检测（续跑时本读取可能陈旧——总工按人设实时直读兜底）
+    bossReviewOrderR = bossNote.includes("【老板审稿】"); // 老板令开盲审的机械识别（同一轮顶直读）
   } catch {
     bossNote = "";
   }
@@ -1058,6 +1077,7 @@ for (let round = startRound; round <= rounds; round++) {
   }
   if (!canary) log("门禁缺少 canary 标记（自检须含必须失败的对照用例）");
   let gate = "";
+  let confirmNoteR = ""; // v0.8.0 回复制确认结果（rows.test 与评估披露面）
   let interpIsPy3 = false;
   for (let attempt = 1; attempt <= 3; attempt++) {
     let exitCode = -1;
@@ -1153,10 +1173,45 @@ for (let round = startRound; round <= rounds; round++) {
       dangerLog = (dangerLog === "无" ? "" : dangerLog + "；") + await dangerFlow(fixDev.dangerRequests);
     }
   }
+  if ((verdict.issues || []).length > 0) {
+    // 回复制确认（老板 2026-11-15）：检查者热承接上文——只判回复与增量，不重开全文审查
+    phase("测试工程师·回复确认");
+    const confirmR = await tester.ask<ConfirmOutcome>(
+      "回复确认（不重开全文审查）：你本轮 verdict 的问题清单与处置回复如下，逐条判定回复是否说得过去——修复项须复跑对应检查实测关闭（无法实测、只在逻辑上判断已修复的，写入 unverified 如实记账，绝不冒充实测；major/blocker 未实测确认的机械注入评估报告向老板披露）；重定界/上报项须说理成立；误诊反驳只依据证据仲裁——成立则撤回，不成立以新缺陷保留并说明。红线=文档与事实不符、开发不满足本轮任务需求、严重 BUG、与老板原话不符、数据保真、安全（唯一例外：与老板原话不符且歧义源于老板原话本身、已按歧义纪律登记的，可重定界/上报关闭）；红线不可用重定界或上报关闭：只能修复（实测）或证据反驳。新缺陷照常如实提出（写进 confirmations 的 note）。\n问题清单：" + JSON.stringify(verdict.issues || []) + "\n处置回复（修复=fixes；重定界/上报=escalations；本轮无修复与升级时，问题以下轮方案重组承载）：" + JSON.stringify({ fixes: fixes, escalations: escR }) + (fixes.length > 0 ? "\n修复报告摘要：" + JSON.stringify({ summary: fixDev.summary, numbers: fixDev.numbers, experiments: fixDev.experiments }) : "") + "\n返回 ConfirmOutcome。",
+    );
+    for (const c of confirmR.confirmations || []) dispositionsR.push("问题：" + String(c.issue || "").slice(0, 100) + "→" + (c.accepted ? "回复被确认" : "回复被否决：" + String(c.note || "").slice(0, 120)));
+    for (const u of confirmR.unverified || []) {
+      const uNoteR = "第 " + round + " 轮|" + String(u.issue || "").slice(0, 80) + "（" + u.severity + "）：" + (u.note || "").slice(0, 120);
+      unverifiedNotesR.push(uNoteR);
+      log(u.severity === "minor" ? "修复未实测确认（记账）：" + uNoteR : "修复未实测确认（重大）：" + uNoteR + "——机械注入评估报告向老板披露");
+    }
+    for (const c of (confirmR.confirmations || []).filter((x) => !x.accepted)) confirmRejectsR.push("第 " + round + " 轮问题：" + String(c.issue || "").slice(0, 80) + "——" + String(c.note || "").slice(0, 120));
+    confirmNoteR = confirmR.passed ? "；回复确认：通过" : "；回复确认：未全过（未解项随评估报告如实披露）";
+    log("第 " + round + " 轮回复确认：" + (confirmR.passed ? "通过" : "未全过——如实披露"));
+  }
 
+  // 完工判定（老板 2026-11-15：盲审只在论文工作与实验完工后开启；硬停/老板停点=完工边界）
+  phase("总工程师·完工判定");
+  let reviewDueR = round === rounds || bossStopR || bossReviewOrderR;
+  let completionBasisR = "";
+  if (!reviewDueR) {
+    const compR = await chief.ask<{ complete: boolean; basis: string }>(
+      "完工判定（对照 LoopMail/ToBoss.md 开局邮件的产物规格表与验收标准）：本轮收尾后，论文工作与实验是否已全部完工？complete=true 表示全部交付物的验收判据达成——绝不把「还想再优化」当未完工，也绝不把未达判据说成完工。basis 一句话依据。",
+    );
+    reviewDueR = compR.complete === true;
+    completionBasisR = (compR.basis || "").slice(0, 160);
+    log("完工判定（第 " + round + " 轮）：" + (reviewDueR ? "完工——开启盲审" : "未完工（" + completionBasisR + "）——跳过盲审与全稿修订，跑轻量查新"));
+  }
+  let paper = "";
+  let digest = "";
+  let reviews: Review[] = [];
+  let noveltyScanR = "";
+  let nR = 0;
+  let absentNR = 0;
+  if (reviewDueR) {
   phase("研究员修订文稿");
-  const paper = await researcher.ask<string>(
-    "开发与测试已完成，这是你本轮唯一修订时机。" + (round === 1 && round1FullMissing ? "【禁令】第 1 轮无 FULL 级端到端数字——稿件不得声称已验证，相关主张一律标注未验证。\n" : "") + "开发报告：" + JSON.stringify(dev) +
+  paper = await researcher.ask<string>(
+    "开发与测试已完成，这是你本轮唯一修订时机。" + (round > 1 ? "\n前序各轮结果见 Agents/ledger.md 的 rows（逐轮 dev/experiments/review 字段）——全稿修订须覆盖全部轮次的结果，不只本轮。" : "") + (round === 1 && round1FullMissing ? "【禁令】第 1 轮无 FULL 级端到端数字——稿件不得声称已验证，相关主张一律标注未验证。\n" : "") + "开发报告：" + JSON.stringify(dev) +
     "\n修复与补充实验报告（其中的新数字同样可入稿）：" + JSON.stringify(fixDev) + "\n测试结论：" + verdict.summary +
     "\n实事求是修订 docs/paper_draft.md：只写映射表里有的数字，缺口留 [TODO]。返回一段修订摘要。",
   );
@@ -1173,6 +1228,7 @@ for (let round = startRound; round <= rounds; round++) {
     "提炼关键词，决定邀请几位审稿人（1–3），并撰写收紧的审稿简报（稿件+映射表+定向问题，不含全仓库）。返回 Invite。",
   );
   const n = Math.max(1, Math.min(3, Math.round(invite.count)));
+  nR = n;
   // 盲审泄漏扫描（机械）：审稿简报不得携带运行者身份特征——发现即退回编辑剥离一次
   let identityScan = "";
   try {
@@ -1194,23 +1250,24 @@ for (let round = startRound; round <= rounds; round++) {
   const settled = await Promise.allSettled(
     Array.from({ length: n }, (_, i) =>
       panelPool[i].ask<Review>(
-        invite.brief + "\n\n你是相邻领域（与本研究方向相关但不重叠）的独立审稿人。评审只依据简报及其所指材料——不翻看简报之外的仓库内容、git 历史与账本（盲审纪律），只读不改任何文件：对稿件与证据映射提出尖锐质询（附证据出处），并给出下一轮迭代建议，给 severity。小心数字幻觉：好的数据表现不代表好的情况——严谨考虑稿件数字的含义是不是表面那么简单，支撑它的理论可能本身有错，而漂亮的数字会加固这一理论幻觉。如无法判断，如实说明。",
+        invite.brief + "\n\n你是相邻领域（与本研究方向相关但不重叠）的独立审稿人。评审只依据简报及其所指材料——不翻看简报之外的仓库内容、git 历史与账本（盲审纪律），只读不改任何文件：" + (dispositionsR.length > 0 ? "\n【已处置问题登记】此前轮次已处置的问题与回复——回复站不住就重提（附新证据），不得空手重提已答复项：\n" + dispositionsR.slice(-8).join("\n") : "") + "对稿件与证据映射提出尖锐质询（附证据出处），并给出下一轮迭代建议，给 severity。小心数字幻觉：好的数据表现不代表好的情况——严谨考虑稿件数字的含义是不是表面那么简单，支撑它的理论可能本身有错，而漂亮的数字会加固这一理论幻觉。如无法判断，如实说明。",
       ),
     ),
   );
   let readerRev: Review | null = null;
   try { readerRev = await reader.ask<Review>(
-    "通读文献后审稿（材料范围：稿件摘要、所引参考文献——含 docs/refs/ 论文库——与网络检索；不翻看账本、git 历史或源码工作区）。稿件摘要：" + paper.slice(0, 500) + "\n核对引用与叙事、查新、提问，并给出迭代建议。小心数字幻觉：好的数据表现不代表好的情况——严谨考虑稿件数字的含义是不是表面那么简单，支撑它的理论可能本身有错，而漂亮的数字会加固这一理论幻觉。nearestWorks 必填：最相近的 3 篇工作与差异维度。",
+    "通读文献后审稿（材料范围：稿件摘要、所引参考文献——含 docs/refs/ 论文库——与网络检索；不翻看账本、git 历史或源码工作区）。" + (dispositionsR.length > 0 ? "\n【已处置问题登记】此前轮次已处置的问题与回复——回复站不住就重提（附新证据），不得空手重提已答复项：\n" + dispositionsR.slice(-8).join("\n") : "") + "稿件摘要：" + paper.slice(0, 500) + "\n核对引用与叙事、查新、提问，并给出迭代建议。小心数字幻觉：好的数据表现不代表好的情况——严谨考虑稿件数字的含义是不是表面那么简单，支撑它的理论可能本身有错，而漂亮的数字会加固这一理论幻觉。nearestWorks 必填：最相近的 3 篇工作与差异维度。",
   ); } catch { log("文献资深读者缺席/失败——缺席如实记录，不计入审稿合计（缺席审稿人如实化同款）"); }
   // 缺席审稿人如实化：缺席不是一份 minor 评审——不伪造 severity，digest 显式标注缺席并计入账本
   const absentN = settled.filter((s) => s.status !== "fulfilled").length;
+  absentNR = absentN;
   if (absentN > 0) log("审稿团缺席 " + absentN + "/" + n + "——缺席不计入 severity 合计，如实记入账本（下轮重新邀请）");
-  const reviews: Review[] = [];
+  reviews = [];
   for (const s of settled) {
     if (s.status === "fulfilled") reviews.push(s.value);
   }
   if (readerRev !== null) reviews.push(readerRev);
-  const digest = settled
+  digest = settled
     .map((s, i) => {
       const label = "审稿人" + (i + 1);
       if (s.status !== "fulfilled") return "【" + label + "｜缺席】该审稿人未完成——评审覆盖不全，缺席不计入评审合计";
@@ -1227,11 +1284,21 @@ for (let round = startRound; round <= rounds; round++) {
       "【文献读者｜缺席】文献资深读者未完成审稿——缺席如实记录，不计入审稿合计",
     ])
     .join("\n\n");
+  } else {
+    // 中间轮：轻量查新（护栏，老板 2026-11-15 认可）——不审稿，防撞车发现太晚
+    noveltyScanR = await researcher.ask<string>(
+      "轻量查新（不审稿、不看稿件全文）：以本轮方案与结果为据，检索 web 与 docs/refs/ 论文库——是否存在与本工作实质相同的已发表工作？两三句答复：无撞车／疑似撞车（题名+差异维度）；拿不准就如实写拿不准。",
+    );
+    reviewSkippedR++;
+    digest = "【第 " + round + " 轮未开启盲审】完工判定：未完工" + (completionBasisR !== "" ? "（" + completionBasisR + "）" : "") + "。工程门禁：" + gate + "。轻量查新：" + noveltyScanR.slice(0, 200);
+    log("第 " + round + " 轮跳过盲审与全稿修订（完工判定未过）——轻量查新完成");
+  }
 
   phase("总工程师·本轮存档");
   const head0 = await HEADR(); // 瞬态失败重试（B#25）——存档核验不再裸读
+  const reviewArchR = reviewDueR ? "审稿团 " + nR + " 人中缺席 " + absentNR + " 人" : "本轮未开启盲审（完工判定未过；工程门禁：" + gate.slice(0, 60) + "；轻量查新已跑）";
   const archived = await chief.ask<string>(
-    "把本轮记入 Agents/ledger.md（头部含仓库标识行" + (repoRoot ? "：" + repoRoot : "") + "与一行一轮的目录：本轮先更新目录行、再追加详情；审稿团 " + n + " 人中缺席 " + absentN + " 人）：任务/产出（" + (dev.summary || "").slice(0, 400) + "）/存档前 HEAD " + (head0 !== "" ? head0.slice(0, 7) : "空树或读取失败") + "/危险操作裁决（" + dangerLog + "）/测试（覆盖声明：" + (verdict.coverage || "").slice(0, 300) + "；视觉审阅：" + visualNoteR.slice(0, 200) + (histIssLedgerR !== "" ? "；历史产物挂账：" + histIssLedgerR.slice(0, 400) : "") + "；claim_map 豁免 " + (exemptCountR >= 0 ? "登记 " + exemptCountR + " 个数字" : "计数未核查——实质核查未完成") + "）/审稿（" + digest.slice(0, 1200) + "）/下轮方向。然后 " + GC + " add <本轮改动文件逐个显式路径> && " + GC + " commit（备份推送由编排器执行并核验，你不执行 push；向云端发布永远是老板的明确动作）。返回一句话。",
+    "把本轮记入 Agents/ledger.md（头部含仓库标识行" + (repoRoot ? "：" + repoRoot : "") + "与一行一轮的目录：本轮先更新目录行、再追加详情；" + reviewArchR + "）：任务/产出（" + (dev.summary || "").slice(0, 400) + "）/存档前 HEAD " + (head0 !== "" ? head0.slice(0, 7) : "空树或读取失败") + "/危险操作裁决（" + dangerLog + "）/测试（覆盖声明：" + (verdict.coverage || "").slice(0, 300) + "；视觉审阅：" + visualNoteR.slice(0, 200) + (histIssLedgerR !== "" ? "；历史产物挂账：" + histIssLedgerR.slice(0, 400) : "") + "；claim_map 豁免 " + (exemptCountR >= 0 ? "登记 " + exemptCountR + " 个数字" : "计数未核查——实质核查未完成") + "）/审稿（" + digest.slice(0, 1200) + "）/下轮方向。然后 " + GC + " add <本轮改动文件逐个显式路径> && " + GC + " commit（备份推送由编排器执行并核验，你不执行 push；向云端发布永远是老板的明确动作）。返回一句话。",
   );
   const head1 = await HEADR(); // 瞬态失败重试（B#25）——存档核验不再裸读
   let commitOk = head1 !== "" && head1 !== head0;
@@ -1271,8 +1338,8 @@ for (let round = startRound; round <= rounds; round++) {
   }
   log("第 " + round + " 轮备份推送：" + pushStateR);
 
-  const worst = reviews.reduce((a, b) => (({ minor: 1, major: 2, blocker: 3 } as Record<string, number>)[b.severity] >
-    ({ minor: 1, major: 2, blocker: 3 } as Record<string, number>)[a.severity] ? b : a));
+  const worst = reviews.length > 0 ? reviews.reduce((a, b) => (({ minor: 1, major: 2, blocker: 3 } as Record<string, number>)[b.severity] >
+    ({ minor: 1, major: 2, blocker: 3 } as Record<string, number>)[a.severity] ? b : a)) : null;
   const nextDirection = reviews.flatMap((r) => r.iteration).slice(0, 3).join("；");
   rows.push({
     round,
@@ -1280,9 +1347,9 @@ for (let round = startRound; round <= rounds; round++) {
     portfolio: (cards.proposals || []).join("、"),
     dev: dev.summary + (fixDev !== dev ? "（含修复补充）" : ""),
     experiments: [dev.experiments, fixDev !== dev ? fixDev.experiments : ""].filter((s) => s && s !== "无").join("；") || "未报告",
-    test: gate,
-    review: "【" + worst.severity + "】" + worst.summary,
-    next: nextDirection.slice(0, 200),
+    test: gate + confirmNoteR,
+    review: worst !== null ? "【" + worst.severity + "】" + worst.summary : "【未审】" + reviewArchR.slice(0, 160),
+    next: worst !== null ? nextDirection.slice(0, 200) : noveltyScanR.slice(0, 200),
   });
   report(rows[rows.length - 1], "rounds");
   plan = digest;
@@ -1343,6 +1410,9 @@ let evalResult = await chief.ask<EvalReport>(
   resumeNote + (bossStopR ? "老板停点：计划 " + rounds + " 轮，实际执行 " + rows.length + " 轮即停（老板在 FromBoss 写下【老板停点】）。" : rounds + " 轮已完成，硬停。") + "最新一轮审稿意见（更早各轮见账本 rows 摘要）：\n" + plan.slice(0, 6000) + "\n" +
   "轮次记录（含每轮实验死亡率 experiments 字段）：" + JSON.stringify(rows) + "\n" +
   (roundsOverrunR ? "【轮数超限】账本/总工申报的已完成轮数超过本次承诺轮数——本次运行未执行任何轮次，此异常已在本报告向老板如实说明。\n" : "") +
+  (reviewSkippedR > 0 ? "【盲审范围】本次运行共 " + reviewSkippedR + " 轮未开启盲审（完工判定未过；工程门禁照常）——报告必须显式注明盲审只覆盖已审轮次，绝不让老板误以为每轮都经过审稿团。\n" : "") +
+  (unverifiedNotesR.length > 0 ? "【修复未实测确认】以下问题的修复无法实测、只在逻辑上判断已修复——按事实向老板披露，绝不说成已解决（major/blocker 级未经实测确认即视为未确认修复）：" + unverifiedNotesR.join("；") + "\n" : "") +
+  (confirmRejectsR.length > 0 ? "【回复确认未过】以下问题的处置回复未被检查者确认——如实呈现问题与被否决的回复：" + confirmRejectsR.join("；") + "\n" : "") +
   (startRound > 1 ? "【证据基座范围】本次运行从第 " + startRound + " 轮续跑：上述审稿意见与轮次记录只含本次运行的轮次——评估必须显式注明证据基座范围，绝不让老板误以为覆盖全部轮次。\n" : "") +
   (bossStopR ? "【老板停点回执】老板在 LoopMail/FromBoss.md 写下【老板停点】：剩余轮次未执行即停——报告必须逐字引用停点原话向老板回执（已完成/未完成、待决策点），绝不静默。\n" : "") +
   (visualOn ? "" : "【视觉审阅豁免】本运行老板以 visualReview=off 豁免独立视觉审阅（图像产物照常检测列报但未经独立审阅）——报告必须如实披露此豁免，绝不静默。\n") +
@@ -1357,7 +1427,7 @@ let evalResult = await chief.ask<EvalReport>(
   (round1FullMissing ? "【机械核查】第 1 轮无 FULL 级端到端数字——报告与稿件必须显式声明未验证。\n" : "") +
   "撰写《初步评估报告》：verdict（继续/转向/停止）、预期成功率（推理依据必须引用实验死亡率趋势与文献读者的新颖性核查结论；并明确标注『这是定性判断的数值化表达，非校准概率』）、创新性（引用最相近 3 篇工作与实质差异维度）、影响力、继续做要注意的点（每条注明对应主张的证据范围——数据集与条件）、" +
   "reviewerQuotes（逐字引用每位审稿人结论，不得改写）、待答问题逐条（questionAnswers：问题原文→直接答案→证据位置；问「存在哪」时连形态一起答——是 raw 还是派生格式、有没有写出器）、自主决定清单（autonomousDecisions：决定→理由→若否决的后果→奥卡姆自评「增加复杂度还是删减」；凡增加复杂度的决定必须进这一节，不能只写账本）、遗留与否决各设固定小节（deferred/declined，各带理由——记录在案的延后是决策而非遗漏，被否决的想法不得下轮重新提案；字段如实填写，无则空数组）、与老板要求相悖的偏离逐条说明（deviations：偏离+原因+替代选择；无则空数组）、流程教训（processLessons：每条=规则+为什么+适用范围；老板采纳的教训持久化并随下次运行加载，被证伪的教训标记废弃）、给老板的建议（含仅老板能做的决策清单：账号、数据、资源类）。" +
-  "逐句对账收尾（内部事务）：开局邮件逐句清点的每句 Rn 逐条标注 已交付/部分/未交付→证据位置，写进账本终章与 Agents/claim_map.md 的对账列——绝不以对账表形式出现在老板邮件正文，没有条目支撑的「已落实」不算完成。这份报告是决策层文档，并作为一封新邮件追加到 LoopMail/ToBoss.md 头部（2026-11-05 老板邮件化体系：ToBoss.md＝总工交付邮件正本，新邮件插头部、倒序追加、旧邮件永不删改；docs/＝正式内容如稿件与 REPORT.ipynb；正式文件在邮件中以链接作附件引用；写作纪律（2026-11-05 老板原话，硬性）：去冗余的艺术——最少的汇报、最快让老板把握主线和全貌，禁止堆砌黑话（行话首次出现用白话括注），禁止与事实不符（数字与结论只引用命令输出与产物 manifest），禁止堆砌代码段与路径指引（证据指针集中一节列，正文不堆路径））：不写过程流水账（第几次门禁通过、返修几轮、审稿几条——那些在账本）、每节开头一句结论、同一件事只说一次、以 ≤2 页为目标。收尾同时整理交付（2026-11-05 老板规则，硬性；先全仓盘点历史冗余——包括此前各轮与各次运行遗留的——再动手，一律 git mv，绝不删除——删除文件是老板的动作）：①凡非最终产出需要的代码与文档（实验脚本、被替换的实现版本、草稿与中间报告等历史冗余，包括代码和文档）→ 直接 git mv 进 Agents/；②AI 生成且已成历史的文档→只把值得采纳且有意义的内容并入 ToBoss 最新邮件的交付清单表述，文档本体算作历史冗余 git mv 进 Agents/；③docs/ 只保留正式内容（稿件本体等），仓库根与 docs/ 不堆工作文件；④老板写入或提供的文件（LoopMail/FromBoss.md、docs/refs/ 论文库）原样保留，绝不改动老板写下的内容；⑤LoopMail/ 下异于 ToBoss.md/FromBoss.md 的文件逐一判定归属——老板放置的文件名加前缀 FromBoss_ 并原样保留，agent 自己散落的按①②归位，拿不准的一律按老板放置处理；工作脚手架（账本、映射表、Agents/selfcheck.py、测试调试脚本、被证伪的历史）全部在 Agents/ 下。追加邮件到 LoopMail/ToBoss.md，" + GC + " add <本轮改动文件逐个显式路径> && " + GC + " commit。",
+  "逐句对账收尾（内部事务）：开局邮件逐句清点的每句 Rn 逐条标注 已交付/部分/未交付→证据位置，写进账本终章与 Agents/claim_map.md 的对账列——绝不以对账表形式出现在老板邮件正文，没有条目支撑的「已落实」不算完成。这份报告是决策层文档，并作为一封新邮件追加到 LoopMail/ToBoss.md 头部（2026-11-05 老板邮件化体系：ToBoss.md＝总工交付邮件正本，新邮件插头部、倒序追加、旧邮件永不删改；docs/＝正式内容如稿件与 REPORT.ipynb；正式文件在邮件中以链接作附件引用）。报告开头=对老板想法（idea 原话）的直接回答：先一句白话结论（值得深挖/转向/停止+为什么），再展开各节；报告必须有「卡在老板的环节」独立节（bossBlockers：需要老板决策/批复/提供的事项逐条白话说清——每条=什么事+为什么卡在老板+可选方向；没有就写「无」）。写作纪律（2026-11-05 老板原话＋2026-11-15 表达纪律，硬性）：去冗余的艺术——最少的汇报、最快让老板把握主线和全貌；内部术语与编号要么不出现，要么首次出现即给白话括注（「M36 定版三选一」式的裸奔编号是违规样例）；禁止与事实不符（数字与结论只引用命令输出与产物 manifest）；禁止堆砌代码段与路径指引（证据指针集中一节列，正文不堆路径）；一点只在一处说完整，绝不用「如上／见某节」式的跨节指代；优先简单句，语法规范、无歧义；用老板原话里的名词说话。不写过程流水账（第几次门禁通过、返修几轮、审稿几条——那些在账本）、每节开头一句结论、同一件事只说一次、以 ≤2 页为目标。链接写成老板点击即达的形式（从 LoopMail/ 解析且必须指向存在的文件）。写完落盘前自查一遍（单次修订，绝不循环重写）：开头一句直接回答老板的问题；卡在老板的环节单独成节且说清楚；无未括注的内部术语；链接全部可点击且指向存在的文件；全文简单句、无跨节指代。收尾同时整理交付（2026-11-05 老板规则，硬性；先全仓盘点历史冗余——包括此前各轮与各次运行遗留的——再动手，一律 git mv，绝不删除——删除文件是老板的动作）：①凡非最终产出需要的代码与文档（实验脚本、被替换的实现版本、草稿与中间报告等历史冗余，包括代码和文档）→ 直接 git mv 进 Agents/；②AI 生成且已成历史的文档→只把值得采纳且有意义的内容并入 ToBoss 最新邮件的交付清单表述，文档本体算作历史冗余 git mv 进 Agents/；③docs/ 只保留正式内容（稿件本体等），仓库根与 docs/ 不堆工作文件；④老板写入或提供的文件（LoopMail/FromBoss.md、docs/refs/ 论文库）原样保留，绝不改动老板写下的内容；⑤LoopMail/ 下异于 ToBoss.md/FromBoss.md 的文件逐一判定归属——老板放置的文件名加前缀 FromBoss_ 并原样保留，agent 自己散落的按①②归位，拿不准的一律按老板放置处理；工作脚手架（账本、映射表、Agents/selfcheck.py、测试调试脚本、被证伪的历史）全部在 Agents/ 下。追加邮件到 LoopMail/ToBoss.md，" + GC + " add <本轮改动文件逐个显式路径> && " + GC + " commit。",
 );
 let evalOnDisk = "";
 try {
@@ -1373,6 +1443,42 @@ if (!evalOnDisk.slice(0, 2000).includes("初步评估报告")) {
     evalOnDisk = "";
   }
   if (!evalOnDisk.slice(0, 2000).includes("初步评估报告")) log("评估报告补写后仍未落盘——如实记录");
+}
+// 邮件机械预检（v0.8.0 裁定四=B：能机械化的机械化）——链接可点击、禁项、卡点节在位；一次性修订，绝不循环
+{
+  const mailHeadP = evalOnDisk.slice(0, 9000);
+  const violationsP: string[] = [];
+  const linkReP = /\[[^\]]+\]\(([^)\s]+)\)/g;
+  let lmP: RegExpExecArray | null = linkReP.exec(mailHeadP);
+  while (lmP !== null) {
+    const tP = lmP[1];
+    if (!/^https?:\/\//i.test(tP)) {
+      const candsP = [tP.replace(/^\.\//, ""), tP.replace(/^(\.\.\/)+/, "")];
+      let okP = false;
+      for (const cP of candsP) {
+        try { await readRepo("LoopMail/" + cP); okP = true; break; } catch { /* 候选下一 */ }
+        try { await readRepo(cP); okP = true; break; } catch { /* 候选下一 */ }
+      }
+      if (!okP) violationsP.push("断链（点击不达）：" + tP);
+    }
+    lmP = linkReP.exec(mailHeadP);
+  }
+  if (mailHeadP.indexOf("Agents/") >= 0) violationsP.push("邮件正文出现 Agents/ 内部路径");
+  if (mailHeadP.indexOf("流程教训") >= 0) violationsP.push("邮件出现流程教训节（已移出邮件，落账本）");
+  if (mailHeadP.indexOf("卡在老板的环节") < 0) violationsP.push("报告缺「卡在老板的环节」独立节（无决策事项时写「无」）");
+  if (violationsP.length > 0) {
+    await chief.ask<string>(
+      "邮件机械预检未过（一次性修订，修完落盘提交，绝不循环重写）：\n" + violationsP.join("\n") + "\n按《初步评估报告》写作纪律修订 LoopMail/ToBoss.md 头部邮件，" + GC + " add <本轮改动文件逐个显式路径> && " + GC + " commit，返回一句话。",
+    );
+    let recheckP = "";
+    try { recheckP = await readRepo("LoopMail/ToBoss.md"); } catch { recheckP = ""; }
+    const stillP = recheckP.slice(0, 9000);
+    const residualP: string[] = [];
+    if (stillP.indexOf("Agents/") >= 0) residualP.push("Agents/ 路径仍在正文");
+    if (stillP.indexOf("流程教训") >= 0) residualP.push("流程教训节仍在");
+    if (stillP.indexOf("卡在老板的环节") < 0) residualP.push("「卡在老板的环节」节仍缺");
+    log(residualP.length === 0 ? "邮件机械预检：修订后通过" : "邮件预检残留（如实记录）：" + residualP.join("；"));
+  } else log("邮件机械预检：通过");
 }
 // 疑问句防蒸发（机械）：老板原话含疑问而报告没有答案即视为漏需求——补答一次，仍缺则如实记录
 const askedQ = ((idea + " " + focus + " " + closingBossNoteR).match(/？|\?/g) || []).length;
@@ -1426,17 +1532,14 @@ const md = [
   "## 继续做要注意的点",
   ...evalResult.risks.map((r) => "- " + r),
   "",
+  "## 卡在老板的环节",
+  (evalResult.bossBlockers && evalResult.bossBlockers.length > 0) ? evalResult.bossBlockers.map((d) => "- " + d) : ["- 无"],
+  "",
   "## 你的问题，答案在这里",
   (evalResult.questionAnswers && evalResult.questionAnswers.length > 0) ? evalResult.questionAnswers.map((x) => "- 「" + x.q + "」→ " + x.a + "（证据：" + x.evidence + "）") : ["- 无（本次没有疑问句）"],
   "",
   "## 自主决定清单（请裁决是否保留）",
   (evalResult.autonomousDecisions && evalResult.autonomousDecisions.length > 0) ? evalResult.autonomousDecisions.map((x) => "- " + x.decision + "｜理由：" + x.reason + "｜若否决：" + x.ifRejected + "｜奥卡姆：" + x.occam) : ["- 无"],
-  "",
-  "## 延后（deferred）",
-  (evalResult.deferred && evalResult.deferred.length > 0) ? evalResult.deferred.map((d) => "- " + d.item + "（理由：" + d.reason + "）") : ["- 无"],
-  "",
-  "## 否决（declined）",
-  (evalResult.declined && evalResult.declined.length > 0) ? evalResult.declined.map((d) => "- " + d.item + "（理由：" + d.reason + "）") : ["- 无"],
   "",
   "## 审稿人原话",
   ...evalResult.reviewerQuotes.map((q) => "> " + q),
@@ -1446,9 +1549,6 @@ const md = [
   "",
   "## 偏离说明",
   (evalResult.deviations && evalResult.deviations.length > 0) ? evalResult.deviations.map((d) => "- " + d) : ["- 无"],
-  "",
-  "## 流程教训",
-  (evalResult.processLessons && evalResult.processLessons.length > 0) ? evalResult.processLessons.map((d) => "- " + d) : ["- 无"],
   "",
   "---",
   "说明：预期成功率是定性判断的数值化表达，非校准概率；审稿人原话未经改写，可能与总判断不一致。",
