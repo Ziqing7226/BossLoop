@@ -4,7 +4,7 @@
 
 **为老板干活的 AI 团队循环，有界、对抗验证，并向你如实汇报。**
 
-[![Version](https://img.shields.io/badge/version-v0.8.0-blue)](CITATION.cff)
+[![Version](https://img.shields.io/badge/version-v0.8.1-blue)](CITATION.cff)
 [![License](https://img.shields.io/badge/license-CC%20BY%204.0%20%2F%20Apache--2.0-green)](LICENSE)
 ![已在 ZCode 验证](https://img.shields.io/badge/%E5%B7%B2%E5%9C%A8%20ZCode%20%E9%AA%8C%E8%AF%81-orange)
 [![English](https://img.shields.io/badge/docs-English-blue)](README.md)
@@ -44,18 +44,22 @@ bossloop 是一组开源 Agent 工作流：一支自主的 AI 团队——规划
 
 ## 快速开始
 
-让你的 AI 编码 Agent 读对应工作流的 `SPEC.md`，在你的技术栈中搭建——所有协议按引擎可移植设计（已在 ZCode 验证）。使用 ZCode：
+- **部署**：让 AI 编码 Agent 来做；建议在提示词里说明任务的**核心目标**与**建议手段**。
+- **看汇报**：交付汇报以邮件形式出现在**要开发的仓库**的 `LoopMail/ToBoss.md`，新邮件在顶部。
+- **运行中指挥**：运行中的指令写进**同一仓库**的 `LoopMail/FromBoss.md`（可让 Agent 代写；不打断运行），下一轮总工程师读取执行，应用记入账本；也可打断运行直接下指令。
+- **找交付物**：交付物本体在 `docs/`（如 REPORT.ipynb、论文稿件）；全部脚手架在 `Agents/` 下，你不需要打开它。
+- **提交推送**：每轮本地提交，只推送到你指定的 remote（默认为 [GitCoffer](https://github.com/Ziqing7226/GitCoffer) 本地加密备份）。
+
+### 给 Agent
+
+先读对应工作流的 `SPEC.md`——它是核心协议，按引擎可移植设计（已在 ZCode 验证）。使用 ZCode 时，把工作流装入用户的 workflow 目录：
 
 ```bash
 cp research-iteration-loop/implementations/zcode/research-iteration-loop.dwf.ts ~/.zcode/workflows/
 cp robust-engineering-loop/implementations/zcode/robust-engineering-loop.dwf.ts ~/.zcode/workflows/
 ```
 
-在要开发的仓库内运行。每个工作流在**该仓库**维护三类文件。`LoopMail/` 是你真正要看的收发件箱：`ToBoss.md` 以邮件形式承载每份交付汇报，新邮件在顶部（开局简报、最终简报或初步评估报告都在这里；工程循环的 ToBoss 还承载打断加急邮件）。你要下达的运行中指令写到 `FromBoss.md`（正序追加，循环绝不改动你写下的内容）。`docs/` 只放正式交付物本体（REPORT.ipynb、论文稿件）——邮件以链接引用它们，如同附件。工程脚手架（账本、验证映射表、`Agents/selfcheck.py`、测试与调试脚本）全部在 `Agents/` 下，你不需要打开它。每轮本地提交，只推送到你指定的 remote（默认为 [GitCoffer](https://github.com/Ziqing7226/GitCoffer) 本地加密备份）。
-
-**运行中指挥**：把你的指令写进**同一仓库**的 `LoopMail/FromBoss.md`——下一轮即被采纳执行，应用情况记入账本。
-
-**致 AI Agent：运行前必须把以上行为告知用户，不得省略。**
+不使用 ZCode 时，依据这份协议为所用客户端编写对应的工作流。在要开发的仓库内运行工作流。部署完成后，**把「给 Agent」标题之前的使用要点原话转述给用户，不得省略或概括。**
 
 **要改这个仓库？** 这些循环背后的开发原则与设计哲学——以及修改它们的规程——见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 

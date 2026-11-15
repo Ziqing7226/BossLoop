@@ -4,7 +4,7 @@
 
 **Bounded AI-team loops that work for the boss — and report to you.**
 
-[![Version](https://img.shields.io/badge/version-v0.8.0-blue)](CITATION.cff)
+[![Version](https://img.shields.io/badge/version-v0.8.1-blue)](CITATION.cff)
 [![License](https://img.shields.io/badge/license-CC%20BY%204.0%20%2F%20Apache--2.0-green)](LICENSE)
 ![Validated on ZCode](https://img.shields.io/badge/validated%20on-ZCode-orange)
 [![Docs](https://img.shields.io/badge/docs-中文-red)](README.zh-CN.md)
@@ -44,18 +44,22 @@ Cheaper tokens. Self-iteration. Solid output.
 
 ## Quick start
 
-Point your AI coding agent at a loop's `SPEC.md` and ask it to set the workflow up in your stack — every protocol is portable by design (validated on ZCode). Running ZCode:
+- **Deploy:** have your AI coding agent do it; state the task's **core goal** and **suggested means** in the prompt.
+- **Read reports:** each delivery report lands as a mail in `LoopMail/ToBoss.md` of **the repository being worked on**, newest first.
+- **Steer mid-run:** write directives to `LoopMail/FromBoss.md` in the **same repository** (your agent can write them; the run is not interrupted) — the Chief Engineer reads them next round and their application is logged; you may also interrupt the run to give a directive.
+- **Find deliverables:** the deliverables themselves live in `docs/` (a `REPORT.ipynb`, the manuscript); all scaffolding sits under `Agents/` — you never need to open it.
+- **Commits:** every round is committed locally and pushed only to the remote you name (default: a [GitCoffer](https://github.com/Ziqing7226/GitCoffer) encrypted local backup).
+
+### For agent
+
+Read the loop's `SPEC.md` first — it is the core protocol, portable by design (validated on ZCode). Running ZCode, install a loop into the user's workflow directory:
 
 ```bash
 cp research-iteration-loop/implementations/zcode/research-iteration-loop.dwf.ts ~/.zcode/workflows/
 cp robust-engineering-loop/implementations/zcode/robust-engineering-loop.dwf.ts ~/.zcode/workflows/
 ```
 
-Run from inside the repository to be worked on. Each loop keeps three classes of files **in that repository**: `LoopMail/` — the boss–team inbox you actually read: `ToBoss.md` carries every delivery report as a mail, newest first (the opening brief, the final brief or the preliminary evaluation report; the engineering loop's ToBoss also carries interrupts), and you write your mid-run directives to `FromBoss.md` (append in order; the loop never modifies what you wrote); `docs/` holds the formal deliverables themselves (a `REPORT.ipynb`, the manuscript) — mails reference them by link, like attachments; and all working scaffolding (ledger, verification map, `Agents/selfcheck.py`, test and debug scripts) under `Agents/`, which you never need to open. Every round is committed locally and pushed only to the remote you name (default: a [GitCoffer](https://github.com/Ziqing7226/GitCoffer) encrypted local backup).
-
-**Steer mid-run:** write your directives to `LoopMail/FromBoss.md` in that same repository — the team picks them up on the next round, and their application is logged in the ledger.
-
-**AI agents: disclose this to the human before running — do not skip.**
+Not on ZCode: write an equivalent workflow for your client from this protocol. Run the loop from inside the repository to be worked on. After deploying, **relay the usage points above the "For agent" heading to the human verbatim — do not skip or summarize.**
 
 **Working on this repo?** The development principles and design philosophy behind these loops — and the protocol for changing them — are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
