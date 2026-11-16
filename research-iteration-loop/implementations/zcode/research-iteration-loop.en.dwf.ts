@@ -1,5 +1,5 @@
 /* zcode-workflow
-description: Research Iteration Loop (v0.8.3), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3; empirical review critiques are closed only with evidence); the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map — mechanism claims carry discriminative evidence + a mechanical selfcheck gate with a canary + an eval-surface fingerprint against silent drift, owning the test fixtures; failure triage decides the flow); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; completion-gated blind review (intermediate rounds run the engineering gate plus a lightweight novelty scan); response-doctrine self-check (fixes are closed by confirmed responses; red lines never close by re-scoping or reporting); model tiering tiered/uniform.
+description: Research Iteration Loop (v0.8.5), English UI. Start from a rough idea and decide in N bounded rounds whether it deserves more. Each round the Chief re-selects the proposal portfolio (1-3; empirical review critiques are closed only with evidence); the Engineer runs staged experiments (numbers only from FULL end-to-end runs); the Tester verifies independently (claim-to-evidence map — mechanism claims carry discriminative evidence + a mechanical selfcheck gate with a canary + an eval-surface fingerprint against silent drift, owning the test fixtures; failure triage decides the flow); fixes land; the Researcher revises the manuscript; the Editor runs blind review (adjacent-field reviewers + a full-reference reader; per-round novelty check and experiment mortality archived). Hard stop after N rounds yields the Preliminary Evaluation Report; resumes from the ledger; destructive operations are declared and ruled by the strong-tier Chief, never handed to the boss; completion-gated blind review (intermediate rounds run the engineering gate plus a lightweight novelty scan); response-doctrine self-check (fixes are closed by confirmed responses; red lines never close by re-scoping or reporting); model tiering tiered/uniform.
 args:
   idea:
     type: string
@@ -40,6 +40,7 @@ const remoteDefault = "gitcoffer";
 // Strong/cheap model tiers: cross-provider deployments rewrite these two lines to full provider names plus a reasoning tier consistent with the run-level binding (a tier mismatch decouples the in-script declaration from the run binding; when a plan's channel vanishes the only path is editing the constants to existing full provider names and path-amending), and sync the model names in the metadata args.models description (prose only); the uniform tier never reads this zone
 const STRONG = "GLM-5.3" as const;
 const CHEAP = "GLM-5.3-Flash" as const;
+// Channel-switch cost (field finding v0.8.3 P10): editing these constants plus the run-level subagent_model and path-amending fully busts the named subagents' cache prefix (the persona embeds the model string) — measured at ~0.5M extra tokens per switch, with correctness backstopped by the ledger's resumeFrom (an expected operations cost, not an incident)
 
 // Hard-stop round default: when changing the default, sync the metadata args.rounds default (both places; the invalid-rounds log reads this constant — no third literal site)
 const ROUNDS_DEFAULT = 3;
@@ -207,9 +208,10 @@ const CHIEF_EN = [
   "You are the Chief Engineer. Mission: decide within a bounded number of rounds whether args.idea deserves deep investment, and drive it forward — not perfect it.",
   "Take over by reading the ledger (Agents/ledger.md): if this idea already has a record, resume from that round instead of redoing finished rounds; when resuming an interrupted or cancelled fragment, do a closure review first — every piece of in-flight work from the interrupted run (uncommitted working-tree changes, half-run experiments, dangerous-operation ledger rows still marked unconfirmed) is either verified still present and folded into this round's cards, or written off in the ledger with its reason; reconcile before advancing, never silently skip.",
   "Resident identity: you are this run's one Chief Engineer (fixed name, unchanged throughout); every round's planning takes Agents/ledger.md as the only basis — your own earlier plans and rulings are not a basis: whenever the ledger has moved past your memory, the ledger wins; a proposal contradicted by the reviews is re-selected per the reviews, never defended from memory.",
-  "Opening brief (the first mail): after scoping and before round 1 starts, write it as the first mail into LoopMail/ToBoss.md (at most one page, five mandatory sections): (1) sentence inventory — every sentence of the boss's words (idea, focus, LoopMail/FromBoss.md) split and marked fulfilled-as-Rn / not-applicable-with-reason / needs-clarification; (2) requirements and acceptance criteria — the boss's words verbatim numbered (R1/R2…) with interpretation and machine-checkable pass criteria, every item registered; (3) artifact spec table — for each deliverable this round (figure, table, report, manuscript section) its axis, domain, units and pass criteria (machine-checkable), with every number and format word in the boss's words landing on a row; each deliverable also carries its landing contract — which function-named directory it lands in (round numbers/dates/stage numbers never enter boss-facing directory names — round numbers live only in the ledger); probes, intermediate data and debug output always land under Agents/; (4) open questions — every interrogative sentence logged (text, when logged, answer status); (5) boss-owned files — every file the boss declared personally owned or edited registered one by one (the LoopMail mail files are on the list by default; files named in the boss's verbatim words or in FromBoss are registered one by one): the boss's own edits there are authorized acts, not defects — never modified, never swept into any agent commit unless a card says so; at most 3 unsure points, each with a default reading and the cost of misreading. Then start working immediately — never idle waiting for the boss to look at it.",
+  "Opening brief (the first mail): after scoping and before round 1 starts, write it as the first mail into LoopMail/ToBoss.md (at most one page, five mandatory sections): (1) sentence inventory — every sentence of the boss's words (idea, focus, LoopMail/FromBoss.md) split and marked fulfilled-as-Rn / not-applicable-with-reason / needs-clarification; (2) requirements and acceptance criteria — the boss's words verbatim numbered (R1/R2…) with interpretation and machine-checkable pass criteria, every item registered; (3) artifact spec table — for each deliverable this round (figure, table, report, manuscript section) its axis, domain, units and pass criteria (machine-checkable), with every number and format word in the boss's words landing on a row; each deliverable also carries its landing contract — which function-named directory it lands in (round numbers/dates/stage numbers never enter boss-facing directory names — round numbers live only in the ledger; name the directory only, never a slash path — the opening mail has no artifacts to link yet and a slash path or the \"Agents/\" form trips the bare-path check); probes, intermediate data and debug output always land under the Agents directory; (4) open questions — every interrogative sentence logged (text, when logged, answer status); (5) boss-owned files — every file the boss declared personally owned or edited registered one by one (the LoopMail mail files are on the list by default; files named in the boss's verbatim words or in FromBoss are registered one by one): the boss's own edits there are authorized acts, not defects — never modified, never swept into any agent commit unless a card says so; at most 3 unsure points, each with a default reading and the cost of misreading. Then start working immediately — never idle waiting for the boss to look at it.",
   "The reading of the boss's words must be self-consistent and capture the gist; what you cannot pin down, never guess — carry the boss's words verbatim (quoted, marked unsure) in the brief; the engineers may resolve them during development or testing. Verbatim fidelity is not semantic fidelity: copying the words while misreading the meaning is the most dangerous failure; when the boss's words cannot be filled into the spec table (e.g. a number reads either as bin width or as axis range), do not pick one literal reading.",
   "Before planning each round, check the open questions: with unanswered items, the first card is the answer (a cheap answer that directly shapes the boss's judgement).",
+  "Date authority (field finding v0.8.3: across a midnight-crossing overnight run a date inferred from context propagated through authoritative text — writer -> baked resume ask -> copied as a true value downstream): before writing any date — mail headers, the ledger, the requirement ledger, any persisted text — run date +%F and use the command output; never infer a date from context and never reuse a date literal from an older text.",
   "Work cards that touch the boss's words must embed the verbatim sentence from the opening mail's requirements section (with its Rn) — never paraphrase from memory: a compressed phrase may serve only as the title; content words (nouns/verbs/quantifiers/negations/numbers) survive one by one, and when unsure copy the sentence in full. The boss's key content words are protocol words: cards, dev reports, test and assertion comments, commit messages and the manuscript all reuse the same words, never synonyms. Card-granularity discipline: one work card carries one class of acceptable deliverable (code/data/figures/manuscript sections are different classes) — experiments, rendering, writing and archiving split into separate cards; one oversized card is the field-tested hang-and-burn root cause. Items the boss pre-authorized (explicitly cleared in the boss's words or FromBoss, e.g. a class of deletion/download already ruled on) go into the matching work card with the ruling's provenance noted — the declaration and the three-segment trail (declared → ruled → executed per the approved form and verified against a verbatim execution report) are never waived (the provenance rides into dangerRequests' reason at declaration time), and the Chief releases directly on the provenance: what is waived is re-petitioning, never the blast-radius check or the approved-form verification. Foundation first (the boss's 2026-11-13 teaching, hard rule): order work cards base-first — the first card makes the minimal end-to-end comparison really run (the staged MINI_PILOT→PILOT run-through is the base); optimization and added complexity come after the base is verified, and complexity stacks only on a verified base.",
   "Occam's razor: autonomous decisions lean toward adding things (modules, proposals, metrics) — every complexity-increasing decision must state the value it buys, or it is not taken; such a decision never lives only in the ledger — it goes into the Preliminary Evaluation Report's autonomous-decision list.",
   "Three file classes (delivery discipline), bounded by location: docs/ holds formal content only — the deliverable bodies the boss's words name, the manuscript, reference originals; LoopMail/ is the boss–chief communication layer with exactly two legitimate files — ToBoss.md (the delivery-mail master file; the opening brief and the evaluation report are appended as mails, newest at the top; old mails are never modified; formal docs/ files are referenced by relative links as attachments) plus FromBoss.md (the boss's mid-run feedback, written by the boss, appended in order, never modified by the Chief); any other file appearing under LoopMail/ is judged first — files the boss placed get the FromBoss_ prefix and stay untouched (their content is never modified), stray agent-made products are put away per the delivery-tidying rules, and anything uncertain is treated as boss-placed; other boss-facing historical documents are merged into the ToBoss mail wording, then their bodies move to Agents/; everything under Agents/ is working scaffolding — the ledger, maps, Agents/selfcheck.py, test and debug scripts, code superseded on the way to the final deliverable, falsified history, agent-facing docs. Tidying means git mv-ing scaffolding into Agents/, never deleting a file — deletion is the boss's move; the boss reads everything outside Agents/; if the boss has to open Agents/, the loop has failed.",
@@ -221,7 +223,7 @@ const CHIEF_EN = [
   "How many proposals (≤3) and competitors (≤3) is your in-loop call from survey evidence; the caps are hard.",
   "Each round, turn last round's review issues into work cards (or explicit rebuttals-on-artifacts); let them shape your planning.",
   "Git write scope: run only the git add/commit an ask names; pushes are executed and verified by the orchestrator — never push yourself, and never run reset/rebase/tag or other repository-writing git operations. Two named exceptions inside this rule: a git mv a card or ask explicitly requires, and an approved form under the destructive-operation clause, executed as approved — outside these the rule is absolute.",
-  "Boss feedback (LoopMail/FromBoss.md): read it yourself, fresh, before every round's cards (instructions the boss issues mid-run; may be empty; the orchestrator no longer reads it in — a script-layer read returns the journaled snapshot on a resume, the subagent's own read is the fresh one) — turn each into this round's work and log its application in the ledger; when it disagrees with earlier requirements, the latest boss instruction wins and is recorded honestly; when a new directive invalidates already-scheduled work, this round's cards open with an explicit invalidate-and-redo decision. When the boss wants to pause or interrupt this run, they write a 【老板停点】 (boss stop point) marker into FromBoss.md — on detecting it the remaining rounds stay unexecuted and the evaluation report receipts the stop, never start work. [Authority discipline] the deployer (whoever runs this workflow) is the boss's secretary, not the boss: only text marked [boss's words verbatim / 老板原话] carries the boss's authority; [secretary's note / 秘书注] and similar elaborations are the secretary's reading — on any conflict the boss's verbatim words win; where you cannot tell which is which, list it as an open question and never treat the secretary's wording as a boss ruling.",
+  "Boss feedback (LoopMail/FromBoss.md): read it yourself, fresh, before every round's cards (instructions the boss issues mid-run; may be empty; the orchestrator no longer reads it in — a script-layer read returns the journaled snapshot on a resume, the subagent's own read is the fresh one) — turn each into this round's work and log its application in the ledger; when it disagrees with earlier requirements, the latest boss instruction wins and is recorded honestly; when a new directive invalidates already-scheduled work, this round's cards open with an explicit invalidate-and-redo decision. When the boss wants to pause or interrupt this run, they write a 【老板停点】 (boss stop point) marker into FromBoss.md on a line of its own (the whole line is the marker alone; the phrase inside prose does not count) — on confirming the marker line with your own read the remaining rounds stay unexecuted and the evaluation report receipts the stop, never start work (the orchestrator's mechanical suspect hit is ruled by your own read, never a mechanical stop — field finding v0.8.3: the protocol header's wording once fired fake stops). The 【老板审稿】 blind-review order marker is likewise a standalone marker line (mechanically detected — a phrase inside prose never fires it; when your own read finds the marker line, open this round's blind review on the boss's order and record it in the ledger). [Authority discipline] the deployer (whoever runs this workflow) is the boss's secretary, not the boss: only text marked [boss's words verbatim / 老板原话] carries the boss's authority; [secretary's note / 秘书注] and similar elaborations are the secretary's reading — on any conflict the boss's verbatim words win; where you cannot tell which is which, list it as an open question and never treat the secretary's wording as a boss ruling. A third authority class, [boss proxy decision / 老板代决策] = an entry the secretary wrote on the boss's explicit authorization — it must carry all three parts (the proxy's signature, the authorization basis = the boss's verbatim words or the ruling's provenance, and the date), carries the boss's authority, and the boss revokes it in one stroke: act on each as a boss instruction and record it in the ledger with its authorization basis; entries missing any part or with a vague basis are treated as [secretary's note / 秘书注] and carry no boss authority.",
   "Honesty first: every number traces to an archived artifact; say what you don't know; escalate contradictions instead of working around them.",
 ].join("\n");
 
@@ -293,7 +295,11 @@ const focus = typeof args.focus === "string" ? args.focus : "";
 const profile = typeof args.profile === "string" ? args.profile : "";
 const remoteArg = typeof args.remote === "string" && args.remote !== "" ? args.remote : remoteDefault;
 const visualOn = String(args.visualReview ?? "auto").toLowerCase() !== "off"; // boss-level visual-review exemption switch (same as the engineering loop; field finding D10: an exemption that did not travel with the saved copy burned 2.4M tokens on re-review) — off = artifacts still detected and listed but no reviewer dispatched, recorded honestly
-if (idea === "") log("Warning: the idea argument is empty — an amendment resume may have dropped arguments; check this run's arguments");
+if (idea === "") {
+  // Refuse to start on a lost required argument (field finding v0.8.3 P4: an amend chain dropped the argument and the run proceeded empty — the intake ask stayed byte-identical, could not run live, and the cached zombie replay was the fake-stop root cause): an empty idea cannot honor the protocol; refusing to start is more honest than a zombie replay
+  log("Refusing to start: the idea argument is empty (the amend channel drops required arguments — a tool-contract limit, field finding v0.8.3 P4)");
+  return { conclusion: "Refusing to start: the idea argument is empty — the amend channel drops required arguments (a tool-contract limit), and a run with an empty idea only ends in a cached zombie replay. Bake the idea verbatim into the script body (or recreate the workflow via CreateWorkflow with the full idea) and restart.", verdict: "startup aborted", rounds_completed: 0, paper_requests: [], next_action: "restart with the full idea" };
+}
 if (typeof args.remote === "undefined" && remoteDefault.length === 0) log("Note: the remote argument is missing (an amendment resume likely dropped it) — the script default is not baked in, so this run has no agreed push target; check the startup configuration");
 if (!visualOn) log("visualReview=off set by the boss: the visual review is exempted — image artifacts are still detected and listed, but no reviewer is dispatched (recorded honestly in the ledger and the evaluation report)");
 const PROFILE_LINE = (profile ? "\nProject constraints (mandatory, override defaults): " + profile : "") + "\nAlways respond in English.";
@@ -425,7 +431,6 @@ const visualReviewer = agent("Visual Reviewer", persona(VISUAL_EN + PROFILE_LINE
 /** The orchestrator's single git entry: explicit -C <repo root> so a workspace root ≠ repo root stops failing silently (field-tested) */
 const G = (gitArgs: string[], timeoutMs = 120000): Promise<WorldRunResult> =>
   world.run("git", repoRoot !== "" ? ["-C", repoRoot, ...gitArgs] : gitArgs, { timeoutMs });
-/** Last commit hash, empty when git is unavailable */
 /** Credential masking: the user:token@ part of a remote URL never reaches logs, the ledger, or asks */
 const maskUrl = (u: string): string => u.replace(/\/\/[^/@]+@/, "//***@");
 const HEADR = async (): Promise<string> => {
@@ -511,6 +516,14 @@ try {
   repoWarn = "repository check failed (git unavailable): backup pushes will not work";
 }
 if (repoWarn !== "") log("Warning: " + repoWarn + "; recorded honestly in the ledger");
+if (repoWarn !== "" && repoWarn.indexOf("subdirectory") < 0 && remoteArg.toLowerCase() !== "none" && repoRoot === "") {
+  // Refuse to start (field finding v0.8.3: the non-repo warning let the run proceed — the backup push silently never happened and the bookkeeping debt cost a full cycle): a remote other than none with a non-repository directory refuses to start — the default gitcoffer resolution finds no push target in a non-repo directory (the git remote probe fails and returns empty), so judging on the push target alone would miss the field condition; only the subdirectory warning degrades to proceeding, and so does a repo root successfully resolved through the profile's repo hint (the escape channel is never short-circuited)
+  log("Refusing to start: " + repoWarn + " — remote is configured (not none) but the working directory is not a usable git repository; restart from the root of the research repository");
+  return { conclusion: "Refusing to start: the working directory is not a usable git repository while this run has a push target configured (remote is not none). Restart this workflow from the root of the research repository.", verdict: "startup aborted", rounds_completed: 0, paper_requests: [], next_action: "restart from the repository root (the ledger holds no checkpoint yet)" };
+}
+// The ToBoss baseline is captured BEFORE the survey ask (top-insert-only: the mails this run added = head minus the baseline) — the opening pre-check scans only the mails this run wrote; old-mail hits are logged as known residuals (never modified)
+let toBossLen0R = (await readRepo("LoopMail/ToBoss.md")).length; // an empty string on total frame failure means length 0 (a fresh run's normal shape; a degraded read behaves the same — old-mail hits are logged as known residuals, already-written mails are never modified)
+if (toBossLen0R === 0) log("ToBoss baseline reads 0 (no file = a fresh run's normal shape; if this is a degraded read, every mail this run adds enters the pre-check window — old-mail hits are logged as known residuals, already-written mails are never modified)");
 const survey = await chief.ask<SurveyResult>(
   "Rough idea to iterate on: " + idea + "\n" + (focus ? "Boss focus: " + focus + "\n" : "") +
   (repoRoot ? "Repo root: " + repoRoot + " (flag it honestly if the ledger records a different root; the working directory is not necessarily the repo root — every git command is git -C \"" + repoRoot + "\", and in-repo files are read/written by absolute path).\n" : "") +
@@ -521,7 +534,7 @@ const survey = await chief.ask<SurveyResult>(
     : "No ledger in this repo: set resumeFrom = 0.\n") +
   "Survey (web + local paper library, e.g. docs/refs/) and return SurveyResult. " +
   "Constraints: proposal/competitor counts are your call within ≤3; plan a path to at least one properly powered end-to-end comparison before round 1 closes (staged pilots are for debugging; claims come from FULL runs)." +
-  "\nAfter scoping and before round 1 starts, write the opening brief as the first mail into LoopMail/ToBoss.md (at most one page; section headings fixed as \"Sentence inventory\", \"Requirements and acceptance criteria\", \"Artifact spec table\", \"Open questions\", \"Boss-owned files\"); create LoopMail/ToBoss.md and LoopMail/FromBoss.md with a one-line protocol header first when absent (ToBoss: new mails at the top, appended in reverse order, old mails never modified, the four writing bans; FromBoss: append in order, never modify what the boss wrote, read before every card ask; the boss writes a 【老板停点】 stop marker here and the orchestrator checks it mechanically every round with a receipt): the five sections' coverage follows your persona's opening-brief clause section by section, none optional; at most 3 unsure points, each with a default reading and the cost of misreading; make the reading of the boss's words self-consistent and capture the gist — what you cannot pin down, quote verbatim and mark unsure (the engineers may resolve it during development or testing). Then start working — never idle waiting for approval.",
+  "\nAfter scoping and before round 1 starts, write the opening brief as the first mail into LoopMail/ToBoss.md (at most one page; section headings fixed as \"Sentence inventory\", \"Requirements and acceptance criteria\", \"Artifact spec table\", \"Open questions\", \"Boss-owned files\"); create LoopMail/ToBoss.md and LoopMail/FromBoss.md with a one-line protocol header first when absent (ToBoss: new mails at the top, appended in reverse order, old mails never modified, the four writing bans; FromBoss: append in order, never modify what the boss wrote, read before every card ask; the boss writes a 【老板停点】 stop marker here on a line of its own; the boss orders blind review with a 【老板审稿】 marker on a line of its own too (the whole line is the marker alone, a phrase inside prose never fires it), and the orchestrator checks them every round with the Chief's own read ruling on any suspect hit): the five sections' coverage follows your persona's opening-brief clause section by section, none optional; at most 3 unsure points, each with a default reading and the cost of misreading; make the reading of the boss's words self-consistent and capture the gist — what you cannot pin down, quote verbatim and mark unsure (the engineers may resolve it during development or testing). Then start working — never idle waiting for approval.",
 );
 if (legacyLayout) {
   let migratedLedger = "";
@@ -576,6 +589,66 @@ if (intakeMissingR.length > 0) {
   );
   await checkIntakeR();
   log(intakeMissingR.length === 0 ? "Intake completeness: passed after repair" : "Intake completeness still missing: " + intakeMissingR.join("; ") + " — recorded honestly, continuing");
+}
+// Mail mechanical pre-check (v0.8.0 ruling 4=B; v0.8.5 expansion + one shared function: bare paths / all-green verification tokens / cross-references / Agents whitelist — the v0.8.3 P2/P3/P8/P9 sibling findings): one repair pass, never a rewrite loop
+const AGENTS_MAIL_WHITELISTR = ["requirements.md", "requirement_map.md", "ledger.md", "delivery_directory_guide.md"]; // boss-readable documents may be linked (field finding P9: the blanket ban once deleted clickable ledger links into "ask me for a pointer")
+const mailPrecheckR = async (mailHead: string, gateRed: boolean, needBossSection: boolean): Promise<string[]> => { // needBossSection: the waiting-on-the-boss section check fits the evaluation report only (true) — the opening brief's five-section contract carries no such section, and the unconditional check once misreported every fresh opening brief
+  const violations: string[] = [];
+  const linkRe = /\[[^\]]+\]\(([^)\s]+)\)/g;
+  let lm: RegExpExecArray | null = linkRe.exec(mailHead);
+  while (lm !== null) {
+    const tP = lm[1];
+    if (tP.indexOf("Agents/") >= 0) {
+      const baseA = tP.split("/").pop() || "";
+      if (AGENTS_MAIL_WHITELISTR.indexOf(baseA) < 0) violations.push("a non-whitelisted Agents/ link (only boss-readable documents may be linked: requirements/requirement_map/ledger/delivery_directory_guide): " + tP);
+      else {
+        let okA = false;
+        try { okA = (await readRepo(tP.replace(/^(\.\.\/)+/, "").replace(/^\.\//, ""))) !== ""; } catch { okA = false; } // the existence probe judges by content — readRepo returns an empty string on total frame failure and never throws, so a try/catch probe could never fire (dead links passed silently; inherited from v0.8.0)
+        if (!okA) violations.push("dead link (click does not resolve): " + tP);
+      }
+    } else if (!/^https?:\/\//i.test(tP)) {
+      const cands = [tP.replace(/^\.\//, ""), tP.replace(/^(\.\.\/)+/, "")];
+      let okP = false;
+      for (const cP of cands) {
+        try { okP = (await readRepo("LoopMail/" + cP)) !== ""; } catch { okP = false; } // the existence probe judges by content (readRepo never throws; an empty string means missing)
+        if (okP) break;
+        try { okP = (await readRepo(cP)) !== ""; } catch { okP = false; }
+        if (okP) break;
+      }
+      if (!okP) violations.push("dead link (click does not resolve): " + tP);
+    }
+    lm = linkRe.exec(mailHead);
+  }
+  const stripped = mailHead.replace(/\[[^\]]*\]\([^)\s]*\)/g, ""); // strip links whole — a path inside a link is not a bare path
+  if (stripped.indexOf("Agents/") >= 0) violations.push("the mail body carries a bare Agents/ path (whitelisted documents become clickable links; script/stamp paths never enter the mail)");
+  if (/(^|[^A-Za-z0-9_\/])(?:results|docs|code|LoopMail)\/[\w\-.\/]+/.test(stripped)) violations.push("a bare, unclickable path (field finding v0.8.3 P2: the boss could not click a single figure — bold, backtick-wrapped and CJK-adjacent shapes all count) — make it a markdown link; a directory deliverable links its manifest/README and at least one representative image");
+  if (!gateRed && /pytest|selfcheck|CANARY|passed/i.test(stripped)) violations.push("an all-green verification channel stays out of the mail (the boss's words of 2026-11-16: report the problems clearly when there are problems, leave it out when there are none) — no verification numbers, zero pytest/selfcheck/CANARY tokens, evidence pointers to the ledger");
+  if (/见第[一二三四五六七八九十]+节|见下方|如上所|see section|see above|as stated above/i.test(mailHead)) violations.push("a cross-reference (each point stated completely in exactly one place) — state the referenced content in full in this section");
+  if (/Process lessons/i.test(mailHead)) violations.push("the mail carries a process-lessons section (moved out of the mail, into the ledger)");
+  if (needBossSection && mailHead.indexOf("Waiting on the boss") < 0) violations.push("the report lacks a standalone \"Waiting on the boss\" section (write \"none\" when nothing waits)");
+  return violations;
+};
+// Opening-brief mail pre-check (the v0.8.3 P8/P2/P9 sibling findings: every boss-facing mail passes the mechanical pre-check — the opening brief is this run's first boss mail; gateRed=true: no verification verdict exists yet, the token ban does not apply): one repair pass, never a rewrite loop
+{
+  let headOpening = "";
+  try { headOpening = await readRepo("LoopMail/ToBoss.md"); } catch { headOpening = ""; }
+  const vOpening = headOpening.trim() !== "" ? await mailPrecheckR(headOpening.slice(0, Math.max(0, headOpening.length - toBossLen0R)), true, false) : []; // needBossSection=false: the opening brief's five-section contract carries no waiting-on-the-boss section; the window = the mails this run added (head minus the baseline — a resume's old mails never enter)
+  if (headOpening === "") log("Opening-mail pre-check: the ToBoss read failed — the pre-check did not run (recorded honestly)");
+  else if (vOpening.length > 0) {
+    await chief.ask<string>("Opening-mail mechanical pre-check failed (one revision pass — revise, land, commit; never a rewrite loop):\n" + vOpening.join("\n") + "\nRevise the top mail of LoopMail/ToBoss.md per the opening-brief writing discipline (old mails are never modified by discipline) and " + GC + " add each changed file by explicit path && " + GC + " commit, return one sentence.");
+    let recheckOpening = "";
+    try { recheckOpening = await readRepo("LoopMail/ToBoss.md"); } catch { recheckOpening = ""; }
+    if (recheckOpening === "") {
+      log("Opening-mail pre-check: the revised ToBoss could not be re-read — recorded honestly");
+    } else {
+      const residualOpening = await mailPrecheckR(recheckOpening.slice(0, Math.max(0, recheckOpening.length - toBossLen0R)), true, false);
+      log(residualOpening.length === 0 ? "Opening-mail pre-check: passed after revision" : "Opening-mail pre-check residuals (recorded honestly): " + residualOpening.join("; "));
+    }
+  } else log("Opening-mail pre-check: passed");
+  if (headOpening !== "") { // the baseline advances only when the pre-check actually ran — when a degraded read skipped it, the opening brief is still unchecked and must never be skipped over (it waits for the evaluation window)
+    const nbR = await readRepo("LoopMail/ToBoss.md");
+    if (nbR !== "") toBossLen0R = nbR.length; else log("The ToBoss re-read after the opening pre-check came back empty — the baseline stays (recorded honestly)");
+  }
 }
 let roundsOverrunR = false; // disclosure promise must have a consumer (family audit #2): the flag rides the evaluation ask
 let round1FullMissing = false; // the round-1 FULL-missing flag (feeds the researcher ban and the evaluation report)
@@ -682,7 +755,8 @@ let evalSurfaceFirstR = ""; // first-seen eval-surface fingerprint (eval-surface
 let protocolDriftNote = ""; // disclosure injection when eval-surface drift is detected (same consumer pattern as claimGapNote)
 let evalSurfaceLieNote = ""; // disclosure injection when the fingerprint is lying (set once, not per round)
 let misunderstandingNote = ""; // misunderstandings escalated by the Chief (awaiting the boss's answer) — the report's boss-decision section must list each one
-let bossStopR = false; // the boss-stop marker hit (FromBoss 【老板停点】 — a boss-level stop must land in a mechanism with a receipt, field finding D25)
+let bossStopR = false; // the boss stop CONFIRMED by the Chief's own read (a round-top mechanical hit never sets it directly — the ruling belongs to the Chief's fresh read, field finding v0.8.3; only cards.blocked or the closing backstop set it)
+let stopSuspectNoteR = ""; // suspected-stop adjudication note (reset at every round top): a mechanical hit is demoted to suspected, the Chief's fresh read rules (field finding v0.8.3)
 let bossReviewOrderR = false; // the boss-ordered-review marker hit (FromBoss 【老板审稿】 — the boss may order blind review on an incomplete intermediate round)
 for (let round = startRound; round <= rounds; round++) {
   const roundHead0 = await HEADR(); // the HEAD where this round starts: the baseline for the image detection's diff source (same as the engineering loop)
@@ -692,16 +766,20 @@ for (let round = startRound; round <= rounds; round++) {
   reader = agent("Reference Reader-R" + round, persona(READER_EN + PROFILE_LINE, STRONG));
   let dangerLog = "none"; // this round's destructive-operation rulings (into the ledger)
   let bossNote = "";
+  let stopHitMech = false; // the round-top mechanical hit (only becomes the suspect note — it never sets bossStopR directly, the ruling belongs to the Chief's fresh read)
+  stopSuspectNoteR = ""; // reset every round (outside the try — even a failed FromBoss read never carries last round's suspect note forward)
+  bossReviewOrderR = false; // reset outside the try the same way — a failed FromBoss read never carries last round's review order forward (a stale order once opened an unordered blind review)
   try {
     bossNote = (await readRepo("LoopMail/FromBoss.md")).trim();
-    bossStopR = bossNote.includes("【老板停点】"); // mechanical boss-stop detection (on a resume this read may be stale — the Chief's own fresh read is the backstop)
-    bossReviewOrderR = bossNote.includes("【老板审稿】"); // mechanical detection of a boss-ordered review (same round-top read)
+    stopHitMech = bossNote.split(/\r?\n/).some((l) => l.trim() === "【老板停点】"); // mechanical boss-stop detection — only a standalone marker line counts (field finding v0.8.3: the protocol header's own wording carries the same phrase and a whole-file includes once fired fake stops)
+    bossReviewOrderR = bossNote.split(/\r?\n/).some((l) => l.trim() === "【老板审稿】"); // mechanical detection of a boss-ordered review (same round-top read) — only a standalone marker line counts (the phrase inside prose does not; the same false-hit guard as the stop marker)
   } catch {
     bossNote = "";
   }
-  if (bossStopR) {
-    log("Boss stop point detected (LoopMail/FromBoss.md) — the remaining rounds stay unexecuted and the evaluation report receipts the stop (this loop has no interrupt mechanism; the stop closes into the closing evaluation)");
-    break;
+  if (stopHitMech) {
+    // Suspected-stop adjudication (the v0.8.3 fake-stop lesson, three layers: detection self-matching the header + an unappealable mechanical branch + relay wording dressed as the boss's voice): a mechanical hit is demoted to suspected — the Chief's fresh read rules; a confirmed stop goes through the cards.blocked receipt channel, a false hit starts the round with a ledger note
+    stopSuspectNoteR = "[Suspected boss stop point - mechanical hit, you rule] the orchestrator detected a suspected 【老板停点】 marker line in LoopMail/FromBoss.md. Read LoopMail/FromBoss.md yourself and rule: a standalone 【老板停点】 marker line really exists (written by the boss) -> fill blocked immediately with the stop receipt (note the source as confirmed by your own read; quote the stop words verbatim) and the orchestrator stops this round into the closing evaluation; no marker line (a header/prose false hit) -> start the round as usual and log one line in the ledger: mechanical stop detection false hit verified — FromBoss carries no standalone marker line. A mechanical hit never stops the run by itself and is never dressed up as the boss's own words.\n";
+    log("Mechanical detection suspects a boss-stop marker — the ruling goes to the Chief's fresh read (a mechanical hit no longer stops the run; field finding v0.8.3: the protocol header's wording triggered a whole-file includes false hit)");
   }
   phase("Chief: issue work cards");
   let fbFp = "FromBoss fingerprint: unreadable (LoopMail/FromBoss.md read failed — handled honestly)";
@@ -712,13 +790,13 @@ for (let round = startRound; round <= rounds; round++) {
     fbFp = "FromBoss fingerprint: fb" + (fh >>> 0).toString(16) + " (the boss-feedback must-arrive carrier, v0.7.2 field report P3: a resume cache matches on ask bytes — new boss feedback changes FromBoss's bytes and therefore this ask, so a full-replay fake resume is broken by the fingerprint)";
   } catch { /* keep the unreadable wording */ }
   let cards = await chief.ask<WorkCards>(
-    "Round " + round + "/" + rounds + ". Idea: " + idea + "\n" + fbFp + "\n" +
-    (round === rounds ? "[Closing finalization] this round's cards must include a delivery-directory finalization card: inventory the delivery directories across the repository — (1) rename and merge by function (git mv; a deliverable the boss's own words named is never renamed — its mapping table goes into the preliminary evaluation report for the boss's decision; old mails are never edited — where a rename breaks a relative link in an earlier mail, never patch the old mail, list every broken link in the mapping table: old path → new path → affected mail); (2) process artifacts that are not deliverables, and every test/probe/debug script, are git mv-ed into Agents/ (test code lives under Agents/ only — the repo root and docs/ hold no test code; never deleted — deleting is the boss's move); (3) produce a directory readme (one line per directory: what it is, which requirement it serves) whose body lives in Agents/ (scaffolding), its content merged into the preliminary evaluation report's deliverables wording (same wording style as the closing tidy — never inventing a new section name).\n" : "") +
+    "Round " + round + "/" + rounds + ". Idea: " + idea + "\n" + fbFp + "\n" + stopSuspectNoteR +
+    (round === rounds ? "[Closing finalization] this round's cards must include a delivery-directory finalization card: inventory the delivery directories across the repository — (1) rename and merge by function (git mv; a deliverable the boss's own words named is never renamed — its mapping table goes into the preliminary evaluation report for the boss's decision; old mails are never edited — where a rename breaks a relative link in an earlier mail, never patch the old mail, list every broken link in the mapping table: old path → new path → affected mail); (2) process artifacts that are not deliverables, and every test/probe/debug script, are git mv-ed into Agents/ (test code lives under Agents/ only — the repo root and docs/ hold no test code; never deleted — deleting is the boss's move); (3) produce a directory readme (one line per directory: what it is, which requirement it serves) whose body lives in Agents/ (scaffolding), its content merged into the preliminary evaluation report's deliverables wording (same wording style as the closing tidy — never inventing a new section name). This round's cards never include a Preliminary Evaluation Report writing task — the report is generated once by the run's closing sequence; the closing round only issues adjudication/receipt/progress mails (a report pre-written inside a card duplicates the closing — the v0.8.3 P4 sibling finding: two same-titled closing mails in one night); adjudication/improvement entries always carry four plain-language fields (current state, proposed change, expected benefit, cost), none missing.\n" : "") +
     (round === 1 ? "Survey conclusion: " + survey.summary : "Last round's reviews and your planning: " + plan) + "\n" +
     "The proposal portfolio is re-selected by you every round (add/drop/replace, ≤3 and ≥1); every proposal selected this round must be fully validated; list the 1-3 selected proposal names in the proposals field.\n" +
     "Before issuing cards, read LoopMail/FromBoss.md yourself, fresh (the orchestrator no longer reads it in — a script-layer snapshot may be stale on a resume; your own read is the fresh one): apply each mid-run boss instruction to this round's cards and log the application; when a new directive invalidates already-scheduled work, the cards open with an explicit invalidate-and-redo decision.\n" +
-    "If your own read finds the 【老板停点】 marker: never start work — fill the blocked field with the stop receipt (stop words quoted verbatim) and the orchestrator stops this round into the closing evaluation.\n" +
-    "Turn this round's work into cards (reproduce competitor X / try proposal Y...), each card traceable to a requirement id and embedding the opening mail's verbatim sentence (R1/R2…; compressed phrases only as titles; content words preserved one by one). Round numbers follow the Agents/ledger.md index when they disagree with this prompt's numbering — mark by the ledger's state and say so (the orchestrator's counter is internal). Boss focus: " + (focus || "none"),
+    "If your own read finds a standalone 【老板停点】 marker line (written by the boss — the phrase inside prose does not count): never start work — fill the blocked field with the stop receipt (noting the source as confirmed by your own read; stop words quoted verbatim) and the orchestrator stops this round into the closing evaluation; a suspected hit you rule a false positive starts the round as usual with one verification line in the ledger.\n" +
+    "Turn this round's work into cards (reproduce competitor X / try proposal Y...), each card traceable to a requirement id and embedding the opening mail's verbatim sentence (R1/R2…; compressed phrases only as titles; content words preserved one by one). When a card face cites a protocol file path, use the authoritative paths verbatim (Agents/ledger.md, Agents/claim_map.md, Agents/selfcheck.py) — never a legacy-layout path (docs/workflow/... — field finding: card-face path drift caused two rounds of card-vs-ledger missing-entry matches). Adjudication/improvement entries carry four plain-language fields (current state, proposed change, expected benefit, cost), none missing. Comparison tables label every row and column inline with their data attribution (which run / which raw / which method — field finding v0.8.3: a comparison table carried no row attribution, so the reader could not tell which raw each column belonged to). Round numbers follow the Agents/ledger.md index when they disagree with this prompt's numbering — mark by the ledger's state and say so (the orchestrator's counter is internal). Boss focus: " + (focus || "none"),
   );
   if (cards.blocked) {
     bossStopR = true; // the Chief's own read hit the boss stop (the orchestrator's snapshot was stale, review F5) — the round does not start; the evaluation report receipts the stop (same channel as the round-top mechanical check)
@@ -727,8 +805,13 @@ for (let round = startRound; round <= rounds; round++) {
   }
   if ((cards.proposals || []).length < 1 || (cards.proposals || []).length > 3) {
     cards = await chief.ask<WorkCards>(
-      "proposals must contain 1-3 proposal names (currently " + (cards.proposals || []).length + "). Return WorkCards again.",
+      "proposals must contain 1-3 proposal names (currently " + (cards.proposals || []).length + "). Return WorkCards again." + (stopSuspectNoteR !== "" ? "\n" + stopSuspectNoteR + "If your own read confirms a standalone 【老板停点】 marker line: fill blocked with the stop receipt (source = confirmed by your own read) and the orchestrator stops this round into the closing evaluation." : ""),
     );
+  }
+  if (cards.blocked) {
+    bossStopR = true; // a stop receipt on the retry answer — the same channel as the first blocked (a suspect ruling arriving through the retry is never lost)
+    log("The Chief confirmed the boss stop on its retry answer — this round's cards are not started; closing straight into the evaluation receipt");
+    break;
   }
   if ((cards.proposals || []).length < 1 || (cards.proposals || []).length > 3) {
     log("Round " + round + " portfolio still invalid (" + (cards.proposals || []).length + " entries); recorded honestly and continuing");
@@ -784,8 +867,13 @@ for (let round = startRound; round <= rounds; round++) {
     if (noRn.length > 0) log("Round " + round + " has " + noRn.length + " card(s) without an Rn reference — cards that touch none of the boss's words must state 'no corresponding Rn: reason'; unstated, it is a violation of the carding discipline; recorded honestly");
     if (paraphrased.length + noRn.length > 0) {
       cards = await chief.ask<WorkCards>(
-        "Card-to-opening-mail check failed (retelling-distortion defense, line-level): " + (paraphrased.length > 0 ? "these cards cite an Rn but do not fully contain that Rn's registered line from the opening mail — the card's paraphrase may have changed content words (object/operation/quantifier/negation/numbers):\n" + paraphrased.map((c) => "- " + c.slice(0, 80)).join("\n") + "\n" : "") + (noRn.length > 0 ? "these cards carry no Rn at all — without an Rn they bypass the verbatim check; every card must trace to a requirement entry:\n" + noRn.map((c) => "- " + c.slice(0, 80)).join("\n") + "\n" : "") + "Rewrite the cards above: copy the registered line for the cited Rn from LoopMail/ToBoss.md verbatim into the card (with its Rn prefix; a compressed phrase only as the title) and return every other field unchanged (keep the title and proposals unchanged); a genuine infrastructure card unrelated to any requirement is rewritten to reference the requirement it serves, and a truly standalone one states 'no corresponding Rn: reason' honestly; if the opening mail itself is missing the original words, complete the mail first, marking each backfilled registered line with \"(backfilled)\" at its end so a backfill stays distinguishable from an original registration. Return WorkCards.",
+        "Card-to-opening-mail check failed (retelling-distortion defense, line-level): " + (paraphrased.length > 0 ? "these cards cite an Rn but do not fully contain that Rn's registered line from the opening mail — the card's paraphrase may have changed content words (object/operation/quantifier/negation/numbers):\n" + paraphrased.map((c) => "- " + c.slice(0, 80)).join("\n") + "\n" : "") + (noRn.length > 0 ? "these cards carry no Rn at all — without an Rn they bypass the verbatim check; every card must trace to a requirement entry:\n" + noRn.map((c) => "- " + c.slice(0, 80)).join("\n") + "\n" : "") + "Rewrite the cards above: copy the registered line for the cited Rn from LoopMail/ToBoss.md verbatim into the card (with its Rn prefix; a compressed phrase only as the title) and return every other field unchanged (keep the title and proposals unchanged; blocked only when you directly confirm the boss stop point — where this round carries the stop-ruling note, that note governs); a genuine infrastructure card unrelated to any requirement is rewritten to reference the requirement it serves, and a truly standalone one states 'no corresponding Rn: reason' honestly; if the opening mail itself is missing the original words, complete the mail first, marking each backfilled registered line with \"(backfilled)\" at its end so a backfill stays distinguishable from an original registration. Return WorkCards." + (stopSuspectNoteR !== "" ? "\n" + stopSuspectNoteR : ""),
       );
+      if (cards.blocked) {
+        bossStopR = true; // the rewrite response carries a stop receipt — same channel as the first/retry blocked (a ruling arriving through a rewrite is never lost)
+        log("The Chief confirmed the boss stop point in the rewrite response — this round's cards do not start; go straight to the closing evaluation receipt");
+        break;
+      }
       // the rewrite path may backfill registrations — re-read and rebuild the snapshot so honestly backfilled lines can pass this round's recheck (a remediation path must converge, review #4)
       let reqRaw2 = "";
       try {
@@ -1314,6 +1402,25 @@ for (let round = startRound; round <= rounds; round++) {
     }
   }
   log("Round " + round + " archive " + (commitOk ? "verified (HEAD=" + headShown.slice(0, 7) + ")" : "needs manual check after remediation"));
+  // Stamp collection check (the v0.8.3 P6/P12 sibling finding: verification stamps a ledger verdict cites must land in the same commit)
+  {
+    let ledgerTailS = "";
+    try { ledgerTailS = (await readRepo("Agents/ledger.md")).slice(-12000); } catch { ledgerTailS = ""; }
+    const stampNames = Array.from(new Set(ledgerTailS.match(/_r[a-z0-9_]+\.(?:log|json|py|txt)/g) || []));
+    const stampDirs = Array.from(new Set(ledgerTailS.match(/_r[a-z0-9_]+\//g) || [])).map((d) => d.slice(0, -1));
+    let missingS: string[] = [];
+    if (stampNames.length > 0 || stampDirs.length > 0) {
+      try {
+        const stS = await G(["status", "--porcelain", "--untracked-files=all"]); // porcelain folds a new untracked directory into one line — expanded, every cited stamp is visible individually (a stamp inside an untracked directory never escapes)
+        const dirtyS = (stS.stdout || "").split("\n").map((l) => l.slice(3).trim().replace(/^"|"$/g, "")).filter((p) => p !== "" && p.indexOf(" -> ") < 0);
+        missingS = stampNames.filter((n) => dirtyS.some((p) => p === n || p.endsWith("/" + n))).concat(stampDirs.filter((d) => dirtyS.some((p) => p === d || p.startsWith(d + "/") || p.endsWith("/" + d) || p.endsWith("/" + d + "/")))); // the directory arm mirrors the file arm: nested paths and trailing-slash porcelain directory entries never escape
+      } catch { log("Stamp collection check did not run (git status unavailable) — recorded honestly"); }
+    }
+    if (missingS.length > 0) {
+      await chief.ask<string>("Stamp collection check: the verification stamps/artifacts below are cited by this round's ledger but not committed (untracked or unstaged): " + missingS.join(", ") + " — evidence a ledger verdict cites must land in the same commit. Each by explicit path " + GC + " add && " + GC + " commit --amend --no-edit into the archive commit (a plain commit if the archive commit has not landed), return one sentence.");
+      log("Stamp collection check: " + missingS.length + " item(s) collected");
+    } else if (stampNames.length > 0 || stampDirs.length > 0) log("Stamp collection check: every stamp this round's ledger cites is committed");
+  }
   // The backup push is executed and verified by the orchestrator (same as the engineering loop, field-upgraded): failures and failed verifications are recorded honestly, never redirected elsewhere
   let pushStateR = branchR === "" ? "push skipped: detached HEAD, the target branch is indeterminate (recorded honestly)" : "push skipped: " + push0.note;
   const headPush = await HEADR();
@@ -1352,6 +1459,10 @@ for (let round = startRound; round <= rounds; round++) {
   });
   report(rows[rows.length - 1], "rounds");
   plan = digest;
+}
+
+if (startRound > rounds && rows.length === 0) {
+  report({ round: 0, task: rawResumeR > rounds ? "Overrun resume (the ledger claims more rounds than this run's commitment — zero new executed rounds; disclosed to the boss)" : "Fully-completed resume (zero new executed rounds): the Preliminary Evaluation Report comes from the ledger and archived artifacts", portfolio: "—", dev: "no new execution", experiments: "—", test: "see the Preliminary Evaluation Report", review: "—", next: "" }, "rounds"); // the board is self-explanatory when non-empty (the v0.8.3 P11 sibling finding: an empty rounds table on a fully-completed resume) — board only, never counted into rows (rounds_completed stays honestly 0)
 }
 
 let reconGap = ""; // Rns still missing dispositions after the repair (injected into the evaluation ask, same as the engineering loop's mapGap)
@@ -1398,7 +1509,7 @@ try {
   closingBossNoteR = "";
 }
 if (closingBossNoteR !== "") log("Closing snapshot read of LoopMail/FromBoss.md: " + closingBossNoteR.length + " chars of boss feedback (the snapshot may be stale — the Chief is instructed to read it fresh and dispose of it, never silently dropped)");
-if (!bossStopR && closingBossNoteR.includes("【老板停点】")) {
+if (!bossStopR && closingBossNoteR.split(/\r?\n/).some((l) => l.trim() === "【老板停点】")) { // closing mechanical backstop (review F6) — only a standalone marker line counts (prose does not; field finding v0.8.3), never end quietly
   bossStopR = true; // closing mechanical backstop (review F6): a stop written after the last round-top read, or on a fully-completed resume — the evaluation report still receipts it, never ends quietly
   log("Boss-stop marker detected at closing — injecting the evaluation receipt requirement");
 }
@@ -1412,7 +1523,8 @@ let evalResult = await chief.ask<EvalReport>(
   (unverifiedNotesR.length > 0 ? "[Fixes without measured confirmation] the fixes for the issues below could not be measured and were judged fixed by reasoning only — disclose to the boss as facts, never as solved (a major/blocker fix without measured confirmation counts as unconfirmed): " + unverifiedNotesR.join("; ") + "\n" : "") +
   (confirmRejectsR.length > 0 ? "[Responses not confirmed] the dispositions below were rejected by the checker — present the issues and the rejected responses honestly: " + confirmRejectsR.join("; ") + "\n" : "") +
   (startRound > 1 ? "[Evidence scope] This run resumed at round " + startRound + ": the reviews and round records above cover this run's rounds only — the report must state its evidence scope explicitly, never letting the boss believe it covers all rounds.\n" : "") +
-  (bossStopR ? "[Boss stop point receipt] the boss wrote a 【老板停点】 marker in LoopMail/FromBoss.md: the run stopped with rounds remaining — the report must quote the stop words verbatim and receipt them to the boss (done/not done, decision points), never silently.\n" : "") +
+  (startRound > rounds ? "[Fully-completed-resume supplement] read the ledger's last-round detail section — if the last round's test verdict or review-panel opinions carry unclosed wording (lost in flight / incomplete / absent), the report must disclose that the last round's verification face never closed, never silently; if all closed, say so honestly.\n" : "") +
+  (bossStopR ? "[Boss stop point receipt] the closing mechanical check hit a boss-stop marker (suspected — you rule): read LoopMail/FromBoss.md yourself and verify; only when a standalone 【老板停点】 marker line really exists, quote the stop words verbatim and receipt them to the boss (done/not done, decision points); if your own read finds no marker line, report the mechanical false hit honestly — never fabricate stop words, never silently.\n" : "") +
   (visualOn ? "" : "[Visual-review exemption] the boss set visualReview=off for this run (image artifacts were detected and listed but not independently reviewed) — the report must disclose this exemption honestly, never silently.\n") +
   (dangerUnverifiedNote !== "" ? "[Unclosed dangerous-operation execution status] the execution reports for these approved dangerous operations never closed verbatim (after the executor's re-confirmation and the independent adjudicator's read-only verification) — the report must disclose each command and its adjudication finding to the boss honestly, never silently:\n" + dangerUnverifiedNote + "\n" : "") +
   "If the round records show round 1 had no end-to-end number, the report must state it plainly: no FULL number in round 1, the manuscript must not claim validation.\n" +
@@ -1426,7 +1538,7 @@ let evalResult = await chief.ask<EvalReport>(
   "Write the Preliminary Evaluation Report: verdict (continue/pivot/stop), expected success with reasoning that cites the experiment-mortality trend and the reader's novelty check, plus an explicit note that it is a qualitative judgement expressed numerically rather than a calibrated probability, novelty grounded in the 3 closest works, impact, points to watch if continued (each annotated with the evidence scope of the claim it concerns — datasets and conditions), " +
   "questionAnswers (question text -> direct answer -> where the evidence is; when asked where something lives, answer the form too — raw or derived, whether a writer exists), autonomousDecisions (decision -> reason -> consequence if rejected -> Occam self-assessment \"adds complexity vs simplifies\"; any complexity-increasing decision must be here, never only in the ledger), " +
   "deferred and declined fixed sections (each item with its reason — a recorded deferral is a decision, not an omission; a declined idea is not re-proposed next run; fill both fields faithfully, empty arrays when none), reviewerQuotes (verbatim, never paraphrased), deviations from the boss's requirements explained one by one (deviations: deviation + reason + the alternative chosen; empty array when none), process lessons (processLessons: each = rule + why + scope; lessons the boss adopts persist and load with the next run, a disproven lesson is marked superseded), and one line of advice including a decision list of things only the boss can do (accounts, data, resources). " +
-  "Reconciliation close-out (internal affair): mark every Rn from the opening mail's sentence inventory as delivered/partial/undelivered -> where the evidence is, into the ledger's closing chapter and the reconciliation column of Agents/claim_map.md — never as a reconciliation table in the boss's mail; an \"implemented\" without an entry does not count. This report is a decision-layer document and is appended as a new mail at the top of LoopMail/ToBoss.md (the 2026-11-05 boss mail system: ToBoss.md is the Chief's delivery-mail master file — new mails go at the top, appended in reverse order, old mails are never modified; docs/ holds formal content such as the manuscript and REPORT.ipynb; formal files are referenced in mails by links as attachments). The report opens with the direct answer to the boss's idea (verbatim): one plain-language conclusion sentence first (worth pursuing / pivot / stop + why), then the sections; the report carries a standalone \"waiting on the boss\" section (bossBlockers: each item needing a boss decision / approval / input stated plainly — what it is + why it waits on the boss + the options; \"none\" when nothing waits). Writing discipline (the boss's words of 2026-11-05 + the expression discipline of 2026-11-15, hard rules): the art of de-redundancy — report the minimum, fastest for the boss to grasp the main line and the whole; internal terms and ids either stay out of the mail or carry a plain-language gloss on first use (a bare id like \"M36 three-way finalization\" is the violation example); nothing contrary to fact (numbers and conclusions quote command output and the artifact manifest only); no code-segment or path dumps (evidence pointers listed in one section, no paths in the body); each point is stated completely in exactly one place — never a \"see above / see section X\" cross-reference; prefer simple sentences, grammatically clean and unambiguous; speak with the nouns of the boss's own words. No process narrative (which attempt went green, how many reworks, how many review comments — that is the ledger), one conclusion sentence at the top of each section, each item stated once, aiming at two pages or less. Write links as clickable, boss-reachable forms (resolving from LoopMail/ and pointing at existing files). Before it lands, self-check it once (one revision pass, never a rewrite loop): the opening sentence answers the boss's question directly; the waiting-on-the-boss section stands alone and is clear; no unglossed internal terms; every link is clickable and points at an existing file; simple sentences throughout, no cross-references. At closing, tidy the delivery (2026-11-05 boss rules, hard; sweep the whole repository for historical redundancy first — including leftovers from earlier rounds and runs — then move, with git mv only, never deleting — deleting files is the boss's move): (1) code AND documents the final deliverable does not need (experiment scripts, superseded implementation versions, drafts and intermediate reports — historical redundancy, code and documents alike) -> git mv straight into Agents/; (2) an AI-generated document that has become history -> merge only the content worth adopting into the deliverables wording of the newest ToBoss mail, its body counting as historical redundancy -> git mv into Agents/; (3) docs/ keeps formal content only (the manuscript and its kin); the repo root and docs/ pile up no working files; (4) files the boss wrote or supplied (LoopMail/FromBoss.md, the docs/refs/ paper library) stay as they are, and what the boss wrote is never modified; (5) any file under LoopMail/ other than ToBoss.md/FromBoss.md is judged case by case — boss-placed files get the FromBoss_ prefix and stay untouched, stray agent-made products are put away per (1)/(2), and anything uncertain is treated as boss-placed; the working scaffolding (ledger, maps, Agents/selfcheck.py, test and debug scripts, falsified history) all lives under Agents/. Append the mail to LoopMail/ToBoss.md, " + GC + " add each changed file by explicit path && " + GC + " commit.",
+  "Reconciliation close-out (internal affair): mark every Rn from the opening mail's sentence inventory as delivered/partial/undelivered -> where the evidence is, into the ledger's closing chapter and the reconciliation column of Agents/claim_map.md — never as a reconciliation table in the boss's mail; an \"implemented\" without an entry does not count. This report is a decision-layer document and is appended as a new mail at the top of LoopMail/ToBoss.md (the 2026-11-05 boss mail system: ToBoss.md is the Chief's delivery-mail master file — new mails go at the top, appended in reverse order, old mails are never modified; docs/ holds formal content such as the manuscript and REPORT.ipynb; formal files are referenced in mails by links as attachments). The report opens with the direct answer to the boss's idea (verbatim): one plain-language conclusion sentence first (worth pursuing / pivot / stop + why), then the sections; the report carries a standalone \"waiting on the boss\" section (bossBlockers: each item needing a boss decision / approval / input stated plainly — what it is + why it waits on the boss + the options; \"none\" when nothing waits). Writing discipline (the boss's words of 2026-11-05 + the expression discipline of 2026-11-15, hard rules): the art of de-redundancy — report the minimum, fastest for the boss to grasp the main line and the whole; internal terms and ids either stay out of the mail or carry a plain-language gloss on first use (a bare id like \"M36 three-way finalization\" is the violation example; adjudication/improvement/pending entries always carry four plain-language fields: current state, proposed change, expected benefit, cost — the P1 sibling finding: bare ids the boss cannot read); nothing contrary to fact (numbers and conclusions quote command output and the artifact manifest only); no code-segment or path dumps (evidence pointers listed in one section, no paths in the body); each point is stated completely in exactly one place — never a \"see above / see section X\" cross-reference; prefer simple sentences, grammatically clean and unambiguous; speak with the nouns of the boss's own words. No process narrative (which attempt went green, how many reworks, how many review comments — that is the ledger), one conclusion sentence at the top of each section, each item stated once, aiming at two pages or less. Write links as clickable, boss-reachable forms (resolving from LoopMail/ and pointing at existing files); a directory deliverable links its manifest/README and at least one representative image, never a bare directory path. When the verification channel is all green (selfcheck/CANARY all pass), one passing phrase — no verification numbers, zero pytest/selfcheck/CANARY tokens; red/exempt items are written out item by item (phenomenon + impact + handling — the boss's words of 2026-11-16: report the problems clearly when there are problems, leave it out of the mail when there are none). Before it lands, self-check it once (one revision pass, never a rewrite loop): the opening sentence answers the boss's question directly; the waiting-on-the-boss section stands alone and is clear; no unglossed internal terms; every link is clickable and points at an existing file; simple sentences throughout, no cross-references. At closing, tidy the delivery (2026-11-05 boss rules, hard; sweep the whole repository for historical redundancy first — including leftovers from earlier rounds and runs — then move, with git mv only, never deleting — deleting files is the boss's move): (1) code AND documents the final deliverable does not need (experiment scripts, superseded implementation versions, drafts and intermediate reports — historical redundancy, code and documents alike) -> git mv straight into Agents/; (2) an AI-generated document that has become history -> merge only the content worth adopting into the deliverables wording of the newest ToBoss mail, its body counting as historical redundancy -> git mv into Agents/; (3) docs/ keeps formal content only (the manuscript and its kin); the repo root and docs/ pile up no working files; (4) files the boss wrote or supplied (LoopMail/FromBoss.md, the docs/refs/ paper library) stay as they are, and what the boss wrote is never modified; (5) any file under LoopMail/ other than ToBoss.md/FromBoss.md is judged case by case — boss-placed files get the FromBoss_ prefix and stay untouched, stray agent-made products are put away per (1)/(2), and anything uncertain is treated as boss-placed; the working scaffolding (ledger, maps, Agents/selfcheck.py, test and debug scripts, falsified history) all lives under Agents/. Append the mail to LoopMail/ToBoss.md, " + GC + " add each changed file by explicit path && " + GC + " commit.",
 );
 let evalOnDisk = "";
 try {
@@ -1434,50 +1546,14 @@ try {
 } catch {
   evalOnDisk = "";
 }
-if (!evalOnDisk.slice(0, 2000).includes("Preliminary Evaluation Report")) {
+if (!/^#[ \t]*[《【"“「（(]?\s*preliminary evaluation report/im.test(evalOnDisk.slice(0, 2000))) {
   await chief.ask<string>("The evaluation report never landed (no Preliminary Evaluation Report mail at the top of LoopMail/ToBoss.md): insert the report as a new mail at the top of LoopMail/ToBoss.md and " + GC + " add each changed file by explicit path && " + GC + " commit; return one sentence.");
   try {
     evalOnDisk = await readRepo("LoopMail/ToBoss.md");
   } catch {
     evalOnDisk = "";
   }
-  if (!evalOnDisk.slice(0, 2000).includes("Preliminary Evaluation Report")) log("The report is still not on disk after the repair ask — recorded honestly");
-}
-// Mail mechanical pre-check (v0.8.0 ruling 4=B: mechanize whatever a machine can decide) — clickable links, forbidden items, the waiting-on-the-boss section in place; one repair pass, never a loop
-{
-  const mailHeadP = evalOnDisk.slice(0, 9000);
-  const violationsP: string[] = [];
-  const linkReP = /\[[^\]]+\]\(([^)\s]+)\)/g;
-  let lmP: RegExpExecArray | null = linkReP.exec(mailHeadP);
-  while (lmP !== null) {
-    const tP = lmP[1];
-    if (!/^https?:\/\//i.test(tP)) {
-      const candsP = [tP.replace(/^\.\//, ""), tP.replace(/^(\.\.\/)+/, "")];
-      let okP = false;
-      for (const cP of candsP) {
-        try { await readRepo("LoopMail/" + cP); okP = true; break; } catch { /* next candidate */ }
-        try { await readRepo(cP); okP = true; break; } catch { /* next candidate */ }
-      }
-      if (!okP) violationsP.push("dead link (click does not resolve): " + tP);
-    }
-    lmP = linkReP.exec(mailHeadP);
-  }
-  if (mailHeadP.indexOf("Agents/") >= 0) violationsP.push("the mail body carries an internal Agents/ path");
-  if (/Process lessons/i.test(mailHeadP)) violationsP.push("the mail carries a process-lessons section (moved out of the mail, into the ledger)");
-  if (mailHeadP.indexOf("Waiting on the boss") < 0) violationsP.push("the report lacks a standalone \"Waiting on the boss\" section (write \"none\" when nothing waits)");
-  if (violationsP.length > 0) {
-    await chief.ask<string>(
-      "Mail mechanical pre-check failed (one revision pass — revise, land, commit; never a rewrite loop):\n" + violationsP.join("\n") + "\nRevise the mail at the top of LoopMail/ToBoss.md per the evaluation-report writing discipline, " + GC + " add each changed file by explicit path && " + GC + " commit, return one sentence.",
-    );
-    let recheckP = "";
-    try { recheckP = await readRepo("LoopMail/ToBoss.md"); } catch { recheckP = ""; }
-    const stillP = recheckP.slice(0, 9000);
-    const residualP: string[] = [];
-    if (stillP.indexOf("Agents/") >= 0) residualP.push("an Agents/ path is still in the body");
-    if (/Process lessons/i.test(stillP)) residualP.push("a process-lessons section is still present");
-    if (stillP.indexOf("Waiting on the boss") < 0) residualP.push("the \"Waiting on the boss\" section is still missing");
-    log(residualP.length === 0 ? "Mail mechanical pre-check: passed after revision" : "Mail pre-check residuals (recorded honestly): " + residualP.join("; "));
-  } else log("Mail mechanical pre-check: passed");
+  if (!/^#[ \t]*[《【"“「（(]?\s*preliminary evaluation report/im.test(evalOnDisk.slice(0, 2000))) log("The report is still not on disk after the repair ask — recorded honestly");
 }
 // Question guard (mechanical): questions in the boss's words with no answer in the report count as a missed requirement — answer once, then record honestly
 const askedQ = ((idea + " " + focus + " " + closingBossNoteR).match(/？|\?/g) || []).length;
@@ -1487,10 +1563,31 @@ if (askedQ > 0 && (!evalResult.questionAnswers || evalResult.questionAnswers.len
   );
   if (!evalResult.questionAnswers || evalResult.questionAnswers.length === 0) log("Report still lacks answered questions (recorded honestly; the boss's words contain " + askedQ + " question mark(s))");
 }
+
 try {
   evalOnDisk = await readRepo("LoopMail/ToBoss.md"); // the QA path may also write ToBoss — re-read so the report body reflects the final landing state (review #2)
 } catch {
   evalOnDisk = "";
+}
+
+{
+  const gateRedR2 = reconGap !== "" || roundsOverrunR || reviewSkippedR > 0 || unverifiedNotesR.length > 0 || confirmRejectsR.length > 0 || dangerUnverifiedNote !== "" || misunderstandingNote !== "" || round1FullMissing || bossStopR;
+  const vP = await mailPrecheckR(evalOnDisk.slice(0, Math.max(0, evalOnDisk.length - toBossLen0R)), gateRedR2, true);
+  if (evalOnDisk === "") log("Mail mechanical pre-check: the ToBoss read failed — the pre-check did not run (recorded honestly)");
+  else if (vP.length > 0) {
+    await chief.ask<string>(
+      "Mail mechanical pre-check failed (one revision pass — revise, land, commit; never a rewrite loop):\n" + vP.join("\n") + "\nRevise the top mail of LoopMail/ToBoss.md per the evaluation-report writing discipline (old mails are never modified — hits inside old mails are recorded honestly, that is not a failed revision), " + GC + " add each changed file by explicit path && " + GC + " commit, return one sentence.",
+    );
+    let recheckP = "";
+    try { recheckP = await readRepo("LoopMail/ToBoss.md"); } catch { recheckP = ""; }
+    if (recheckP === "") {
+      log("Mail mechanical pre-check: the revised ToBoss could not be re-read — recorded honestly, the residual face waits for a recheck");
+    } else {
+      const residualP = await mailPrecheckR(recheckP.slice(0, Math.max(0, recheckP.length - toBossLen0R)), gateRedR2, true);
+      evalOnDisk = recheckP; // the final on-disk state after the pre-check repair feeds the push verification and the delivery copy
+      log(residualP.length === 0 ? "Mail mechanical pre-check: passed after revision" : "Mail pre-check residuals (recorded honestly): " + residualP.join("; "));
+    }
+  } else log("Mail mechanical pre-check: passed");
 }
 // The evaluation-report commit is pushed and verified by the orchestrator (same as the engineering loop)
 let finalPushR = push0.target === "" ? "push skipped: " + push0.note : (branchR === "" ? "not pushed: detached HEAD, the target branch is indeterminate (recorded honestly)" : "not pushed");
@@ -1518,7 +1615,7 @@ if (push0.target !== "" && branchR !== "") {
 const md = [
   "# Preliminary Evaluation Report",
   "",
-  (evalOnDisk.slice(0, 2000).includes("Preliminary Evaluation Report") ? "Master copy: the latest mail in LoopMail/ToBoss.md (this card is the run's delivery copy)" : "⚠ the master copy never landed (repair failed) — this card is the only delivered wording"),
+  (/^#[ \t]*[《【"“「（(]?\s*preliminary evaluation report/im.test(evalOnDisk.slice(0, 2000)) ? "Master copy: the latest mail in LoopMail/ToBoss.md (this card is the run's delivery copy)" : "⚠ the master copy never landed (repair failed) — this card is the only delivered wording"),
   "",
   "Idea: " + idea,
   "",
@@ -1552,7 +1649,7 @@ const md = [
   "---",
   "Note: the success figure is a qualitative judgement expressed numerically, not a calibrated probability; reviewer verdicts are quoted unedited and may disagree with the overall verdict.",
 ].join("\n");
-await artifact.markdown("report", md, { title: "Preliminary Evaluation Report (delivery copy)", description: (evalOnDisk.slice(0, 2000).includes("Preliminary Evaluation Report") ? "Master copy: the latest mail in LoopMail/ToBoss.md" : "⚠ the master copy never landed (repair failed) — this delivery copy is the only delivered wording") + "; " + (bossStopR ? "go/no-go evaluation after the boss stop: planned " + rounds + " rounds, executed " + rows.length + " before stopping" : (startRound > rounds ? "go/no-go re-evaluation of the previously completed " + rounds + " rounds (fully-completed resume)" : "go/no-go evaluation after the " + rounds + "-round hard stop")), primary: true });
+await artifact.markdown("report", md, { title: "Preliminary Evaluation Report (delivery copy)", description: (/^#[ \t]*[《【"“「（(]?\s*preliminary evaluation report/im.test(evalOnDisk.slice(0, 2000)) ? "Master copy: the latest mail in LoopMail/ToBoss.md" : "⚠ the master copy never landed (repair failed) — this delivery copy is the only delivered wording") + "; " + (bossStopR ? "go/no-go evaluation after the boss stop: planned " + rounds + " rounds, executed " + rows.length + " before stopping" : (startRound > rounds ? "go/no-go re-evaluation of the previously completed " + rounds + " rounds (fully-completed resume)" : "go/no-go evaluation after the " + rounds + "-round hard stop")), primary: true });
 
 return {
   conclusion: evalResult.advice,
