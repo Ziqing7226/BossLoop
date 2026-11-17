@@ -4,7 +4,7 @@
 
 **Bounded AI-team loops that work for the boss — and report to you.**
 
-[![Version](https://img.shields.io/badge/version-v0.8.5-blue)](CITATION.cff)
+[![Version](https://img.shields.io/badge/version-v0.8.6-blue)](CITATION.cff)
 [![License](https://img.shields.io/badge/license-CC%20BY%204.0%20%2F%20Apache--2.0-green)](LICENSE)
 ![Validated on ZCode](https://img.shields.io/badge/validated%20on-ZCode-orange)
 [![Docs](https://img.shields.io/badge/docs-中文-red)](README.zh-CN.md)
@@ -73,6 +73,7 @@ The Research Iteration Loop distills lessons from these research-agent systems �
 - [Ahren09/AgentReview](https://github.com/Ahren09/AgentReview) — quantified reviewer biases that motivated the blind-review discipline
 - [gulucaptain/Best-Paper-Writing-Skill](https://github.com/gulucaptain/Best-Paper-Writing-Skill) — award-paper writing rules that govern the Researcher role
 - [ScientistTwo](https://scientist-two.github.io/) ([arXiv:2609.19644](https://arxiv.org/abs/2609.19644)) — the evidence-attribution discipline (discriminative evidence, an eval-surface fingerprint, failure triage, evidence-backed rebuttals) draws on the ScientistTwo paper
+- [leanprover/skills](https://github.com/leanprover/skills) & [cameronfreer/lean4-skills](https://github.com/cameronfreer/lean4-skills) — machine-checked math proofs: the one-step-at-a-time proving discipline and the axiom doctrine (a proof counts only with zero sorries and standard axioms only) behind the math-proof skill
 
 The ScientistTwo paper's own Limitations section notes that the system "does not yet consistently achieve the caliber of spotlight or oral presentations that introduce paradigm-shifting conceptual breakthroughs" — a reminder to hold moderate expectations of autonomous research loops, bossloop included.
 

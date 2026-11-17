@@ -1,6 +1,6 @@
 # Robust Engineering Loop
 
-**v0.8.5** · collection: `bossloop` · sibling: [Research Iteration Loop](../research-iteration-loop/SPEC.md)
+**v0.8.6** · collection: `bossloop` · sibling: [Research Iteration Loop](../research-iteration-loop/SPEC.md)
 
 > Give it a requirement. Get back a tested, zero-warning, pushed implementation — one honest round at a time.
 
@@ -140,7 +140,7 @@ The **ledger is the checkpoint**. Every round appends its cards, verdicts, rebut
 
 Roles run on two model tiers by default (`models=tiered`; `uniform` puts every role on the session model):
 
-- **Strong tier** — Chief Engineer, Senior Engineer: analysis, planning, arbitration.
+- **Strong tier** — Chief Engineer, Senior Engineer, Visual Reviewer: analysis, planning, arbitration.
 - **Cheap tier** — Algorithm Engineer (junior), Test Engineer: hands-on build and verify. Safe exactly because the gate is mechanical — quality is decided by selfcheck/CI/the zero-warning build, never by model self-report.
 
 **Junior→senior escalation:** the gate loop runs under an attempt cap — the cold-start budget per round (the reference implementation sets it to 2: the handled-findings list rides the recheck ask and the gate criteria ride the Chief persona, so the budget converges); the junior tier spends its budget first and the last attempt is the Senior Engineer's single delivery, under the same amend discipline — from the first unsolved senior delivery on, gate failures route to the boss-ruled skip adjudication (§4.15) instead of repeated senior deliveries; when the delivery lands on the last attempt, the adjudication runs immediately on the honest basis that it went without a recheck; a new blocker batch in a later round re-walks the same cycle — junior attempts, then the Senior's single delivery, then adjudication. The executor never rules on its own declarations: escalation-phase destructive requests are adjudicated by the Chief. Escalations are counted per round in the ledger — a high escalation rate is a signal that the tiering or the task split is wrong, and the Chief acts on it.

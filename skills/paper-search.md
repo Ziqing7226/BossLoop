@@ -61,10 +61,11 @@ Also: sort by date for the frontier; sort by usage (180 days) for what peers are
 
 ## 3. Citation tracking (snowballing)
 
-From any pivotal paper, walk its citation network in all directions:
+From any pivotal paper, walk its citation network in the four directions:
 - **References** (what it cites) — walk **backward** to the foundations;
 - **Citing literature** (who cites it) — walk **forward** to the follow-ups and the state of the art;
-- **Related records / 共引文献 / 同被引文献** — papers sharing references with it (same research background), the co-citation principle; a "(22 shared)" tag means 22 shared references.
+- **Co-cited papers / 共引文献 / 同被引文献** — papers sharing references with it (same research background), the co-citation principle; a "(22 shared)" tag means 22 shared references;
+- **Related records** — records the retrieval system flags as related to it — the fourth direction of the sideways walk.
 CNKI exposes the same network (参考文献/引证文献/共引/同被引/二级参考/二级引证) plus knowledge-network hints (研究起点/来源/分支/去脉). Repeat until new names stop appearing.
 
 ## 4. Author and institution search

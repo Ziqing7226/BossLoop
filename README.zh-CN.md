@@ -4,7 +4,7 @@
 
 **为老板干活的 AI 团队循环，有界、对抗验证，并向你如实汇报。**
 
-[![Version](https://img.shields.io/badge/version-v0.8.5-blue)](CITATION.cff)
+[![Version](https://img.shields.io/badge/version-v0.8.6-blue)](CITATION.cff)
 [![License](https://img.shields.io/badge/license-CC%20BY%204.0%20%2F%20Apache--2.0-green)](LICENSE)
 ![已在 ZCode 验证](https://img.shields.io/badge/%E5%B7%B2%E5%9C%A8%20ZCode%20%E9%AA%8C%E8%AF%81-orange)
 [![English](https://img.shields.io/badge/docs-English-blue)](README.md)
@@ -73,6 +73,7 @@ cp robust-engineering-loop/implementations/zcode/robust-engineering-loop.dwf.ts 
 - [Ahren09/AgentReview](https://github.com/Ahren09/AgentReview)——量化的审稿偏差，促成盲审纪律
 - [gulucaptain/Best-Paper-Writing-Skill](https://github.com/gulucaptain/Best-Paper-Writing-Skill)——约束研究员角色的获奖论文写作规则
 - [ScientistTwo](https://scientist-two.github.io/)（[arXiv:2609.19644](https://arxiv.org/abs/2609.19644)）——科研迭代循环的证据归因纪律（区分性证据、协议面指纹、失败三分类、以证据闭环的审稿回应）借鉴自 ScientistTwo 论文
+- [leanprover/skills](https://github.com/leanprover/skills) 与 [cameronfreer/lean4-skills](https://github.com/cameronfreer/lean4-skills)——机器验证的数学证明：math-proof skill 背后的一步一验证明纪律与公理教义（零 sorry 且仅标准公理才算证明）
 
 ScientistTwo 论文的 Limitations 一节自述该系统 "does not yet consistently achieve the caliber of spotlight or oral presentations that introduce paradigm-shifting conceptual breakthroughs"（尚未能稳定达到引入范式级概念突破的 spotlight 或 oral 水准）——对自主科研循环，包括 bossloop，都宜保持适度预期。
 
