@@ -20,7 +20,7 @@ Formalization is expensive; spend it only where the paper leans on the mathemati
 
 - **Formalize** the load-bearing claims: a theorem or lemma, a bound, a convergence proof, an equivalence, a correctness guarantee — claims whose falsehood would sink the paper's headline conclusion.
 - **Do not formalize** routine algebra a computation already checks, empirical claims (they belong to experiments and the claim→evidence map), or decorative mathematics.
-- The Chief judges at the artifact spec table: a round whose core claims carry formalizable mathematics gets a **formalization card** (Lean declarations + proofs); a run with empirical-only claims keeps this skill dormant at zero cost.
+- The math-claims judgment is standing, with three triggers: the boss's words demand a proof (mandatory card); the opening spec table finds load-bearing formalizable claims; or any role spots a suspected simple, effective pattern in the data or the literature — a conjecture — and the Chief weighs proof against experiment. A conjecture proven in Lean becomes a theorem, the strongest evidence form; an experiment that verifies it equally well counts. A run with empirical-only claims keeps this skill dormant at zero cost.
 
 ## 2. Environment
 
