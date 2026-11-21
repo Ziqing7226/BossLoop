@@ -32,9 +32,9 @@ This file is the boss's standing word for anyone advancing the project in the bo
 
 ## Repository constraints
 
-**M1** One advance, one commit, with a self-explanatory message. The version is unified in all nine defined places (citation, two README badges, two SPEC headers, four implementation descriptions) and bumps in the rightmost digit.
+**M1** One advance, one commit, with a self-explanatory message. The version is unified in all nine defined places (citation, two README badges, four SPEC headers — the English originals and their Chinese translations — and two implementation descriptions) and bumps in the rightmost digit.
 
-**M2** Chinese and English change in the same pass and are verified by a paired checklist — one row per sentence, one column per language — never file by file.
+**M2** Where a document exists in both languages (the READMEs, each SPEC with its Chinese translation), Chinese and English change in the same pass and are verified by a paired checklist — one row per sentence, one column per language — never file by file. Implementation templates ship in Chinese only; each English SPEC stays the core, its Chinese translation exists to serve Chinese users.
 
 **M3** Prose follows the mechanism: counts, names, paths, file names and version strings change with the mechanism in the same commit; after the change, a stale-string grep over the old values returns nothing outside legitimate migration notes.
 

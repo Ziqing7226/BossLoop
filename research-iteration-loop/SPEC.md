@@ -1,6 +1,6 @@
 # Research Iteration Loop
 
-**v0.8.9** · collection: `bossloop` · sibling: [Robust Engineering Loop](../robust-engineering-loop/SPEC.md)
+**v0.8.10** · collection: `bossloop` · sibling: [Robust Engineering Loop](../robust-engineering-loop/SPEC.md) · Chinese translation: [SPEC.zh-CN.md](SPEC.zh-CN.md)
 
 > Start from a rough idea. Iterate it through bounded, adversarial cycles. Stop on schedule and report whether it deserves more of your life.
 
@@ -129,7 +129,7 @@ Roles run on two model tiers by default (`models=tiered`; `uniform` = session mo
 
 ## 11. Implementations and scope
 
-- **ZCode** — `implementations/zcode/*.dwf.ts`: ZCode-specific format; copy into `~/.zcode/workflows/` and run from inside the research repo. The gate calls `python Agents/selfcheck.py` and falls back to `python3` automatically. The Chinese-UI file is canonical; `*.en.dwf.ts` is protocol-identical.
+- **ZCode** — `implementations/zcode/*.dwf.ts`: ZCode-specific format; copy into `~/.zcode/workflows/` and run from inside the research repo. The gate calls `python Agents/selfcheck.py` and falls back to `python3` automatically.
 - **Any framework** — roles → subagents, steps 1–8 → graph nodes or an orchestration script, the gate → a CI job, the ledger → a repo file, `profile` → project config. Portable by design; validated on one engine (ZCode).
 - **Skills** — `skills/paper-writing.md`, `skills/paper-search.md` and `skills/math-proof.md` (collection repo root) distill paper-writing and literature-search discipline from university lecture series, page by page, and machine-checked math-proof discipline (Lean 4 + Mathlib — the type checker is the only referee: zero sorries, standard axioms only). The Researcher follows the writing skill; the Scout's survey follows the search skill; formalization cards follow the math-proof skill — their personas carry the inline essentials so the loop runs standalone, and the skill files are the full reference. Copy them alongside the workflow when porting.
 - **Scope** — this repository ships the *iteration* protocol. A heavier deep-research variant (fixed specialist reviewer bench, domain guardrails) was field-tested on a real project over nine rounds in three runs; its lessons are folded into §5–§7. It is not included here. `claim_map` as a standardized JSON schema is a possible future extension.

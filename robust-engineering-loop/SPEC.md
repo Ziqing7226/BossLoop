@@ -1,6 +1,6 @@
 # Robust Engineering Loop
 
-**v0.8.9** · collection: `bossloop` · sibling: [Research Iteration Loop](../research-iteration-loop/SPEC.md)
+**v0.8.10** · collection: `bossloop` · sibling: [Research Iteration Loop](../research-iteration-loop/SPEC.md) · Chinese translation: [SPEC.zh-CN.md](SPEC.zh-CN.md)
 
 > Give it a requirement. Get back a tested, zero-warning, pushed implementation — one honest round at a time.
 
@@ -180,7 +180,7 @@ Project constraints travel in a `profile` string injected into every role: build
 
 ## 14. Implementations and scope
 
-- **ZCode** — `implementations/zcode/*.dwf.ts`: copy into `~/.zcode/workflows/` and run from inside the project repository being developed. The Chinese-UI file is canonical; `*.en.dwf.ts` is protocol-identical.
+- **ZCode** — `implementations/zcode/*.dwf.ts`: copy into `~/.zcode/workflows/` and run from inside the project repository being developed.
 - **Any framework** — roles → subagents, steps 1–7 → graph nodes or an orchestration script, the gate → a CI job, the ledger → a repo file, `profile` → project config.
 - **Scope** — this protocol ships the *development* loop. The requirement map, cold-start testing and amend discipline are engine-agnostic; the remote-CI check degrades honestly when no CI CLI exists.
 
