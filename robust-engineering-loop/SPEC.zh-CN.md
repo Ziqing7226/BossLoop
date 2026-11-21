@@ -1,6 +1,6 @@
 # 鲁棒工程循环
 
-**v0.8.11** · collection: `bossloop` · sibling: [科研迭代循环](../research-iteration-loop/SPEC.zh-CN.md) · 英文原件：[SPEC.md](SPEC.md)（协议核心）
+**v0.8.12** · collection: `bossloop` · sibling: [科研迭代循环](../research-iteration-loop/SPEC.zh-CN.md) · 英文原件：[SPEC.md](SPEC.md)（协议核心）
 
 > 给它一条开发要求，还你一份已测试、零警告、已推送的实现——每一轮都诚实地推进。
 

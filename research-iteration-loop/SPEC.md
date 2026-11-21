@@ -1,6 +1,6 @@
 # Research Iteration Loop
 
-**v0.8.11** · collection: `bossloop` · sibling: [Robust Engineering Loop](../robust-engineering-loop/SPEC.md) · Chinese translation: [SPEC.zh-CN.md](SPEC.zh-CN.md)
+**v0.8.12** · collection: `bossloop` · sibling: [Robust Engineering Loop](../robust-engineering-loop/SPEC.md) · Chinese translation: [SPEC.zh-CN.md](SPEC.zh-CN.md)
 
 > Start from a rough idea. Iterate it through bounded, adversarial cycles. Stop on schedule and report whether it deserves more of your life.
 
@@ -39,11 +39,7 @@ The tier annotations are the shipped default and a suggestion only — which mod
 - **Response doctrine:** after fixes land, the checker confirms each response (fix with measured closure / evidence-backed rebuttal / re-scope / report) instead of re-reviewing in full; a fix that cannot be measured is ledgered honestly and a major one rides the evaluation report's mandatory disclosure to the boss.
 - Red lines = document contradicts facts, the work fails this round's task requirement, a serious bug, contradiction of the boss's words (the single exception: a contradiction whose ambiguity originates in the boss's own words and is registered under the ambiguity discipline may close by re-scope/report), data fidelity, security; they close only by a measured fix or an evidence-backed rebuttal; re-scoping and reporting never close a red line otherwise.
 - The evaluation report opens with a one-sentence plain-language direct answer to the boss's idea and carries a standalone "waiting on the boss" section ("none" when nothing waits); process lessons, deferred/declined and the reconciliation details live in the ledger, not the report.
-- The report is appended as a **new mail at the top of `LoopMail/ToBoss.md`** and is a **decision-layer document**: no process narrative (the ledger holds it), jargon glossed on first use, each section opening with its conclusion, each item stated once, no code paths in the body, two pages or less.
-- **The boss's writing discipline (four bans):** defined once at §4 — the Chief plans, writes and reports against it.
-- An all-green verification channel stays out of the mail — one passing phrase at most, no verification numbers, no canary explanations, while red or exempt items are written out item by item — report the problems clearly when there are problems, leave it out when there are none; the deliverables list links every artifact — a directory deliverable links its manifest/README and at least one representative image, never a bare path; the boss-readable scaffolding documents may be linked, everything else under Agents/ stays out.
-- Adjudication and improvement proposals carry four plain-language fields — current state, proposed change, expected benefit, cost; a numeric-gate parameter carries one recomputable positive example and one negative example, a boss-visible artifact produced on provisional defaults is labeled as such (re-producible after the ruling), and a substantive interpretive decision on an underdetermined spot of the boss's words (a qualifier the engineers added) is listed as its own adjudication entry for the boss to confirm.
-- The opening brief and the evaluation report pass one shared mechanical pre-check — clickable links (whitelisted Agents/ links included, existence-probed), bare deliverable paths (bold, backtick-wrapped and CJK-adjacent shapes included), all-green verification tokens (once any verification verdict exists), cross-references, and the Agents/ whitelist — one repair pass per check; the waiting-on-the-boss section check and the token ban apply to the evaluation report only — the opening brief's five-section contract carries neither; already-written mails are disclosed as residuals, never rewritten; the same checklist rides every writing ask as its first-line self-check — writing and checking share one list; the run then stops and waits for the boss's continue / pivot / stop decision.
+- **The evaluation report's writing contract:** defined once at §4 — the Chief plans, writes and reports against it.
 
 ### 2.2 Scout *(cheap tier)*
 

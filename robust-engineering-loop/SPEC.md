@@ -1,6 +1,6 @@
 # Robust Engineering Loop
 
-**v0.8.11** · collection: `bossloop` · sibling: [Research Iteration Loop](../research-iteration-loop/SPEC.md) · Chinese translation: [SPEC.zh-CN.md](SPEC.zh-CN.md)
+**v0.8.12** · collection: `bossloop` · sibling: [Research Iteration Loop](../research-iteration-loop/SPEC.md) · Chinese translation: [SPEC.zh-CN.md](SPEC.zh-CN.md)
 
 > Give it a requirement. Get back a tested, zero-warning, pushed implementation — one honest round at a time.
 
