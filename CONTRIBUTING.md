@@ -8,7 +8,7 @@ This file is the boss's standing word for anyone advancing the project in the bo
 
 ## The philosophy
 
-**P1 Occam's razor.** Nothing is added without necessity: the simplest process that works beats a cleverer complicated one, and a clause whose cost exceeds its benefit is dropped however sensible it sounds. Its manifestations are binding: documents are concise and carry no redundant information; the SPECs are the solution and carry nothing unrelated to it — rules and verdicts, not the story of how the rules were learned; the boss-facing surface stays minimal.
+**P1 Occam's razor.** Nothing is added without necessity: the simplest process that works beats a cleverer complicated one, and a clause whose cost exceeds its benefit is dropped however sensible it sounds. Its manifestations are binding: documents are concise and carry no redundant information; **the SPECs are the solution and carry nothing unrelated to it — rules and verdicts, not the story of how the rules were learned** (a mechanism born of a field incident carries the rule; the incident's story stays in the commit message); the boss-facing surface stays minimal.
 
 **P2 The protocol is the asset.** The protocol files are the most valuable thing in this repository; within a protocol, process comes first, then constraints, then skills. SPECs are normative and engine-portable; implementations are references. Skills serve the AI that uses them — a constraint that does not improve the outcome has no place in a prompt — and disclosure of AI usage follows the venue's stated policy.
 

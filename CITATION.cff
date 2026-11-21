@@ -4,7 +4,7 @@ message: >-
   please mention this work.
 type: software
 title: bossloop
-version: v0.8.10
+version: v0.8.11
 date-released: "2026-11-21"
 authors:
   - alias: Ziqing7226
@@ -16,8 +16,9 @@ abstract: >-
   peer review, and robust
   engineering development through plan-build-cold-test-amend-push
   rounds — each loop hard-stops on schedule and reports honestly
-  to the boss. Roles run on tiered models — strong for planning and
-  review, cheap for build and test — so larger jobs cost less.
+  to the boss. Each member's model is configurable per role; the
+  shipped tiering (strong for planning and review, cheap for build
+  and test) is a suggested default.
 license:
   - CC-BY-4.0
   - Apache-2.0

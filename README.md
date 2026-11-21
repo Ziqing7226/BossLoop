@@ -4,7 +4,7 @@
 
 **Bounded AI-team loops that work for the boss — and report to you.**
 
-[![Version](https://img.shields.io/badge/version-v0.8.10-blue)](CITATION.cff)
+[![Version](https://img.shields.io/badge/version-v0.8.11-blue)](CITATION.cff)
 [![License](https://img.shields.io/badge/license-CC%20BY%204.0%20%2F%20Apache--2.0-green)](LICENSE)
 ![Validated on ZCode](https://img.shields.io/badge/validated%20on-ZCode-orange)
 [![Docs](https://img.shields.io/badge/docs-中文-red)](README.zh-CN.md)
@@ -13,7 +13,7 @@
 
 </div>
 
-bossloop is a collection of open-source agent workflows: an autonomous AI team — a chief who plans, an engineer who builds, a cold-start tester who attacks the work — iterates in bounded rounds, ships only what passes a fully green gate, and reports to you, the boss. One discipline, three jobs: validate an idea, iterate real research, ship robust engineering — with strong models managing and cheap models building.
+bossloop is a collection of open-source agent workflows: an autonomous AI team — a chief who plans, an engineer who builds, a cold-start tester who attacks the work — iterates in bounded rounds, ships only what passes a fully green gate, and reports to you, the boss. One discipline, three jobs: validate an idea, iterate real research, ship robust engineering — and each member's model is yours to configure.
 
 ## The loops
 
@@ -32,19 +32,18 @@ bossloop is a collection of open-source agent workflows: an autonomous AI team �
 
 Hand a command to an AI and you spend the evening supervising its untested output. Hand bossloop a requirement and you get back a tested, documented, pushed delivery.
 
-![Without bossloop: late-night chaos; with bossloop: read the report](assets/before-after.jpg)
-
-- **Low cost.** Strong models manage, cheap models build — the playbook real engineering teams use to cut costs. The cheap tier can be a locally deployed open model (e.g. Qwen3.8 on your own GPUs); a destructive command the cheap tier raises is ruled on by the strong tier, and an unapproved form simply fails the gate. Cheaper tokens, larger jobs.
+- **Low cost.** Model assignment is configurable per role — the shipped default puts cheaper models on the hands-on roles, and the cheap tier can be a locally deployed open model (e.g. Qwen3.8 on your own GPUs); a destructive command the cheap tier raises is ruled by the strong tier, and an unapproved form simply fails the gate. Cheaper tokens, larger jobs.
 - **High quality.** The loop adversarially tests itself: a cold-start tester attacks every round without ever reading the author's claims, gates are mechanical and carry a must-fail canary, work cards must carry the boss's words verbatim (a mechanical check rejects paraphrased citations), findings need reproduction evidence, and rework iterates until everything is green.
 - **Minimal supervision.** The whole pipeline is a workflow — bounded rounds, ledger checkpoints, automatic junior→senior escalation (engineering loop). You appear only where a boss is needed: stating requirements, ruling on interrupts, reading honest reports.
 
-![Strong models manage, cheap models build](assets/low-cost.jpg)
+![Without bossloop: late-night chaos; with bossloop: read the report](assets/before-after.jpg)
 
 Cheaper tokens. Self-iteration. Solid output.
 
 ## Quick start
 
 - **Deploy:** have your AI coding agent do it; state the task's **core goal** and **suggested means** in the prompt.
+- **Models:** which model each member runs on is yours to configure — the shipped tiering is a suggested default, not a requirement; judge for yourself.
 - **Read reports:** each delivery report lands as a mail in `LoopMail/ToBoss.md` of **the repository being worked on**, newest first.
 - **Steer mid-run:** write directives to `LoopMail/FromBoss.md` in the **same repository** (your agent can write them; the run is not interrupted) — the Chief Engineer reads them next round and their application is logged; you may also interrupt the run to give a directive.
 - **Find deliverables:** the deliverables themselves live in `docs/` (a `REPORT.ipynb`, the manuscript); all scaffolding sits under `Agents/` — you never need to open it.
