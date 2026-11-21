@@ -1,6 +1,6 @@
 # Research Iteration Loop
 
-**v0.8.12** · collection: `bossloop` · sibling: [Robust Engineering Loop](../robust-engineering-loop/SPEC.md) · Chinese translation: [SPEC.zh-CN.md](SPEC.zh-CN.md)
+**v0.9.0** · collection: `bossloop` · sibling: [Robust Engineering Loop](../robust-engineering-loop/SPEC.md) · Chinese translation: [SPEC.zh-CN.md](SPEC.zh-CN.md)
 
 > Start from a rough idea. Iterate it through bounded, adversarial cycles. Stop on schedule and report whether it deserves more of your life.
 

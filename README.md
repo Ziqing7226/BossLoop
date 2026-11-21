@@ -4,7 +4,7 @@
 
 **Bounded AI-team loops that work for the boss — and report to you.**
 
-[![Version](https://img.shields.io/badge/version-v0.8.12-blue)](CITATION.cff)
+[![Version](https://img.shields.io/badge/version-v0.9.0-blue)](CITATION.cff)
 [![License](https://img.shields.io/badge/license-CC%20BY%204.0%20%2F%20Apache--2.0-green)](LICENSE)
 ![Validated on ZCode](https://img.shields.io/badge/validated%20on-ZCode-orange)
 [![Docs](https://img.shields.io/badge/docs-中文-red)](README.zh-CN.md)
@@ -13,7 +13,7 @@
 
 </div>
 
-bossloop is a collection of open-source agent workflows: an autonomous AI team — a chief who plans, an engineer who builds, a cold-start tester who attacks the work — iterates in bounded rounds, ships only what passes a fully green gate, and reports to you, the boss. One discipline, three jobs: validate an idea, iterate real research, ship robust engineering — and each member's model is yours to configure.
+bossloop is a collection of open-source agent workflows: an autonomous AI team — a chief who plans, an engineer who builds, a cold-start checker who judges the work against the boss’s words and objective laws — iterates in bounded rounds, ships only what passes a fully green gate, and reports to you, the boss. One discipline, three jobs: validate an idea, iterate real research, ship robust engineering — and each member's model is yours to configure.
 
 ## The loops
 
@@ -22,18 +22,16 @@ bossloop is a collection of open-source agent workflows: an autonomous AI team �
 | **Idea Validation & Research Iteration** | Start from a rough idea. Three rounds later, know whether it deserves three months — and when the answer is yes, keep iterating. | [Research Iteration Loop](research-iteration-loop/SPEC.md) |
 | **Engineering Development** | Give it a requirement. Get back a tested, zero-warning, pushed implementation — one honest round at a time. | [Robust Engineering Loop](robust-engineering-loop/SPEC.md) |
 
-![BossLoop: the boss feeds an idea or a requirement into either loop, and the report comes back](assets/two-loops.jpg)
-
 **Validation is not a dead end.** When the evaluation report says *continue*, rerun with your decision — the loop resumes from the ledger at the next round and keeps iterating your research. It carried a real project through nine rounds across three runs.
 
-![One round: bounded rounds, a cold-start gate, fixes loop back, only green goes out](assets/how-it-works.jpg)
+![BossLoop: the boss feeds an idea or a requirement into either loop, and the report comes back](assets/two-loops.jpg)
 
 ## Why bossloop
 
 Hand a command to an AI and you spend the evening supervising its untested output. Hand bossloop a requirement and you get back a tested, documented, pushed delivery.
 
 - **Low cost.** Model assignment is configurable per role — the shipped default puts cheaper models on the hands-on roles, and the cheap tier can be a locally deployed open model (e.g. Qwen3.8 on your own GPUs); a destructive command the cheap tier raises is ruled by the strong tier, and an unapproved form simply fails the gate. Cheaper tokens, larger jobs.
-- **High quality.** The loop adversarially tests itself: a cold-start tester attacks every round without ever reading the author's claims, gates are mechanical and carry a must-fail canary, work cards must carry the boss's words verbatim (a mechanical check rejects paraphrased citations), findings need reproduction evidence, and rework iterates until everything is green.
+- **High quality.** The loop adversarially tests itself: a cold-start checker judges every round on six axes against the boss's words and objective laws — never the author's claims — verifies every behavioral claim in code and at runtime, and judges rendered artifacts by eye; gates are mechanical and carry a must-fail canary, work cards must carry the boss's words verbatim (a mechanical check rejects paraphrased citations), findings need reproduction evidence, and rework iterates until everything is green.
 - **Minimal supervision.** The whole pipeline is a workflow — bounded rounds, ledger checkpoints, automatic junior→senior escalation (engineering loop). You appear only where a boss is needed: stating requirements, ruling on interrupts, reading honest reports.
 
 ![Without bossloop: late-night chaos; with bossloop: read the report](assets/before-after.jpg)

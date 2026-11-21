@@ -1,6 +1,6 @@
 # 科研迭代循环
 
-**v0.8.12** · collection: `bossloop` · sibling: [鲁棒工程循环](../robust-engineering-loop/SPEC.zh-CN.md) · 英文原件：[SPEC.md](SPEC.md)（协议核心）
+**v0.9.0** · collection: `bossloop` · sibling: [鲁棒工程循环](../robust-engineering-loop/SPEC.zh-CN.md) · 英文原件：[SPEC.md](SPEC.md)（协议核心）
 
 > 从一个粗糙的想法出发，在有界、对抗式的循环中打磨它。按期停下，汇报它值不值得你继续投入。
 
