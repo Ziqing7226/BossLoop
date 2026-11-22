@@ -2,27 +2,27 @@
 
 # BossLoop
 
-**Bounded AI-team loops that work for the boss — and report to you.**
+**An AI team that keeps iterating on long-horizon tasks — verifying every round, resuming after every interrupt, reporting to you.**
 
 [![Version](https://img.shields.io/badge/version-v0.9.0-blue)](CITATION.cff)
 [![License](https://img.shields.io/badge/license-CC%20BY%204.0%20%2F%20Apache--2.0-green)](LICENSE)
 ![Validated on ZCode](https://img.shields.io/badge/validated%20on-ZCode-orange)
 [![Docs](https://img.shields.io/badge/docs-中文-red)](README.zh-CN.md)
 
-![BossLoop — bounded AI-team loops that work for the boss](assets/hero-banner.jpg)
+![BossLoop — an AI team that keeps iterating on long-horizon tasks](assets/hero-banner.jpg)
 
 </div>
 
-bossloop is a collection of open-source agent workflows: an autonomous AI team — a chief who plans, an engineer who builds, a cold-start checker who judges the work against the boss’s words and objective laws — iterates in bounded rounds, ships only what passes a fully green gate, and reports to you, the boss. One discipline, three jobs: validate an idea, iterate real research, ship robust engineering — and each member's model is yours to configure.
+bossloop is two open-source agent workflows built for tasks too long for one session. Work runs in bounded rounds, and each round ends in an independent check against your own words before it counts as done — that check is what keeps a long run honest. Progress goes into a ledger, so an interrupted run resumes at the next round instead of starting over. You run it the way a team lead runs a team: state the requirement, steer while it runs by writing to a mail file, and decide what continues at each stop. Each member's model is yours to configure; the design philosophy is in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## The loops
 
 | Workflow | What it does | Protocol |
 |---|---|---|
-| **Idea Validation & Research Iteration** | Start from a rough idea. Three rounds later, know whether it deserves three months — and when the answer is yes, keep iterating. | [Research Iteration Loop](research-iteration-loop/SPEC.md) |
+| **Idea Validation & Research Iteration** | Start from a rough idea. A few rounds of iteration, then blind review, then decide whether it deserves three months — when the answer is yes, keep iterating. | [Research Iteration Loop](research-iteration-loop/SPEC.md) |
 | **Engineering Development** | Give it a requirement. Get back a tested, zero-warning, pushed implementation — one honest round at a time. | [Robust Engineering Loop](robust-engineering-loop/SPEC.md) |
 
-**Validation is not a dead end.** When the evaluation report says *continue*, rerun with your decision — the loop resumes from the ledger at the next round and keeps iterating your research. It carried a real project through nine rounds across three runs.
+**Validation is not a dead end.** When the evaluation report says *continue*, rerun with your decision — the loop keeps iterating your research.
 
 ![BossLoop: the boss feeds an idea or a requirement into either loop, and the report comes back](assets/two-loops.jpg)
 

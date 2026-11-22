@@ -2,27 +2,27 @@
 
 # BossLoop
 
-**为老板干活的 AI 团队循环，有界、对抗验证，并向你如实汇报。**
+**一支在长周期任务上持续自主迭代的 AI 团队——每轮独立验证，中断后从断点续跑，并向你如实汇报。**
 
 [![Version](https://img.shields.io/badge/version-v0.9.0-blue)](CITATION.cff)
 [![License](https://img.shields.io/badge/license-CC%20BY%204.0%20%2F%20Apache--2.0-green)](LICENSE)
 ![已在 ZCode 验证](https://img.shields.io/badge/%E5%B7%B2%E5%9C%A8%20ZCode%20%E9%AA%8C%E8%AF%81-orange)
 [![English](https://img.shields.io/badge/docs-English-blue)](README.md)
 
-![BossLoop —— 为老板干活的 AI 团队循环](assets/hero-banner.jpg)
+![BossLoop —— 在长周期任务上持续自主迭代的 AI 团队](assets/hero-banner.jpg)
 
 </div>
 
-bossloop 是一组开源 Agent 工作流：一支自主的 AI 团队——规划的总工程师、开发的算法工程师、对照老板原话与客观规律评判作品的冷启动检查者——在有界轮次中迭代，只交付通过全绿门禁的工作，并向老板（你）汇报。同一套纪律，三件事：验证想法、迭代科研、鲁棒工程开发——每个成员接什么模型由你配置。
+bossloop 是两个开源 Agent 工作流，为一个会话装不下的长任务而做。工作分有界的轮次推进，每轮结束前都有一道对照你原话的独立检查，通过才算完成——这道检查让长跑保持诚实。进展写入账本，运行中断后从下一轮续跑，不必从头再来。你像团队 leader 带团队一样用它：用自己的话提出要求，运行中往一个邮件文件里写指令，到每个停点决定是否继续。每个成员接什么模型由你配置；设计哲学见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 工作流
 
 | 工作流 | 它做什么 | 协议 |
 |---|---|---|
-| **观点验证与科研迭代** | 从一个粗糙的想法出发，三轮之后知道它值不值得你投入三个月——答案是值得，就继续迭代下去。 | [科研迭代循环](research-iteration-loop/SPEC.md) |
+| **观点验证与科研迭代** | 从一个粗糙的想法出发，迭代几轮之后盲审，再决定要不要投入三个月——答案是值得，就继续迭代下去。 | [科研迭代循环](research-iteration-loop/SPEC.md) |
 | **工程开发** | 给它一条开发要求，还你一份已测试、零警告、已推送的实现——每一轮都诚实地推进。 | [鲁棒工程循环](robust-engineering-loop/SPEC.md) |
 
-**验证不是终点。**当评估报告说「继续」，带着你的决策重跑即可——循环从账本下一轮续跑，继续推进你的研究。它曾在三次运行中驱动一个真实研究项目迭代九轮。
+**验证不是终点。**当评估报告说「继续」，带着你的决策重跑即可——循环继续推进你的研究。
 
 ![BossLoop：老板把想法或要求交给循环，汇报回到老板手中](assets/two-loops.jpg)
 
